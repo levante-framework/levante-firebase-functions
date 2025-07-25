@@ -191,25 +191,32 @@ export async function writeSurveyResponses(requesterUid, data) {
             `[DEBUG] Current survey assessment completedOn: ${surveyAssessment.completedOn}`
           );
 
-          // Build update operations separately to ensure they work
+          // Create a copy of the assessments array to modify
+          const updatedAssessments = [...assessments];
+          const updatedSurveyAssessment = {
+            ...updatedAssessments[surveyAssessmentIndex],
+          };
+
+          let hasAssessmentChanges = false;
           const updates: any = {};
 
-          // Handle timestamps separately using dot notation to avoid array issues
-          if (isNewDocument && !assessments[surveyAssessmentIndex].startedOn) {
-            updates[`assessments.${surveyAssessmentIndex}.startedOn`] =
-              FieldValue.serverTimestamp();
+          // Add startedOn timestamp if this is the first survey submission
+          if (isNewDocument && !updatedSurveyAssessment.startedOn) {
+            updatedSurveyAssessment.startedOn = new Date();
+            hasAssessmentChanges = true;
             console.log(
               `[DEBUG] Adding startedOn timestamp for index ${surveyAssessmentIndex}`
             );
           } else {
             console.log(
-              `[DEBUG] NOT adding startedOn - isNewDocument: ${isNewDocument}, existing startedOn: ${assessments[surveyAssessmentIndex].startedOn}`
+              `[DEBUG] NOT adding startedOn - isNewDocument: ${isNewDocument}, existing startedOn: ${updatedSurveyAssessment.startedOn}`
             );
           }
 
+          // Add completedOn timestamp if entire survey is complete
           if (isEntireSurveyCompleted) {
-            updates[`assessments.${surveyAssessmentIndex}.completedOn`] =
-              FieldValue.serverTimestamp();
+            updatedSurveyAssessment.completedOn = new Date();
+            hasAssessmentChanges = true;
             updates["progress.survey"] = "completed";
             console.log(
               `[DEBUG] Adding completedOn timestamp and setting progress.survey to completed for index ${surveyAssessmentIndex}`
@@ -220,8 +227,20 @@ export async function writeSurveyResponses(requesterUid, data) {
             );
           }
 
+          // Update the assessment in the array if there were changes
+          if (hasAssessmentChanges) {
+            updatedAssessments[surveyAssessmentIndex] = updatedSurveyAssessment;
+            updates.assessments = updatedAssessments;
+            console.log(
+              `[DEBUG] Updated survey assessment:`,
+              JSON.stringify(updatedSurveyAssessment, null, 2)
+            );
+          }
+
           console.log(`[DEBUG] Update object keys:`, Object.keys(updates));
-          console.log(`[DEBUG] Update object:`, updates);
+          console.log(
+            `[DEBUG] Has assessment changes: ${hasAssessmentChanges}`
+          );
 
           // Apply updates if any exist
           if (Object.keys(updates).length > 0) {
@@ -230,7 +249,7 @@ export async function writeSurveyResponses(requesterUid, data) {
                 Object.keys(updates).length
               } updates to assignment document`
             );
-            transaction.update(assignmentRef, updates);
+            transaction.set(assignmentRef, updates, { merge: true });
           } else {
             console.log(`[DEBUG] No updates to apply`);
           }
