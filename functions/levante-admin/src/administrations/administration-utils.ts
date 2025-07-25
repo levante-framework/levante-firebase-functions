@@ -302,7 +302,11 @@ export const standardizeAdministrationOrgs = async ({
 
   const currOrgs = _pick(currData, ORG_NAMES);
 
-  const numCurrOrgs = _reduce(currOrgs, (sum, value) => sum + (Array.isArray(value) ? value.length : 0), 0);
+  const numCurrOrgs = _reduce(
+    currOrgs,
+    (sum, value) => sum + (Array.isArray(value) ? value.length : 0),
+    0
+  );
 
   let assignedOrgs: IOrgsList;
   let readOrgs: IOrgsList;

@@ -42,8 +42,7 @@ export const deleteUser = async ({
   const promises: Promise<unknown>[] = [];
 
   const userRef = db.collection("users").doc(targetRoarUid);
-  const userClaimsRef = db.collection("userClaims")
-    .doc(targetRoarUid);
+  const userClaimsRef = db.collection("userClaims").doc(targetRoarUid);
 
   promises.push(
     db.recursiveDelete(userRef).then(() => {
@@ -52,9 +51,7 @@ export const deleteUser = async ({
   );
   promises.push(
     db.recursiveDelete(userClaimsRef).then(() => {
-      logger.debug(
-        `Deleted user claims ${targetRoarUid} from database.`
-      );
+      logger.debug(`Deleted user claims ${targetRoarUid} from database.`);
     })
   );
   promises.push(
@@ -87,7 +84,6 @@ export const removeOrgFromUser = async ({
   orgType: string;
   orgId: string;
 }) => {
-
   const db = getFirestore();
 
   const requesterClaimsDocRef = db
@@ -107,20 +103,18 @@ export const removeOrgFromUser = async ({
   await db.runTransaction(async (transaction) => {
     const userDocRef = db.collection("users").doc(targetRoarUid);
     const userDocSnap = await transaction.get(userDocRef);
-      if (userDocSnap.exists) {
-        const allOrgs = _pick(userDocSnap.data(), ORG_NAMES);
-        logger.debug(`Removing orgs from users/${targetRoarUid}`, {
-          requesterRoarUid,
-          targetRoarUid,
-          allOrgs,
-          orgToRemove: `${orgType}/${orgId}`,
-        });
-        // TODO: If the orgs are empty after removing this one, delete the user
-        // Otherwise, just update the orgs with this one removed
-      } else {
-        throw new Error(
-          `User ${targetRoarUid} does not exist in the database.`
-        );
-      }
+    if (userDocSnap.exists) {
+      const allOrgs = _pick(userDocSnap.data(), ORG_NAMES);
+      logger.debug(`Removing orgs from users/${targetRoarUid}`, {
+        requesterRoarUid,
+        targetRoarUid,
+        allOrgs,
+        orgToRemove: `${orgType}/${orgId}`,
+      });
+      // TODO: If the orgs are empty after removing this one, delete the user
+      // Otherwise, just update the orgs with this one removed
+    } else {
+      throw new Error(`User ${targetRoarUid} does not exist in the database.`);
+    }
   });
 };

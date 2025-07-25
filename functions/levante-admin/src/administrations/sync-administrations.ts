@@ -136,7 +136,6 @@ export const processNewAdministration = async (
     );
   }
 
-
   await Promise.all(enqueues);
 
   return Promise.resolve({ status: "ok" });

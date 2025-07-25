@@ -73,12 +73,14 @@ const incrementCompletionStatus = async (
         docRef: completionDocRef,
         fieldPath: orgFieldPath,
         value: FieldValue.increment(incrementBy),
-        data: { 
+        data: {
           assignment: { [status]: FieldValue.increment(incrementBy) },
-          ...(updateMethod === "set" 
-            ? { createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }
-            : { updatedAt: FieldValue.serverTimestamp() }
-          )
+          ...(updateMethod === "set"
+            ? {
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+              }
+            : { updatedAt: FieldValue.serverTimestamp() }),
         },
       });
     }
@@ -89,12 +91,14 @@ const incrementCompletionStatus = async (
         docRef: completionDocRef,
         fieldPath: orgFieldPath,
         value: FieldValue.increment(incrementBy),
-        data: { 
+        data: {
           [taskId]: { [status]: FieldValue.increment(incrementBy) },
-          ...(updateMethod === "set" 
-            ? { createdAt: FieldValue.serverTimestamp(), updatedAt: FieldValue.serverTimestamp() }
-            : { updatedAt: FieldValue.serverTimestamp() }
-          )
+          ...(updateMethod === "set"
+            ? {
+                createdAt: FieldValue.serverTimestamp(),
+                updatedAt: FieldValue.serverTimestamp(),
+              }
+            : { updatedAt: FieldValue.serverTimestamp() }),
         },
       });
     }
@@ -102,7 +106,13 @@ const incrementCompletionStatus = async (
 
   for (const action of transactionActions) {
     if (action.updateMethod === "update") {
-      transaction.update(action.docRef, action.fieldPath, action.value, "updatedAt", FieldValue.serverTimestamp());
+      transaction.update(
+        action.docRef,
+        action.fieldPath,
+        action.value,
+        "updatedAt",
+        FieldValue.serverTimestamp()
+      );
     } else if (action.updateMethod === "set") {
       transaction.set(action.docRef, action.data, { merge: true });
     }

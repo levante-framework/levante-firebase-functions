@@ -247,7 +247,9 @@ interface AssignmentAssessment {
     taskId: string;
     variantId: string;
     variantName: string;
-    [key: string]: {};
+    startedOn?: Timestamp;
+    completedOn?: Timestamp;
+    [key: string]: any;
   }[];
   optional: boolean;
   params: {
@@ -374,7 +376,7 @@ export interface RunDoc {
  */
 export interface TrialDoc {
   // Common fields exist, but many are task-dependent.
-  [key: string]: any; 
+  [key: string]: any;
   assessment_stage?: string;
   correct?: boolean;
   isPractice?: boolean;

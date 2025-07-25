@@ -11,7 +11,6 @@ import _without from "lodash/without";
 import { IOrgsMap } from "../interfaces";
 import { config } from "./config";
 
-
 /**
  * Checks if the functions are running in an emulator environment.
  * @returns {boolean} - Returns true if the functions are running in an emulator environment, otherwise false.
@@ -73,12 +72,7 @@ export const singularizeFirestoreCollection = (plural: string) => {
   throw new Error(`There is no Firestore collection ${plural}`);
 };
 
-export const orgTypes = [
-  "districts",
-  "schools",
-  "classes",
-  "groups",
-];
+export const orgTypes = ["districts", "schools", "classes", "groups"];
 
 /**
  * Create an empty IOrgsMap

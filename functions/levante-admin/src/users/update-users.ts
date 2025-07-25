@@ -63,13 +63,11 @@ export const updateUser = async ({
     // Update user's record with the updateRecord object.
     const uid = userDocRef.id;
 
-    await auth
-      .updateUser(uid, updateRecord)
-      .catch((error) => {
-        logger.error(
-          `Error updating admin user record for user ${uid}: ${error}`
-        );
-      });
+    await auth.updateUser(uid, updateRecord).catch((error) => {
+      logger.error(
+        `Error updating admin user record for user ${uid}: ${error}`
+      );
+    });
   }
 
   // Update the user's admin document with the updateRequest fields.

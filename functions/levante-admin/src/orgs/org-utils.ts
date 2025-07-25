@@ -380,7 +380,7 @@ export const getOnlyExistingOrgs = async (
         .filter((doc) => doc.exists)
         .map((doc) => doc.id);
       existingOrgs[orgType] = existingOrgIds;
-    } else {  
+    } else {
       existingOrgs[orgType] = [];
     }
   }
