@@ -148,48 +148,18 @@ export async function writeSurveyResponses(requesterUid, data) {
       }
 
       // Update assignment document assessments if it exists
-      console.log(
-        `[DEBUG] Assignment document exists: ${assignmentDoc.exists}`
-      );
-
       if (assignmentDoc.exists) {
         const assignmentData = assignmentDoc.data();
         const assessments = assignmentData?.assessments || [];
-
-        console.log(`[DEBUG] Assignment ID: ${administrationId}`);
-        console.log(`[DEBUG] User ID: ${requesterUid}`);
-        console.log(`[DEBUG] Assignment path: ${assignmentRef.path}`);
-        console.log(`[DEBUG] Number of assessments: ${assessments.length}`);
-        console.log(
-          `[DEBUG] Assessment taskIds:`,
-          assessments.map((a) => a.taskId)
-        );
-        console.log(`[DEBUG] isNewDocument: ${isNewDocument}`);
-        console.log(
-          `[DEBUG] isEntireSurveyCompleted: ${isEntireSurveyCompleted}`
-        );
 
         // Find the survey assessment
         const surveyAssessmentIndex = assessments.findIndex(
           (assessment) => assessment.taskId === "survey"
         );
 
-        console.log(
-          `[DEBUG] Survey assessment index: ${surveyAssessmentIndex}`
-        );
-
         if (surveyAssessmentIndex !== -1) {
           const surveyAssessment = assessments[surveyAssessmentIndex];
-          console.log(
-            `[DEBUG] Current survey assessment:`,
-            JSON.stringify(surveyAssessment, null, 2)
-          );
-          console.log(
-            `[DEBUG] Current survey assessment startedOn: ${surveyAssessment.startedOn}`
-          );
-          console.log(
-            `[DEBUG] Current survey assessment completedOn: ${surveyAssessment.completedOn}`
-          );
+
 
           // Create a copy of the assessments array to modify
           const updatedAssessments = [...assessments];
@@ -204,73 +174,36 @@ export async function writeSurveyResponses(requesterUid, data) {
           if (isNewDocument && !updatedSurveyAssessment.startedOn) {
             updatedSurveyAssessment.startedOn = new Date();
             hasAssessmentChanges = true;
-            console.log(
-              `[DEBUG] Adding startedOn timestamp for index ${surveyAssessmentIndex}`
-            );
-          } else {
-            console.log(
-              `[DEBUG] NOT adding startedOn - isNewDocument: ${isNewDocument}, existing startedOn: ${updatedSurveyAssessment.startedOn}`
-            );
+
           }
 
           // Add completedOn timestamp if entire survey is complete
           if (isEntireSurveyCompleted) {
             updatedSurveyAssessment.completedOn = new Date();
             hasAssessmentChanges = true;
-            updates["progress.survey"] = "completed";
-            console.log(
-              `[DEBUG] Adding completedOn timestamp and setting progress.survey to completed for index ${surveyAssessmentIndex}`
-            );
-          } else {
-            console.log(
-              `[DEBUG] NOT adding completedOn - isEntireSurveyCompleted: ${isEntireSurveyCompleted}`
-            );
+
+            // Update the progress object properly
+            const currentProgress = assignmentData?.progress || {};
+            const updatedProgress = { ...currentProgress, survey: "completed" };
+            updates.progress = updatedProgress;
+
+
           }
 
           // Update the assessment in the array if there were changes
           if (hasAssessmentChanges) {
             updatedAssessments[surveyAssessmentIndex] = updatedSurveyAssessment;
             updates.assessments = updatedAssessments;
-            console.log(
-              `[DEBUG] Updated survey assessment:`,
-              JSON.stringify(updatedSurveyAssessment, null, 2)
-            );
           }
-
-          console.log(`[DEBUG] Update object keys:`, Object.keys(updates));
-          console.log(
-            `[DEBUG] Has assessment changes: ${hasAssessmentChanges}`
-          );
 
           // Apply updates if any exist
           if (Object.keys(updates).length > 0) {
-            console.log(
-              `[DEBUG] Applying ${
-                Object.keys(updates).length
-              } updates to assignment document`
-            );
             transaction.set(assignmentRef, updates, { merge: true });
-          } else {
-            console.log(`[DEBUG] No updates to apply`);
           }
-        } else {
-          console.log(
-            `[DEBUG] Survey assessment NOT found in assessments array`
-          );
-          console.log(
-            `[DEBUG] Available taskIds:`,
-            assessments.map((a) => a.taskId)
-          );
         }
-
-        // Also log current progress state
-        console.log(
-          `[DEBUG] Current progress object:`,
-          JSON.stringify(assignmentData?.progress, null, 2)
-        );
       } else {
-        console.log(
-          `[DEBUG] Assignment document does not exist for ${administrationId}`
+        throw new Error(
+          `Assignment document does not exist for ${administrationId}`
         );
       }
 
