@@ -1,0 +1,69 @@
+# # –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––– #
+# # roar-firebase-functions/deploy
+# #
+# # NOTE: This composite action deploys Cloud Functions using the Firebase CLI using the npx firebase command. It is
+# # however important to note that this relies on the firebase-tools-with-isolate package installed at the root and is
+# # required to be installed before executing the npx firebase deploy command.
+# # –––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––––– #
+# name: Deploy to Firebase
+# description: Composite action to deploy Cloud Functions to a Firebase project
+
+# inputs:
+#   firebase-project-id: 
+#     description: 'The Firebase project ID.'
+#     required: true
+#   package-path: 
+#     description: 'The path to the package to deploy.'
+#     required: true
+#   gcp-auth-method:
+#     description: 'The method to authenticate with GCP, "service-account-credentials" or "workload-identity-federation".'
+#     required: false
+#     default: 'workload-identity-federation'
+#   gcp-workload-identity-provider:
+#     description: 'The GCP workload identity provider ID, required for "workload-identity-federation" auth.'
+#     required: false
+#   gcp-service-account-id:
+#     description: 'The GCP service account ID to impersonate, required for "workload-identity-federation" auth.'
+#     required: false
+#   gcp-service-account-credentials:
+#     description: 'The GCP Service Account credentials, required for "service-account-credentials" auth method.'
+#     required: false
+
+# runs:
+#   using: composite
+#   steps:
+#     - name: Setup Node.js
+#       uses: actions/setup-node@v4
+#       with:
+#         node-version-file: '.nvmrc'
+
+#     - name: Install npm packages
+#       shell: bash
+#       run: npm ci
+
+#     - name: Build packages
+#       shell: bash
+#       run: npm run build
+
+#     - name: Authenticate with GCP via Service Account credentials
+#       uses: google-github-actions/auth@v2
+#       if: inputs.gcp-auth-method == 'service-account-credentials'
+#       with:
+#         project_id: ${{ inputs.firebase-project-id }}
+#         credentials_json: ${{ inputs.gcp-service-account-credentials }}
+#         request_reason: 'yeatmanlab/roar-firebase-functions/deploy run ${{ github.run_id }}'
+
+#     - name: Authenticate with GCP via Workload Identity Federation
+#       uses: google-github-actions/auth@v2
+#       if: inputs.gcp-auth-method == 'workload-identity-federation'
+#       with:
+#         project_id: ${{ inputs.firebase-project-id }}
+#         workload_identity_provider: ${{ inputs.gcp-workload-identity-provider }}
+#         service_account: ${{ inputs.gcp-service-account-id }}
+#         request_reason: 'yeatmanlab/roar-firebase-functions/deploy run ${{ github.run_id }}'
+#         access_token_scopes: 'email,openid,https://www.googleapis.com/auth/cloudplatformprojects.readonly,https://www.googleapis.com/auth/firebase,https://www.googleapis.com/auth/cloud-platform'
+
+#     - name: Deploy to Firebase
+#       shell: bash
+#       run: npx firebase --project ${{ inputs.firebase-project-id }} deploy --only functions
+#       working-directory: ${{ inputs.package-path }}

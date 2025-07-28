@@ -1,0 +1,36 @@
+{
+  "name": "@levante-firebase-functions/levante-assessment",
+  "version": "0.0.0",
+  "scripts": {
+    "build": "tsc",
+    "build:all": "cd ../.. && npm run build && cd -",
+    "build:watch": "tsc --watch --preserveWatchOutput",
+    "predeploy:prod": "firebase use prod",
+    "predeploy:dev": "firebase use dev",
+    "deploy:prod": "firebase --project prod deploy --only functions",
+    "deploy:dev": "firebase --project dev deploy --only functions",
+    "format": "npx prettier . --write",
+    "lint": "npx prettier . --check",
+    "logs": "firebase functions:log",
+    "serve": "npm run build:watch | firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "license": "Stanford Academic Software License for LEVANTE",
+  "main": "lib/index.js",
+  "dependencies": {
+    "firebase-admin": "^11.9.0",
+    "firebase-functions": "^4.4.1",
+    "lodash": "^4.17.21"
+  },
+  "devDependencies": {
+    "firebase-functions-test": "^0.2.0",
+    "firebase-tools-with-isolate": "^13.11.2",
+    "prettier": "2.8.3",
+    "typescript": "^4.5.4"
+  },
+  "private": true
+}

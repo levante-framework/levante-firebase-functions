@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "dev": "hs-levante-assessment-dev",
+    "prod": "hs-levante-assessment-prod"
+  }
+}

@@ -1,0 +1,73 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+### General Project Context
+* The primary purpose of these functions is to handle backend logic for the Levante Dashboard. The Levante Dashboard is a Vue SPA. It is a project to study how children learn and read through administering web assessments to children. There are two types of users, admins and participants. Admins can be of type admin or super_admin. Participants can be student, parent, or teacher. 
+
+* The repo is split into folders by project in the functions folder. There are two Firebase projects (with their own databases) admin and assessment. We migrated to a single Firebase project (admin). Ignore the levante-assessment folder, it will be deleted soon. local is for functions we run locally from our machines. 
+
+* This repository contains Firebase Cloud Functions written in [TypeScript].
+* The main backend database used is Firestore.
+
+### Core Technologies & Setup
+
+* We use the Firebase Admin SDK (usually initialized as 'admin' for admin project, 'assessment' for assessment project) for backend operations, including Firestore access.
+* Ensure Firebase Admin SDK is initialized correctly, typically once via `admin.initializeApp()` at the entry point or using lazy initialization.
+* Functions are exported primarily in files within the {project}/src/ directory.
+* Dependencies are managed in {project}/package.json. Use `npm` within the directory.
+* Firebase project configuration (deploy targets, etc.) is defined in {project}/firebase.json.
+
+### Firestore Interaction and Best Practices
+
+* Firestore is accessed via the initialized Admin SDK, often through a variable named `db` (e.g., `const db = admin.firestore();`).
+* Optimize queries by fetching only necessary data. Prefer getting specific documents (`doc()`) over entire collections (`collection()`) if the ID is known.
+* When querying collections, use `select()` to retrieve only the required fields, reducing read costs and data transfer.
+* Use `where()` clauses effectively to filter data server-side. Be aware of Firestore's indexing requirements for compound queries (multiple `where` clauses) or queries involving both range/inequality filters (`<`, `<=`, `>`, `>=`) and `orderBy` on different fields. Check @firestore.indexes.json (if it exists) and create necessary composite indexes.
+* Understand Firestore query limitations. There's no native logical OR across different fields. Inequality filters (`<`, `<=`, `>`, `>=`, `!=`, `not-in`) are limited to a single field per query. Use `in` or `array-contains-any` for multiple equality checks on the same field (up to 30 values).
+* Use `orderBy()` to sort results. Remember that ordering requires an index. If you combine range/inequality filters with `orderBy`, the first `orderBy` clause *must* be on the same field as the filter.
+* For large datasets, implement pagination using `limit()` combined with `startAfter()` (using field values from the last document of the previous page) for forward pagination. Cursors (`startAfter`, `endBefore`) must refer to fields included in the `orderBy` clause.
+* Prefer single-shot reads (`get()`) within Cloud Functions for predictable execution and cost management. Realtime listeners (`onSnapshot()`) are generally suited for client-side applications and can lead to longer function execution times and potentially higher costs if used inappropriately in backend functions.
+* Consider data denormalization to optimize common read queries. Storing related or aggregated data together can avoid complex joins or multiple separate queries, improving performance. However, this requires careful handling during writes to maintain consistency.
+* Use Collection Group queries (`db.collectionGroup('subCollectionName').where(...)`) to query across all subcollections with a specific ID (e.g., query all 'reviews' regardless of the 'product' they belong to). These require specific indexes configured in @firestore.indexes.json or via the Firebase console.
+* Be mindful of Firestore costs, primarily based on document reads, writes, and deletes. Efficient queries (using `select`, `limit`, appropriate filters) minimize read operations and costs.
+* Include error handling around query execution (`try/catch` with `await`) to manage potential issues like missing permissions (less likely with Admin SDK but possible for specific rules) or missing indexes.
+* Use Firestore transactions (`db.runTransaction(...)`) for atomic read-modify-write operations or when multiple writes must succeed or fail together based on data read within the transaction.
+* Use batch writes (`db.batch()`) for performing multiple write operations (set, update, delete) efficiently when atomicity across *all* operations isn't strictly required.
+* Use `FieldValue.serverTimestamp()` for reliable, server-generated createdAt/updatedAt timestamps.
+* For data modeling patterns, look for existing interfaces or types defined in {project}/src/firestore-schema.
+
+### Cloud Functions Specifics
+
+* Functions are triggered by various events: HTTPS requests (`functions.https.onRequest`, `functions.https.onCall`), Firestore triggers (`functions.firestore.document(...).onWrite/onCreate/onUpdate/onDelete`), Pub/Sub, Auth triggers, etc. Identify the trigger type for context.
+* For HTTPS Callable Functions (`onCall`), ensure data is returned correctly and errors are thrown using `functions.https.HttpsError`.
+* For background-triggered functions (Firestore, Pub/Sub, etc.), ensure they are idempotent where possible, as they might be triggered more than once.
+* Implement robust error handling within each function. Log errors effectively using `functions.logger`.
+* Be aware of function cold starts and potential latency implications.
+* Environment configuration (API keys, settings) should be managed using Firebase Functions environment variables (`functions.config()`). Avoid hardcoding secrets.
+
+### Deployment & Testing
+
+* Functions are deployed using the Firebase CLI: `firebase deploy --only functions`.
+
+
+### Coding Style & Best Practices
+
+* Follow the linting rules defined in [@.eslintrc.js/.json] and formatting rules in [@.prettierrc.js/.json] if they exist.
+* Validate incoming data for HTTPS functions rigorously.
+* Keep functions focused on a single responsibility.
+* Handle asynchronous operations correctly using `async/await`.
+
+TODO: Add testing, Firestore rules files, and Firestore indexes files. 
+-- SKIP --
+* [Optional: If testing exists] Unit/integration tests are located in [e.g., @functions/src/test/] and use [e.g., Jest, Mocha].
+* [Optional: If testing exists] Use the Firebase Test SDK (@firebase/rules-unit-testing) for testing Firestore rules and interactions.
+
+* When writing Firestore queries or mutations, always consider the Firestore Security Rules defined in @firestore.rules. Assume rules might restrict direct access even from Functions unless explicitly allowed or using Admin SDK's bypass.
+* Refer to @firestore.indexes.json if complex queries are needed, as missing indexes can cause errors or performance issues.
+-- End SKIP --
+
+### Miscellaneous
+* Use comments only when necessary. Do not add redundant comments. For example, if a function is called getUserClaims, do not add a comment saying "this gets the user's claims".
+* Do not modify existing comments unless a code change requires it. 

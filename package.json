@@ -1,0 +1,66 @@
+{
+  "name": "levante-firebase-functions",
+  "version": "1.1.0",
+  "description": "Firebase functions for the LEVANTE platform",
+  "main": "index.js",
+  "workspaces": [
+    "functions/levante-admin"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "format": "npm run format --workspaces",
+    "lint": "npm run lint --workspaces",
+    "prepare": "husky install || true",
+    "predeploy:levante-admin": "npm run build",
+    "predeploy:levante-assessment": "npm run build",
+    "deploy:levante-admin": "firebase deploy --only functions --prefix ./functions/levante-admin/firebase.json",
+    "deploy:levante-assessment": "firebase deploy --only functions --prefix ./functions/levante-assessment/firebase.json",
+    "dev": "EMULATOR=TRUE firebase emulators:start --import=./emulator_data --export-on-exit=./emulator_data",
+    "emulator:seed": "node emulator_scripts/seed-emulator.js",
+    "emulator:clear": "node emulator_scripts/clear-emulator.js",
+    "emulator:export": "firebase emulators:export ./emulator_data --force",
+    "emulator:reset": "npm run emulator:clear && npm run emulator:seed"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/levante-framework/levante-firebase-functions.git"
+  },
+  "authors": [
+    {
+      "name": "Philip Ziolkowski"
+    },
+    {
+      "name": "David Cardinal"
+    },
+    {
+      "name": "Adam Richie-Halford",
+      "email": "richiehalford@gmail.com",
+      "url": "https://richiehalford.org/"
+    }
+  ],
+  "license": "Stanford Academic Software License for LEVANTE",
+  "bugs": {
+    "url": "https://github.com/levante-framework/levante-firebase-functions/issues"
+  },
+  "homepage": "https://github.com/levante-framework/levante-firebase-functions#readme",
+  "lint-staged": {
+    "*.{js,css,md}": "prettier --write"
+  },
+  "dependencies": {
+    "firebase": "^11.6.1",
+    "firebase-admin": "^11.11.1",
+    "firebase-tools": "^14.5.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.14",
+    "jest": "^29.7.0",
+    "prettier": "3.3.2",
+    "puppeteer": "^24.8.0",
+    "ts-jest": "^29.2.5"
+  },
+  "private": true,
+  "fireConfig": {}
+}
