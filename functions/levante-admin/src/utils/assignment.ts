@@ -60,3 +60,22 @@ export async function updateAssignedAssessment(
     }
   }
 }
+
+/**
+ * Checks if all assessments in an assignment are completed
+ *
+ * Note: When checking if all assessments are completed, we need to consider the current task
+ * as already completed, even though its completedOn timestamp will be set in the transaction
+ * and won't be reflected in the document snapshot we're examining.
+ */
+export function shouldCompleteAssignment(
+  docSnap: DocumentSnapshot,
+  currentTaskId: string
+): boolean {
+  const data = docSnap.data();
+  const assessments: IExtendedAssignedAssessment[] = data?.assessments || [];
+
+  return assessments.every((a: IExtendedAssignedAssessment) => {
+    return Boolean(a.completedOn) || a.optional || a.taskId === currentTaskId;
+  });
+}

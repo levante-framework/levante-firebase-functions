@@ -1,4 +1,9 @@
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import {
+  shouldCompleteAssignment,
+  getAssignmentDocRef,
+  getAssignmentDoc,
+} from "./utils/assignment";
 
 type Response = {
   responseTime: string;
@@ -21,7 +26,6 @@ export async function writeSurveyResponses(requesterUid, data) {
   // write or update survey responses as subcollection of user document
   const userRef = db.collection("users").doc(requesterUid);
   const surveyResponsesCollection = userRef.collection("surveyResponses");
-  const assignmentsCollection = userRef.collection("assignments");
 
   const returnObj = {
     success: false,
@@ -86,8 +90,17 @@ export async function writeSurveyResponses(requesterUid, data) {
       }
 
       // Read assignment document
-      const assignmentRef = assignmentsCollection.doc(administrationId);
-      const assignmentDoc = await transaction.get(assignmentRef);
+      const assignmentRef = getAssignmentDocRef(
+        db,
+        requesterUid,
+        administrationId
+      );
+      const assignmentDoc = await getAssignmentDoc(
+        db,
+        requesterUid,
+        administrationId,
+        transaction
+      );
 
       // ALL WRITES AFTER - Process the data and perform writes
 
@@ -160,7 +173,6 @@ export async function writeSurveyResponses(requesterUid, data) {
         if (surveyAssessmentIndex !== -1) {
           const surveyAssessment = assessments[surveyAssessmentIndex];
 
-
           // Create a copy of the assessments array to modify
           const updatedAssessments = [...assessments];
           const updatedSurveyAssessment = {
@@ -174,7 +186,6 @@ export async function writeSurveyResponses(requesterUid, data) {
           if (isNewDocument && !updatedSurveyAssessment.startedOn) {
             updatedSurveyAssessment.startedOn = new Date();
             hasAssessmentChanges = true;
-
           }
 
           // Add completedOn timestamp if entire survey is complete
@@ -187,7 +198,10 @@ export async function writeSurveyResponses(requesterUid, data) {
             const updatedProgress = { ...currentProgress, survey: "completed" };
             updates.progress = updatedProgress;
 
-
+            // Check if assignment should be completed
+            if (shouldCompleteAssignment(assignmentDoc, "survey")) {
+              updates.completed = true;
+            }
           }
 
           // Update the assessment in the array if there were changes
