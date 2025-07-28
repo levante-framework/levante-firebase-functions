@@ -1,0 +1,34 @@
+{
+  "targetDefaults": {
+    "build": {
+      "cache": true,
+      "dependsOn": ["^build"],
+      "outputs": ["{projectRoot}/lib"]
+    },
+    "build:watch": {
+      "dependsOn": ["^build:watch"]
+    },
+    "format": {
+      "dependsOn": []
+    },
+    "lint": {
+      "cache": true,
+      "dependsOn": []
+    },
+    "deploy": {
+      "dependsOn": []
+    },
+    "logs": {
+      "dependsOn": []
+    },
+    "serve": {
+      "dependsOn": ["^serve"]
+    },
+    "shell": {
+      "dependsOn": ["^shell"]
+    },
+    "start": {
+      "dependsOn": ["^start"]
+    }
+  }
+}

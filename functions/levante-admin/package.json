@@ -1,0 +1,47 @@
+{
+  "name": "@levante-firebase-functions/levante-admin",
+  "version": "0.0.0",
+  "scripts": {
+    "build": "tsc",
+    "build:watch": "tsc --watch --preserveWatchOutput",
+    "predeploy:prod": "firebase use prod && npm run format && npm run build",
+    "predeploy:dev": "firebase use dev && npm run format && npm run build",
+    "deploy:prod": "firebase --project prod deploy --only functions",
+    "deploy:dev": "firebase --project dev deploy --only functions",
+    "format": "npx prettier . --write",
+    "lint": "npx prettier . --check",
+    "logs": "firebase functions:log",
+    "serve": "npm run build:watch | firebase emulators:start --only functions",
+    "shell": "npm run build && firebase functions:shell",
+    "start": "npm run shell",
+    "validate:indexes": "bash scripts/validate-indexes.sh",
+    "update:indexes": "firebase firestore:indexes --project dev > firestore.indexes.json"
+  },
+  "engines": {
+    "node": "20"
+  },
+  "license": "Stanford Academic Software License for LEVANTE",
+  "main": "lib/index.js",
+  "dependencies": {
+    "@bdelab/roar-utils": "^1.1.0",
+    "@firebase/logger": "^0.4.4",
+    "@google-cloud/secret-manager": "^4.2.2",
+    "axios": "^1.4.0",
+    "axios-oauth-1.0a": "^0.3.6",
+    "bcrypt": "^5.1.1",
+    "boolean": "^3.2.0",
+    "dotenv": "^16.0.0",
+    "firebase-admin": "^13.4.0",
+    "firebase-functions": "^6.3.2",
+    "lodash": "^4.17.21",
+    "status-code-enum": "^1.0.0",
+    "typescript": "^4.5.4",
+    "uuid": "^9.0.0"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.2",
+    "prettier": "2.8.3",
+    "typescript": "^4.5.4"
+  },
+  "private": true
+}

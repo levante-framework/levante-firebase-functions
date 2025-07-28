@@ -1,0 +1,42 @@
+{
+  "functions": [
+    {
+      "source": "functions/levante-admin",
+      "codebase": "levante-admin",
+      "ignore": [
+        "node_modules",
+        ".git",
+        "firebase-debug.log",
+        "firestore-debug.log"
+      ],
+      "predeploy": [
+        "npm --prefix \"$RESOURCE_DIR\" run build"
+      ]
+    }
+  ],
+  "emulators": {
+    "auth": {
+      "port": 9199
+    },
+    "functions": {
+      "port": 5002
+    },
+    "firestore": {
+      "port": 8180
+    },
+    "hub": {
+      "port": 4401
+    },
+    "tasks": {
+      "port": 9899
+    },
+    "ui": {
+      "enabled": true,
+      "port": 4001
+    },
+    "logging": {
+      "port": 4501
+    },
+    "singleProjectMode": true
+  }
+}
