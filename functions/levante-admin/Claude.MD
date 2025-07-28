@@ -105,8 +105,6 @@ npm run logs
 # Validate Firestore indexes
 npm run validate:indexes
 
-# Update Firestore indexes
-npm run update:indexes
 ```
 
 ## Security & Permissions
