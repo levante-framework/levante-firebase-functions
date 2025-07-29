@@ -97,7 +97,7 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
     try {
       // Generate administration ID
       const administrationId = db.collection('administrations').doc().id;
-      
+
       console.log(`    Creating administration: ${administrationId} (${template.name})...`);
 
       const now = new Date();
@@ -142,7 +142,7 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
         schools: testOrgs.schools,
         sequential: template.sequential,
         tags: template.tags,
-        testData: true,
+        testData: false,
       };
 
       const adminRef = db.collection('administrations').doc(administrationId);
@@ -268,7 +268,14 @@ async function createStats(adminRef, template) {
   console.log(`      ✅ Created stats subcollection`);
 }
 
-async function createUserAssignments(db, administrationId, template, administrationData, participantUsers, taskVariantMap) {
+async function createUserAssignments(
+  db,
+  administrationId,
+  template,
+  administrationData,
+  participantUsers,
+  taskVariantMap,
+) {
   console.log(`      Creating user assignments...`);
 
   // Create testOrgs for assignments using the same IDs as the administration
