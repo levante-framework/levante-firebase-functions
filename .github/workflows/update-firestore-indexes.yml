@@ -14,6 +14,13 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
+      - name: Generate GitHub App token
+        id: generate-token
+        uses: tibdex/github-app-token@v1
+        with:
+          app_id: ${{ secrets.LEVANTE_BOT_APP_ID }}
+          private_key: ${{ secrets.LEVANTE_BOT_APP_PRIVATE_KEY }}
+
       - name: Checkout repository
         uses: actions/checkout@v4
 
@@ -77,14 +84,6 @@ jobs:
             echo "has-changes=true" >> $GITHUB_OUTPUT
           fi
         shell: bash
-
-      - name: Generate GitHub App token
-        if: steps.check-changes.outputs.has-changes == 'true'
-        id: generate-token
-        uses: tibdex/github-app-token@v1
-        with:
-          app_id: ${{ secrets.LEVANTE_BOT_APP_ID }}
-          private_key: ${{ secrets.LEVANTE_BOT_APP_PRIVATE_KEY }}
 
       - name: Update index file
         if: steps.check-changes.outputs.has-changes == 'true'
