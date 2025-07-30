@@ -112,69 +112,67 @@ export const syncAssignmentsOnUserUpdateEventHandler = async ({
   const prevData = event.data?.before.data();
   const currData = event.data?.after.data();
 
-  if (currData?.userType === "student") {
-    const prevOrgs = _pick(prevData, ORG_NAMES);
-    const currOrgs = _pick(currData, ORG_NAMES);
+  const prevOrgs = _pick(prevData, ORG_NAMES);
+  const currOrgs = _pick(currData, ORG_NAMES);
 
-    if (userTypes.includes(currData?.userType)) {
-      // The orgs data structure for users is different than for administrations.
-      // Each org is an object with fields `all`, `current`, and `dates`.
-      // We are only concerned with the `current` orgs.
-      // So we extract those and save to the variables `prevOrgLists` and `currOrgLists`.
-      const prevOrgLists = _fromPairs(
-        _map(_toPairs(prevOrgs), ([orgName, orgObj]) => [
-          orgName,
-          orgObj.current ?? [],
+  if (userTypes.includes(currData?.userType)) {
+    // The orgs data structure for users is different than for administrations.
+    // Each org is an object with fields `all`, `current`, and `dates`.
+    // We are only concerned with the `current` orgs.
+    // So we extract those and save to the variables `prevOrgLists` and `currOrgLists`.
+    const prevOrgLists = _fromPairs(
+      _map(_toPairs(prevOrgs), ([orgName, orgObj]) => [
+        orgName,
+        orgObj.current ?? [],
+      ])
+    );
+    const currOrgLists = _fromPairs(
+      _map(_toPairs(currOrgs), ([orgName, orgObj]) => [
+        orgName,
+        orgObj.current ?? [],
+      ])
+    );
+
+    logger.debug(`user ${roarUid} changed`, {
+      prevOrgs,
+      currOrgs,
+      currOrgLists,
+      prevOrgLists,
+    });
+
+    if (!_isEmpty(currOrgLists) && !_isEqual(prevOrgs, currOrgs)) {
+      const removedOrgs = _fromPairs(
+        _map(Object.entries(prevOrgLists), ([key, value]) => [
+          key,
+          _difference(value, currOrgLists[key]),
         ])
+      ) as IOrgsList;
+
+      const numRemovedOrgs = _reduce(
+        removedOrgs,
+        (sum, value) => (value ? sum + value.length : sum),
+        0
       );
-      const currOrgLists = _fromPairs(
-        _map(_toPairs(currOrgs), ([orgName, orgObj]) => [
-          orgName,
-          orgObj.current ?? [],
+
+      if (numRemovedOrgs > 0) {
+        await processUserRemovedOrgs(roarUid, removedOrgs);
+      }
+
+      const addedOrgs = _fromPairs(
+        _map(Object.entries(currOrgLists), ([key, value]) => [
+          key,
+          _difference(value, prevOrgLists[key]),
         ])
+      ) as IOrgsList;
+
+      const numAddedOrgs = _reduce(
+        addedOrgs,
+        (sum, value) => (value ? sum + value.length : sum),
+        0
       );
 
-      logger.debug(`user ${roarUid} changed`, {
-        prevOrgs,
-        currOrgs,
-        currOrgLists,
-        prevOrgLists,
-      });
-
-      if (!_isEmpty(currOrgLists) && !_isEqual(prevOrgs, currOrgs)) {
-        const removedOrgs = _fromPairs(
-          _map(Object.entries(prevOrgLists), ([key, value]) => [
-            key,
-            _difference(value, currOrgLists[key]),
-          ])
-        ) as IOrgsList;
-
-        const numRemovedOrgs = _reduce(
-          removedOrgs,
-          (sum, value) => (value ? sum + value.length : sum),
-          0
-        );
-
-        if (numRemovedOrgs > 0) {
-          await processUserRemovedOrgs(roarUid, removedOrgs);
-        }
-
-        const addedOrgs = _fromPairs(
-          _map(Object.entries(currOrgLists), ([key, value]) => [
-            key,
-            _difference(value, prevOrgLists[key]),
-          ])
-        ) as IOrgsList;
-
-        const numAddedOrgs = _reduce(
-          addedOrgs,
-          (sum, value) => (value ? sum + value.length : sum),
-          0
-        );
-
-        if (numAddedOrgs > 0) {
-          await processUserAddedOrgs(roarUid, addedOrgs);
-        }
+      if (numAddedOrgs > 0) {
+        await processUserAddedOrgs(roarUid, addedOrgs);
       }
     }
   }
