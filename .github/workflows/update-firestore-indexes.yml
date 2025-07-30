@@ -23,6 +23,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          token: ${{ steps.generate_token.outputs.token }}
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -96,9 +98,8 @@ jobs:
       - name: Configure Git
         if: steps.check-changes.outputs.has-changes == 'true'
         run: |
-          git config --local user.email "levante-bot@github.actions"
-          git config --local user.name "Levante Bot"
-        shell: bash
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
 
       - name: Commit and push changes
         if: steps.check-changes.outputs.has-changes == 'true'
@@ -113,7 +114,6 @@ jobs:
           git push origin main
         env:
           GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
-        shell: bash
 
       - name: Log success
         if: steps.check-changes.outputs.has-changes == 'true'
