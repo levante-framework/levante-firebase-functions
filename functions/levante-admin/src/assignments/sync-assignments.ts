@@ -113,11 +113,11 @@ export const syncAssignmentsOnUserUpdateEventHandler = async ({
   const currData = event.data?.after.data();
 
   if (currData?.userType === "student") {
+  if (currData?.userType === "student") {
     const prevOrgs = _pick(prevData, ORG_NAMES);
     const currOrgs = _pick(currData, ORG_NAMES);
 
-    if (userTypes.includes(currData?.userType)) {
-      // The orgs data structure for users is different than for administrations.
+    if (userTypes.includes(currData?.userType)) {      // The orgs data structure for users is different than for administrations.
       // Each org is an object with fields `all`, `current`, and `dates`.
       // We are only concerned with the `current` orgs.
       // So we extract those and save to the variables `prevOrgLists` and `currOrgLists`.

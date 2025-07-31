@@ -142,7 +142,7 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
         schools: testOrgs.schools,
         sequential: template.sequential,
         tags: template.tags,
-        testData: true,
+        testData: false,
       };
 
       const adminRef = db.collection('administrations').doc(administrationId);
