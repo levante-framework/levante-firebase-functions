@@ -1,0 +1,223 @@
+name: Deploy Levante Admin
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Environment to deploy to'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+      version_bump:
+        description: 'Version bump type (for prod only)'
+        required: false
+        default: 'patch'
+        type: choice
+        options:
+          - patch
+          - minor
+          - major
+
+env:
+  HUSKY: 0
+
+jobs:
+  deploy:
+    name: Deploy to ${{ github.event.inputs.environment }}
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Generate GitHub App token
+        id: generate-token
+        uses: tibdex/github-app-token@v1
+        with:
+          app_id: ${{ secrets.LEVANTE_BOT_APP_ID }}
+          private_key: ${{ secrets.LEVANTE_BOT_APP_PRIVATE_KEY }}
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ steps.generate-token.outputs.token }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          npm install -g husky
+          npm ci
+
+      - name: Install Firebase CLI
+        run: |
+          npm install -g firebase-tools
+        shell: bash
+
+      - name: Authenticate with GCP
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ github.event.inputs.environment == 'prod' && 'hs-levante-admin-prod' || 'hs-levante-admin-dev' }}
+          credentials_json: ${{ github.event.inputs.environment == 'prod' && secrets.GCP_SA_CREDENTIALS_PROD || secrets.GCP_SA_CREDENTIALS_DEV }}
+          request_reason: 'levante-firebase-functions/deploy run ${{ github.run_id }}'
+          access_token_scopes: 'email,openid,https://www.googleapis.com/auth/cloudplatformprojects.readonly,https://www.googleapis.com/auth/firebase,https://www.googleapis.com/auth/cloud-platform'
+
+      - name: Check Firestore rules file exists
+        id: check-rules
+        run: |
+          cd functions/levante-admin
+          if [ ! -f "firestore.rules" ]; then
+            echo "❌ Firestore rules file (firestore.rules) not found!"
+            echo "Please create the firestore.rules file before deploying."
+            exit 1
+          else
+            echo "✅ Firestore rules file found"
+          fi
+        shell: bash
+
+      - name: Export current Firestore indexes from Dev
+        run: |
+          cd functions/levante-admin
+          firebase firestore:indexes --project dev > current-indexes.json
+        shell: bash
+
+      - name: Check if indexes have changed
+        id: check-changes
+        run: |
+          cd functions/levante-admin
+          
+          # Function to normalize JSON for comparison
+          normalize_json() {
+            jq -S '.' "$1" | sed 's/[[:space:]]//g'
+          }
+          
+          # Check if firestore.indexes.json exists
+          if [ ! -f "firestore.indexes.json" ]; then
+            echo "firestore.indexes.json not found, will create it"
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Normalize both files
+          normalize_json "firestore.indexes.json" > local-normalized.json
+          normalize_json "current-indexes.json" > remote-normalized.json
+          
+          # Compare the normalized files
+          if cmp -s local-normalized.json remote-normalized.json; then
+            echo "Indexes are up to date"
+            echo "has-changes=false" >> $GITHUB_OUTPUT
+          else
+            echo "Indexes have changed"
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+          fi
+        shell: bash
+
+      - name: Update index file if needed
+        if: steps.check-changes.outputs.has-changes == 'true'
+        run: |
+          cd functions/levante-admin
+          cp current-indexes.json firestore.indexes.json
+          echo "Updated firestore.indexes.json with latest indexes from dev project"
+        shell: bash
+
+      - name: Bump version for prod deployment
+        if: github.event.inputs.environment == 'prod'
+        id: bump-version
+        run: |
+          cd functions/levante-admin
+          
+          # Get current version
+          current_version=$(node -p "require('./package.json').version")
+          echo "Current version: $current_version"
+          
+          # Bump version based on input
+          bump_type="${{ github.event.inputs.version_bump }}"
+          new_version=$(npm version $bump_type --no-git-tag-version)
+          
+          # Remove the 'v' prefix that npm version adds
+          new_version=${new_version#v}
+          
+          echo "New version: $new_version"
+          echo "new-version=$new_version" >> $GITHUB_OUTPUT
+          
+          # Update package.json with the new version
+          node -e "
+            const pkg = require('./package.json');
+            pkg.version = '$new_version';
+            require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+        shell: bash
+
+      - name: Configure Git
+        run: |
+          git config --local user.email "levante-bot@github.actions"
+          git config --local user.name "Levante Bot"
+
+      - name: Commit index updates and version bump
+        if: steps.check-changes.outputs.has-changes == 'true' || github.event.inputs.environment == 'prod'
+        run: |
+          git add functions/levante-admin/firestore.indexes.json
+          if [ "${{ github.event.inputs.environment }}" == "prod" ]; then
+            git add functions/levante-admin/package.json
+          fi
+          
+          commit_message="🤖 Auto-update for ${{ github.event.inputs.environment }} deployment"
+          if [ "${{ steps.check-changes.outputs.has-changes }}" == "true" ]; then
+            commit_message="$commit_message
+
+          - Updated Firestore indexes from dev project"
+          fi
+          if [ "${{ github.event.inputs.environment }}" == "prod" ]; then
+            commit_message="$commit_message
+          - Bumped version to ${{ steps.bump-version.outputs.new-version }}"
+          fi
+          
+          git commit -m "$commit_message"
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+        shell: bash
+
+      - name: Push changes
+        if: steps.check-changes.outputs.has-changes == 'true' || github.event.inputs.environment == 'prod'
+        run: |
+          git push origin main
+        env:
+          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+        shell: bash
+
+      - name: Deploy to Firebase
+        run: |
+          cd functions/levante-admin
+          
+          # Set the Firebase project
+          if [ "${{ github.event.inputs.environment }}" == "prod" ]; then
+            firebase use prod
+          else
+            firebase use dev
+          fi
+          
+          # Deploy functions and Firestore rules
+          firebase deploy --only functions,firestore:rules
+        shell: bash
+
+      - name: Log deployment success
+        run: |
+          echo "✅ Successfully deployed to ${{ github.event.inputs.environment }}"
+          if [ "${{ steps.check-changes.outputs.has-changes }}" == "true" ]; then
+            echo "📝 Firestore indexes updated"
+          fi
+          if [ "${{ github.event.inputs.environment }}" == "prod" ]; then
+            echo "📦 Version bumped to ${{ steps.bump-version.outputs.new-version }}"
+          fi
+        shell: bash
+
+      - name: Cleanup
+        if: always()
+        run: |
+          cd functions/levante-admin
+          rm -f current-indexes.json local-normalized.json remote-normalized.json
+        shell: bash
