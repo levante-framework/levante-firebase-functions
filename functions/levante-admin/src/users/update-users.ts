@@ -112,7 +112,7 @@ export const updateUser = async ({
 
     for (const [key, value] of Object.entries(adminUserUpdates)) {
       if (key === "studentData") {
-        for (const [sdKey, sdValue] of Object.entries(value)) {
+        for (const [sdKey, sdValue] of Object.entries(value!)) {
           if (sdKey === "dob") {
             const jsDate = new Date(sdValue as string);
             fieldPathsAndValues.push(
