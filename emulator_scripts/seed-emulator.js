@@ -12,6 +12,7 @@ const { createGroups } = require('./seeders/groups');
 const { createUsers } = require('./seeders/users');
 const { createUserClaims } = require('./seeders/userClaims');
 const { linkUsersToGroups } = require('./seeders/associations');
+const { updateUserRoles } = require('./seeders/roles');
 const { createTasks } = require('./seeders/tasks');
 const { createAdministrations } = require('./seeders/administrations');
 
@@ -39,13 +40,18 @@ async function seedDatabase() {
     await linkUsersToGroups(adminApp, users, groups);
     console.log("✅ User-group associations created successfully\n");
     
-    // Step 5: Create tasks and variants
-    console.log("Step 5: Creating tasks and variants...");
+    // Step 5: Update user roles based on associations
+    console.log("Step 5: Updating user roles...");
+    await updateUserRoles(adminApp, users, groups);
+    console.log("✅ User roles updated successfully\n");
+    
+    // Step 6: Create tasks and variants
+    console.log("Step 6: Creating tasks and variants...");
     const tasks = await createTasks(adminApp);
     console.log("✅ Tasks and variants created successfully\n");
     
-    // Step 6: Create administrations with subcollections
-    console.log("Step 6: Creating administrations...");
+    // Step 7: Create administrations with subcollections
+    console.log("Step 7: Creating administrations...");
     const administrations = await createAdministrations(adminApp, tasks, users, groups);
     console.log("✅ Administrations created successfully\n");
     

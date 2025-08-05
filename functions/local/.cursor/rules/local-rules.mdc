@@ -1,0 +1,291 @@
+---
+alwaysApply: false
+---
+
+# Firebase One-Off Script Template
+
+Use this template when creating new Firebase administrative scripts for one-off tasks.
+
+## Required Structure
+
+### 1. Imports and Dependencies
+```typescript
+import * as admin from "firebase-admin/app";
+import { getFirestore } from "firebase-admin/firestore";
+import yargs from "yargs";
+import cliProgress from "cli-progress";
+import * as fs from "fs";
+```
+
+### 2. Command Line Arguments Interface
+Always define a typed interface for your arguments:
+```typescript
+interface Args {
+  dryRun: boolean;
+  environment: "dev" | "prod";
+  batchSize: number;
+  outputFile: string;
+  // Add script-specific arguments here
+}
+```
+
+### 3. Standard Arguments Configuration
+Include these standard arguments in every script:
+```typescript
+const argv = yargs(process.argv.slice(2))
+  .options({
+    dryRun: {
+      alias: "d",
+      description: "Dry run mode: show what would be done without making changes",
+      type: "boolean",
+      default: true,
+    },
+    environment: {
+      alias: "e",
+      description: "Environment to run against",
+      choices: ["dev", "prod"] as const,
+      default: "dev" as const,
+    },
+    batchSize: {
+      alias: "b",
+      description: "Batch size for Firestore operations",
+      type: "number",
+      default: 500,
+    },
+    outputFile: {
+      alias: "o",
+      description: "Output file path for results",
+      type: "string",
+      default: "./script-results.txt",
+    },
+    // Add script-specific options here
+  })
+  .help("help")
+  .alias("help", "h").argv as Args;
+```
+
+### 4. Environment Setup
+Standard environment variable handling:
+```typescript
+const dryRun = argv.dryRun;
+const isDev = argv.environment === "dev";
+
+// Set up environment variables for admin project
+const envVariable = "LEVANTE_ADMIN_FIREBASE_CREDENTIALS";
+const credentialFile = process.env[envVariable];
+
+if (!credentialFile) {
+  console.error(
+    `Missing required environment variable: ${envVariable}
+    Please set this environment variable using
+    export ${envVariable}=path/to/credentials/for/admin/project.json`,
+  );
+  process.exit(1);
+}
+```
+
+### 5. Firebase Initialization
+Standard Firebase app initialization function:
+```typescript
+const initializeApp = async () => {
+  const credentials = (
+    await import(credentialFile, {
+      assert: { type: "json" },
+    })
+  ).default;
+
+  const projectId = isDev
+    ? "hs-levante-admin-dev"
+    : "hs-levante-admin-prod";
+
+  return admin.initializeApp(
+    {
+      credential: admin.cert(credentials),
+      projectId,
+    },
+    "admin",
+  );
+};
+```
+
+### 6. File Reading Utility (if needed)
+For scripts that need to read input files:
+```typescript
+function readInputFile(filePath: string): string[] {
+  try {
+    if (!fs.existsSync(filePath)) {
+      console.error(`Input file not found: ${filePath}`);
+      process.exit(1);
+    }
+    
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const items = content
+      .split('\n')
+      .map(line => line.trim())
+      .filter(line => line.length > 0 && !line.startsWith('#'));
+    
+    if (items.length === 0) {
+      console.error(`No items found in file: ${filePath}`);
+      process.exit(1);
+    }
+    
+    return items;
+  } catch (error) {
+    console.error(`Error reading input file: ${error}`);
+    process.exit(1);
+  }
+}
+```
+
+### 7. Progress Bar Pattern
+Use cli-progress for long-running operations:
+```typescript
+async function processDocuments(
+  db: FirebaseFirestore.Firestore,
+  items: string[]
+): Promise<{ processedCount: number; modifiedCount: number }> {
+  console.log("\n📝 Processing documents...");
+  
+  const progressBar = new cliProgress.SingleBar({
+    format: "Processing [{bar}] {percentage}% | ETA: {eta}s | {value}/{total}",
+    barCompleteChar: "#",
+    barIncompleteChar: ".",
+  });
+  
+  progressBar.start(items.length, 0);
+  
+  let processedCount = 0;
+  let modifiedCount = 0;
+  let batch = db.batch();
+  let operationCount = 0;
+  const BATCH_LIMIT = argv.batchSize;
+
+  for (const item of items) {
+    // Your processing logic here
+    
+    if (!dryRun) {
+      // Batch operations
+      operationCount++;
+      
+      if (operationCount >= BATCH_LIMIT) {
+        await batch.commit();
+        batch = db.batch();
+        operationCount = 0;
+      }
+    }
+    
+    processedCount++;
+    progressBar.update(processedCount);
+  }
+  
+  // Commit remaining operations
+  if (!dryRun && operationCount > 0) {
+    await batch.commit();
+  }
+  
+  progressBar.stop();
+  return { processedCount, modifiedCount };
+}
+```
+
+### 8. Results Output
+Standard results writing function:
+```typescript
+function writeResultsToFile(results: any, outputFile: string) {
+  console.log(`\n📄 Writing results to ${outputFile}...`);
+  
+  const output = `Script Results
+================
+
+Environment: ${argv.environment}
+Dry run mode: ${dryRun ? "ON" : "OFF"}
+Generated at: ${new Date().toISOString()}
+
+Summary:
+${JSON.stringify(results, null, 2)}
+`;
+
+  fs.writeFileSync(outputFile, output);
+  console.log(`✅ Results written to ${outputFile}`);
+}
+```
+
+### 9. Main Function Structure
+```typescript
+async function main() {
+  try {
+    console.log(`\nRunning [SCRIPT_NAME] in ${argv.environment} environment`);
+    console.log(`Dry run mode: ${dryRun ? "ON" : "OFF"}`);
+    
+    // Initialize Firebase
+    console.log("Initializing Firebase connection...");
+    const app = await initializeApp();
+    const db = getFirestore(app);
+    console.log("Firebase connection established successfully");
+
+    // Your script logic here
+    
+    // Write results
+    writeResultsToFile(results, argv.outputFile);
+
+    // Print summary
+    console.log("\n" + "=".repeat(60));
+    console.log("OPERATION SUMMARY");
+    console.log("=".repeat(60));
+    console.log(`Environment: ${argv.environment}`);
+    console.log(`Dry run mode: ${dryRun ? "ON" : "OFF"}`);
+    console.log(`Batch size: ${argv.batchSize}`);
+    console.log("=".repeat(60));
+    
+    if (dryRun) {
+      console.log("🔍 This was a dry run. No changes were made to the database.");
+      console.log("🚀 Run without --dryRun flag to execute changes.");
+    } else {
+      console.log("✅ Operation completed successfully!");
+    }
+    
+    console.log("=".repeat(60));
+
+  } catch (error) {
+    console.error("Fatal error during execution:", error);
+    process.exit(1);
+  }
+}
+
+// Run the script
+main().catch((error) => {
+  console.error("Unhandled error:", error);
+  process.exit(1);
+});
+```
+
+## Best Practices Checklist
+
+- [ ] Always include dry run mode (default: true)
+- [ ] Support both dev and prod environments
+- [ ] Use batched Firestore operations with configurable batch size
+- [ ] Include progress bars for long operations
+- [ ] Write results to an output file
+- [ ] Handle errors gracefully with meaningful messages
+- [ ] Validate required environment variables
+- [ ] Use TypeScript interfaces for type safety
+- [ ] Include comprehensive logging and status updates
+- [ ] Support file-based input when needed
+- [ ] Follow consistent naming conventions
+- [ ] Include operation summaries
+- [ ] Use emojis for visual feedback in console output
+
+## Usage Example
+```bash
+# Dry run (default)
+npm run script -- --environment dev --groupIdsFile ./groups.txt
+
+# Actual execution
+npm run script -- --dryRun false --environment prod --batchSize 1000
+```
+
+## Environment Variables
+Always require this environment variable:
+```bash
+export LEVANTE_ADMIN_FIREBASE_CREDENTIALS=path/to/credentials.json
+```

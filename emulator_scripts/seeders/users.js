@@ -105,7 +105,9 @@ async function createUsers(adminApp) {
           legal: {
             assent: {},
             tos: {}
-          }
+          },
+          // Initialize empty roles array - will be populated after associations
+          roles: []
         };
         
         // Add admin-specific data for admin users
