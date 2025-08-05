@@ -40,6 +40,7 @@ async function clearDatabase() {
     console.log("Step 2: Clearing Firestore collections...");
     
     const collections = [
+      'system',
       'users',
       'userClaims', 
       'districts',

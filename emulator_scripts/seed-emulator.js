@@ -15,48 +15,55 @@ const { linkUsersToGroups } = require('./seeders/associations');
 const { updateUserRoles } = require('./seeders/roles');
 const { createTasks } = require('./seeders/tasks');
 const { createAdministrations } = require('./seeders/administrations');
+const { createSystemPermissions } = require('./seeders/permissions');
 
 async function seedDatabase() {
   try {
     console.log("=== STARTING DATABASE SEEDING ===\n");
     
-    // Step 1: Create Auth users and user documents
-    console.log("Step 1: Creating users...");
+    // Step 1: Create system permissions
+    console.log("Step 1: Creating system permissions...");
+    const permissions = await createSystemPermissions(adminApp);
+    console.log("✅ System permissions created successfully\n");
+    
+    // Step 2: Create Auth users and user documents
+    console.log("Step 2: Creating users...");
     const users = await createUsers(adminApp);
     console.log("✅ Users created successfully\n");
 
-    // Step 2: Create groups (districts, schools, classes, groups)
-    console.log("Step 2: Creating groups...");
+    // Step 3: Create groups (districts, schools, classes, groups)
+    console.log("Step 3: Creating groups...");
     const groups = await createGroups(adminApp, users.admin.uid);
     console.log("✅ Groups created successfully\n");
     
-    // Step 3: Create userClaims documents
-    console.log("Step 3: Creating user claims...");
+    // Step 4: Create userClaims documents
+    console.log("Step 4: Creating user claims...");
     await createUserClaims(adminApp, users, groups);
     console.log("✅ User claims created successfully\n");
     
-    // Step 4: Link users to groups
-    console.log("Step 4: Linking users to groups...");
+    // Step 5: Link users to groups
+    console.log("Step 5: Linking users to groups...");
     await linkUsersToGroups(adminApp, users, groups);
     console.log("✅ User-group associations created successfully\n");
     
-    // Step 5: Update user roles based on associations
-    console.log("Step 5: Updating user roles...");
+    // Step 6: Update user roles based on associations
+    console.log("Step 6: Updating user roles...");
     await updateUserRoles(adminApp, users, groups);
     console.log("✅ User roles updated successfully\n");
     
-    // Step 6: Create tasks and variants
-    console.log("Step 6: Creating tasks and variants...");
+    // Step 7: Create tasks and variants
+    console.log("Step 7: Creating tasks and variants...");
     const tasks = await createTasks(adminApp);
     console.log("✅ Tasks and variants created successfully\n");
     
-    // Step 7: Create administrations with subcollections
-    console.log("Step 7: Creating administrations...");
+    // Step 8: Create administrations with subcollections
+    console.log("Step 8: Creating administrations...");
     const administrations = await createAdministrations(adminApp, tasks, users, groups);
     console.log("✅ Administrations created successfully\n");
     
     console.log("=== DATABASE SEEDING COMPLETE ===");
     console.log("\nCreated data summary:");
+    console.log(`- System permissions: ${Object.keys(permissions).length} roles`);
     console.log(`- Districts: ${groups.districts.length}`);
     console.log(`- Schools: ${groups.schools.length}`);
     console.log(`- Classes: ${groups.classes.length}`);
