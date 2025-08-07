@@ -74,18 +74,23 @@ async function createUserClaims(adminApp, users, organizations) {
       }
       
       // Also set custom claims in Auth for admin users
+      let authClaims = {};
       if (['superAdmin', 'admin'].includes(userKey)) {
-        const authClaims = {
+        authClaims = {
           admin: claims.admin,
           super_admin: claims.super_admin,
           adminUid: user.uid,
           assessmentUid: user.uid,
           roarUid: user.uid
         };
-        
+
         await auth.setCustomUserClaims(user.uid, authClaims);
         console.log(`      ✅ Set Auth custom claims for ${user.uid}`);
       }
+
+      // Persist computed claims for downstream seeders to consume (avoid reads)
+      users[userKey].claims = claims;
+      users[userKey].authClaims = authClaims;
       
     } catch (error) {
       console.error(`      ❌ Failed to create claims for ${userKey}:`, error.message);
