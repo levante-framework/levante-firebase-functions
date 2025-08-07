@@ -1,5 +1,8 @@
+const { getAuth } = require('firebase-admin/auth');
+
 async function updateUserRoles(adminApp, users, organizations) {
   const db = adminApp.firestore();
+  const auth = getAuth(adminApp);
   
   console.log("  Updating user roles...");
   
@@ -43,14 +46,19 @@ async function updateUserRoles(adminApp, users, organizations) {
         }
       }
       
-      // Update the user document with roles
-      if (roles.length > 0) {
-        await db.collection('users').doc(user.uid).update({
-          roles: roles
-        });
-        console.log(`      ✅ Updated ${userKey} with ${roles.length} role(s)`);
-      } else {
-        console.log(`      ⚠️  No roles to add for ${userKey}`);
+      // Always update roles in user doc and Auth custom claims
+      // 1) Update user doc roles array (empty array is valid)
+      await db.collection('users').doc(user.uid).update({ roles });
+      console.log(`      ✅ Updated ${userKey} user doc with ${roles.length} role(s)`);
+
+      // 2) Merge roles into Auth custom claims (ensure roles property exists for all users)
+      try {
+        const baseAuthClaims = (users[userKey] && users[userKey].authClaims) || {};
+        const newAuthClaims = { ...baseAuthClaims, roles };
+        await auth.setCustomUserClaims(user.uid, newAuthClaims);
+        console.log(`      ✅ Set Auth custom claims roles for ${userKey}`);
+      } catch (e) {
+        console.warn(`      ⚠️  Failed to set Auth claims for ${userKey}:`, e.message || e);
       }
       
     } catch (error) {
