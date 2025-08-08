@@ -29,6 +29,8 @@ interface UpdateResult {
   successfulUpdates: number;
 }
 
+// TODO: Update user roles in custom claims if new groups provided
+
 /**
  * Edits user records with the provided data
  * @param requestingUid - The UID of the user making the request

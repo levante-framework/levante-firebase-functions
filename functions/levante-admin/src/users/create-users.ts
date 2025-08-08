@@ -37,13 +37,6 @@ type ClassData = {
   schoolId: string;
 };
 
-type ProviderData = {
-  providerId: string;
-  uid: string;
-  displayName: string;
-  email: string;
-};
-
 type Claims = {
   roarUid: string;
   adminUid: string;
@@ -61,15 +54,13 @@ interface BaseAuthUserData {
   fromCSV: InputUser;
   customClaims: {
     claims: Claims;
+    roles: { siteId: string; role: string }[];
   };
   username?: string;
 }
 
 type AdminAuthUserData = BaseAuthUserData;
 
-interface AssessmentAuthUserData extends BaseAuthUserData {
-  providerData: ProviderData[];
-}
 
 interface ReturnUserData {
   uid: string;
@@ -362,6 +353,11 @@ export const _createUsers = async (
     // generate random password
     const stringPassword = generateRandomString();
 
+    const roles: { siteId: string; role: string }[] = [];
+    user.orgIds.districts.forEach((districtId) => {
+      roles.push({ siteId: districtId, role: "participant" });
+    });
+
     const claims = {
       roarUid: userAdminDocs[i].id,
       adminUid: userAdminDocs[i].id,
@@ -375,7 +371,7 @@ export const _createUsers = async (
       emailVerified: false,
       disabled: false,
       fromCSV: user,
-      customClaims: { claims: claims },
+      customClaims: { claims: claims, roles },
     };
 
     // Handle password differently for emulator vs production
@@ -409,7 +405,6 @@ export const _createUsers = async (
 
   const maxRetries = 3; // Set a maximum number of retries to avoid infinite loops
 
-  // creates admin and assessment users in auth
   async function createAuthUsers(
     usersToRegister: AdminAuthUserData[],
     project: string,
