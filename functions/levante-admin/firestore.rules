@@ -62,36 +62,17 @@ service cloud.firestore {
     // New: Check if user has a specific role
     function hasRole(role) {
       let roles = getUserRolesFromAuth();
-      for (let i = 0; i < roles.size(); i++) {
-        if (roles[i].get('role', '') == role) {
-          return true;
-        }
-      }
-      return false;
+      return roles.hasAny([role]);
     }
 
     // New: Get the highest role for a user
     function getHighestRole() {
       let roles = getUserRolesFromAuth();
-      if (roles.size() == 0) return 'participant';
-
-      let hasSuper = false;
-      let hasSite = false;
-      let hasAdmin = false;
-      let hasResearch = false;
-
-      for (let i = 0; i < roles.size(); i++) {
-        let role = roles[i].get('role', '');
-        if (role == 'super_admin') hasSuper = true;
-        if (role == 'site_admin') hasSite = true;
-        if (role == 'admin') hasAdmin = true;
-        if (role == 'research_assistant') hasResearch = true;
-      }
-
-      return hasSuper ? 'super_admin' :
-             hasSite ? 'site_admin' :
-             hasAdmin ? 'admin' :
-             hasResearch ? 'research_assistant' : 'participant';
+      return roles.size() == 0 ? 'participant' :
+             roles.hasAny(['super_admin']) ? 'super_admin' :
+             roles.hasAny(['site_admin']) ? 'site_admin' :
+             roles.hasAny(['admin']) ? 'admin' :
+             roles.hasAny(['research_assistant']) ? 'research_assistant' : 'participant';
     }
 
     // New: Check if user has permission for a specific action
@@ -171,12 +152,9 @@ service cloud.firestore {
 
       // Unified read permission check
       function canReadUser() {
-        if (shouldUseNewPermissions()) {
-          return (myData() || isParentOfUser()) ||
-                 (hasPermission('users', 'read') && isUserAdmin());
-        } else {
-          return myData() || isUserAdmin() || isParentOfUser();
-        }
+        return shouldUseNewPermissions() ?
+          ((myData() || isParentOfUser()) || (hasPermission('users', 'read') && isUserAdmin())) :
+          (myData() || isUserAdmin() || isParentOfUser());
       }
 
       allow read: if canReadUser();

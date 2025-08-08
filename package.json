@@ -11,7 +11,7 @@
     "format": "npm run format --workspaces",
     "lint": "npm run lint --workspaces",
     "prepare": "husky install || true",
-    "test": "firebase emulators:exec \"npm test\"",
+    "test": "firebase emulators:exec \"npx vitest run\"",
     "predeploy:levante-admin": "npm run build",
     "predeploy:levante-assessment": "npm run build",
     "deploy:levante-admin": "firebase deploy --only functions --prefix ./functions/levante-admin/firebase.json",
