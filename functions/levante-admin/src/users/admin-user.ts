@@ -105,7 +105,15 @@ export const createAdminUser = async ({
         logger.debug(`Creating admin user with ${email} in admin project`);
         return auth
           .createUser(await getUserInfo(true))
-          .then((userRecord) => userRecord.uid);
+          .then(async (userRecord) => {
+            // Temporary, admin creation will be refactored to handle all admin role types.
+            const roles = (adminOrgs.districts ?? []).map((districtId) => ({
+              siteId: districtId,
+              role: "admin",
+            }));
+            await auth.setCustomUserClaims(userRecord.uid, { roles });
+            return userRecord.uid;
+          });
       } else {
         throw error;
       }
@@ -128,14 +136,17 @@ export const createAdminUser = async ({
 
   logger.debug(`Setting up custom claims in admin project`);
 
-  await setUidClaimsHandler({
-    roarUid,
-    adminUid,
-    auth: auth,
-    db: db,
-    targetAuthUid: targetAuthUids.admin,
-    isTestData,
-  });
+  // Pretty sure we don't use custom claims anywhere so this can be removed. Keeping for now.
+  // await setUidClaimsHandler({
+  //   roarUid,
+  //   adminUid,
+  //   auth: auth,
+  //   db: db,
+  //   targetAuthUid: targetAuthUids.admin,
+  //   isTestData,
+  // });
+
+
 
   await appendOrRemoveAdminOrgs({
     requesterUid: requesterUid,

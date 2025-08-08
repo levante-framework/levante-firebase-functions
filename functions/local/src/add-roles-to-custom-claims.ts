@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import * as admin from "firebase-admin/app";
-import { getFirestore, FieldPath, FieldValue } from "firebase-admin/firestore";
+import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
@@ -12,7 +12,7 @@ const parsedArgs = yargs(hideBin(process.argv))
     alias: "database",
     describe: "Database: 'dev' or 'prod'",
     choices: ["dev", "prod"],
-    default: "prod",
+    default: "dev",
   })
   .option("dry-run", {
     describe: "Run without making changes to Auth or Firestore",
@@ -24,6 +24,14 @@ const parsedArgs = yargs(hideBin(process.argv))
     type: "number",
     default: 500,
   })
+  .option("limit", {
+    describe: "Maximum number of users to process. If omitted, processes all users (unless --uids provided)",
+    type: "number",
+  })
+  .option("uids", {
+    describe: "Comma-separated list of user UIDs to process (overrides --limit if provided)",
+    type: "string",
+  })
   .help()
   .alias("help", "h")
   .parseSync();
@@ -31,10 +39,17 @@ const parsedArgs = yargs(hideBin(process.argv))
 const isDev = parsedArgs.d === "dev";
 const dryRun = parsedArgs["dry-run"] as boolean;
 const batchSize = parsedArgs["batch-size"] as number;
+const limitArg = (parsedArgs["limit"] as number | undefined) ?? undefined;
+const uidsArg = (parsedArgs["uids"] as string | undefined) ?? undefined;
 
 console.log(`Using ${isDev ? "development" : "production"} database`);
 console.log(`Dry run mode: ${dryRun ? "ON" : "OFF"}`);
 console.log(`Batch size: ${batchSize}`);
+if (uidsArg) {
+  console.log(`Targeting specific UIDs: ${uidsArg}`);
+} else if (typeof limitArg === "number") {
+  console.log(`Limiting to at most ${limitArg} user(s)`);
+}
 
 // Env var for Admin credentials (admin project only)
 const adminCredentialFile = process.env.LEVANTE_ADMIN_FIREBASE_CREDENTIALS;
@@ -100,8 +115,40 @@ async function addRolesToCustomClaimsForAllUsers() {
     console.log("Adding roles from user docs into custom claims");
     console.log("========================================\n");
 
-    const usersSnapshot = await db.collection("users").get();
-    const totalUsers = usersSnapshot.size;
+    let userDocs: Array<FirebaseFirestore.QueryDocumentSnapshot | FirebaseFirestore.DocumentSnapshot> = [];
+
+    if (uidsArg) {
+      const uids = uidsArg
+        .split(",")
+        .map((s) => s.trim())
+        .filter((s) => s.length > 0);
+      if (uids.length === 0) {
+        console.error("No valid UIDs provided via --uids");
+        return;
+      }
+      console.log(`Fetching ${uids.length} user document(s) by UID...`);
+      const docs = await Promise.all(
+        uids.map((uid) => db.collection("users").doc(uid).get()),
+      );
+      userDocs = docs.filter((d) => d.exists);
+      const missing = docs.filter((d) => !d.exists).map((d) => d.id);
+      if (missing.length > 0) {
+        console.warn(`Warning: ${missing.length} UID(s) not found: ${missing.join(", ")}`);
+      }
+    } else {
+      let usersQuery: FirebaseFirestore.Query = db.collection("users");
+      if (typeof limitArg === "number") {
+        if (!Number.isFinite(limitArg) || limitArg <= 0) {
+          console.error("--limit must be a positive integer");
+          return;
+        }
+        usersQuery = usersQuery.limit(limitArg);
+      }
+      const usersSnapshot = await usersQuery.get();
+      userDocs = usersSnapshot.docs;
+    }
+
+    const totalUsers = userDocs.length;
 
     if (totalUsers === 0) {
       console.log("No users found in the database");
@@ -120,13 +167,12 @@ async function addRolesToCustomClaimsForAllUsers() {
     let processed = 0;
     let authUpdated = 0;
     let userDocsUpdated = 0;
-    let userClaimsUpdated = 0;
     let errors = 0;
 
     let batch = db.batch();
     let batchCount = 0;
 
-    for (const userDoc of usersSnapshot.docs) {
+    for (const userDoc of userDocs) {
       const uid = userDoc.id;
       const userData = userDoc.data() as AnyObject;
       const rolesArray = coerceRolesArray(userData.roles);
@@ -170,19 +216,7 @@ async function addRolesToCustomClaimsForAllUsers() {
           authUpdated++;
         }
 
-        // 3) Mirror roles into Firestore userClaims doc without disturbing other claim fields
-        try {
-          if (!dryRun) {
-            const userClaimsRef = db.collection("userClaims").doc(uid);
-            await userClaimsRef.set(
-              { claims: { roles: rolesArray }, lastUpdated: FieldValue.serverTimestamp() },
-              { merge: true },
-            );
-          }
-          userClaimsUpdated++;
-        } catch (ucErr) {
-          console.error(`Failed to update userClaims for ${uid}:`, ucErr);
-        }
+
       } catch (err) {
         console.error(`Error processing user ${uid}:`, err);
         errors++;
@@ -207,7 +241,6 @@ async function addRolesToCustomClaimsForAllUsers() {
     console.log(`\nTotal users processed: ${processed}`);
     console.log(`Auth custom claims updated: ${authUpdated}`);
     console.log(`User docs updated with blank roles: ${userDocsUpdated}`);
-    console.log(`userClaims docs updated (roles mirrored): ${userClaimsUpdated}`);
     console.log(`Errors: ${errors}`);
     console.log("========================================\n");
   } catch (fatalErr) {
