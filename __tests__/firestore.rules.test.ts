@@ -39,7 +39,7 @@ describe('Firestore security rules (levante-admin)', () => {
         await ctx
           .firestore()
           .doc('userClaims/alice')
-          .set({ claims: { admin: true } });
+          .set({ claims: { admin: false } });
         await ctx
           .firestore()
           .doc('userClaims/bob')
