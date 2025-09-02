@@ -11,6 +11,7 @@
     "format": "npm run format --workspaces",
     "lint": "npm run lint --workspaces",
     "prepare": "husky install || true",
+    "test": "firebase emulators:exec \"npx vitest run\"",
     "predeploy:levante-admin": "npm run build",
     "predeploy:levante-assessment": "npm run build",
     "deploy:levante-admin": "firebase deploy --only functions --prefix ./functions/levante-admin/firebase.json",
@@ -55,11 +56,14 @@
     "firebase-tools": "^14.5.0"
   },
   "devDependencies": {
-    "@types/jest": "^29.5.14",
-    "jest": "^29.7.0",
+    "@firebase/rules-unit-testing": "^4.0.0",
+    "@types/node": "^22.7.9",
+    "@vitest/coverage-v8": "^2.1.9",
     "prettier": "3.3.2",
     "puppeteer": "^24.8.0",
-    "ts-jest": "^29.2.5"
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "vitest": "^3.2.4"
   },
   "private": true,
   "fireConfig": {}

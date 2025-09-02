@@ -5,9 +5,9 @@
       "codebase": "levante-admin",
       "ignore": [
         "node_modules",
-        ".git",
+        "firestore-debug.log",
         "firebase-debug.log",
-        "firestore-debug.log"
+        ".git"
       ],
       "predeploy": [
         "npm --prefix \"$RESOURCE_DIR\" run build"
