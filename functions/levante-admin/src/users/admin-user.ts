@@ -9,6 +9,7 @@ import {
   setUidClaimsHandler,
   validateAdminStatus,
 } from "./set-custom-claims";
+import { ROLES } from "../utils/constants";
 
 /**
  * Creates an admin user in both the admin and assessment Firebase projects.
@@ -109,7 +110,7 @@ export const createAdminUser = async ({
             // Temporary, admin creation will be refactored to handle all admin role types.
             const roles = (adminOrgs.districts ?? []).map((districtId) => ({
               siteId: districtId,
-              role: "admin",
+              role: ROLES.ADMIN,
             }));
             await auth.setCustomUserClaims(userRecord.uid, { roles });
             return userRecord.uid;

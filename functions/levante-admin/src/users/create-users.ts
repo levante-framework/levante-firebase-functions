@@ -14,6 +14,7 @@ import _chunk from "lodash/chunk";
 import { HttpsError } from "firebase-functions/v2/https";
 import bcrypt from "bcrypt";
 import { isEmulated } from "../utils/utils";
+import { ROLES } from "../utils/constants";
 
 interface InputUser {
   userType: string;
@@ -355,7 +356,7 @@ export const _createUsers = async (
 
     const roles: { siteId: string; role: string }[] = [];
     user.orgIds.districts.forEach((districtId) => {
-      roles.push({ siteId: districtId, role: "participant" });
+      roles.push({ siteId: districtId, role: ROLES.PARTICIPANT });
     });
 
     const claims = {
