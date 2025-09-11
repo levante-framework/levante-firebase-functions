@@ -147,8 +147,6 @@ export const createAdminUser = async ({
   //   isTestData,
   // });
 
-
-
   await appendOrRemoveAdminOrgs({
     requesterUid: requesterUid,
     targetUid: targetAuthUids.admin,
@@ -182,6 +180,7 @@ export const createAdminUser = async ({
           claims: {
             ...currentClaims,
             admin: true,
+            useNewPermissions: false,
           },
         },
         { merge: true }

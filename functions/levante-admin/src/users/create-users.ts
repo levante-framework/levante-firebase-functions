@@ -62,7 +62,6 @@ interface BaseAuthUserData {
 
 type AdminAuthUserData = BaseAuthUserData;
 
-
 interface ReturnUserData {
   uid: string;
   email: string;
@@ -395,7 +394,14 @@ export const _createUsers = async (
     const adminUserClaimDoc = db
       .collection("userClaims")
       .doc(userAdminDocs[i].id);
-    adminUserClaimsDocs.push(adminUserClaimDoc.set({ claims: claims }));
+    adminUserClaimsDocs.push(
+      adminUserClaimDoc.set({
+        claims: {
+          ...claims,
+          useNewPermissions: false,
+        },
+      })
+    );
 
     returnUserData.push({
       uid: authUserData.uid,
