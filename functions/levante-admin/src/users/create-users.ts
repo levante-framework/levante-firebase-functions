@@ -1,6 +1,7 @@
 import { getAuth, type UserImportResult, type Auth } from "firebase-admin/auth";
 import {
   getFirestore,
+  FieldPath,
   type DocumentReference,
   type WriteResult,
 } from "firebase-admin/firestore";
@@ -344,6 +345,32 @@ export const _createUsers = async (
   const adminUserClaimsDocs: Promise<WriteResult>[] = [];
   const returnUserData: ReturnUserData[] = [];
 
+  // Prepare a map of districtId -> name (bulk fetch unique IDs to populate siteName)
+  const uniqueDistrictIds = Array.from(
+    new Set(userData.flatMap((u) => u.orgIds.districts || []))
+  );
+  const districtIdToName = new Map<string, string>();
+  if (uniqueDistrictIds.length > 0) {
+    const chunk = <T>(arr: T[], size: number): T[][] => {
+      const chunks: T[][] = [];
+      for (let i = 0; i < arr.length; i += size) {
+        chunks.push(arr.slice(i, i + size));
+      }
+      return chunks;
+    };
+    const idChunks = chunk(uniqueDistrictIds, 30);
+    for (const ids of idChunks) {
+      const snap = await db
+        .collection("districts")
+        .where(FieldPath.documentId(), "in", ids)
+        .get();
+      for (const doc of snap.docs) {
+        const data = doc.data();
+        districtIdToName.set(doc.id, (data?.name as string) ?? "");
+      }
+    }
+  }
+
   // Add relavent data to the auth user object
   for (let i = 0; i < userData.length; i++) {
     const user = userData[i];
@@ -353,9 +380,13 @@ export const _createUsers = async (
     // generate random password
     const stringPassword = generateRandomString();
 
-    const roles: { siteId: string; role: string }[] = [];
+    const roles: { siteId: string; role: string; siteName: string }[] = [];
     user.orgIds.districts.forEach((districtId) => {
-      roles.push({ siteId: districtId, role: ROLES.PARTICIPANT });
+      roles.push({
+        siteId: districtId,
+        role: ROLES.PARTICIPANT,
+        siteName: districtIdToName.get(districtId) ?? "",
+      });
     });
 
     const claims = {
@@ -605,6 +636,7 @@ export const _createUsers = async (
         createdAt: new Date(),
         updatedAt: new Date(),
         lastUpdated: new Date(), // keeping this until we migrate to updatedAt
+        roles: currentUser.customClaims.roles,
       };
 
       const validUserTypes = ["student", "child", "teacher", "parent"];
