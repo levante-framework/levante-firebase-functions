@@ -27,7 +27,8 @@ async function createUserClaims(adminApp, users, organizations) {
           schools: []
         },
         super_admin: false,
-        admin: false
+        admin: false,
+        useNewPermissions: false
       };
       
       // Set claims based on user type
