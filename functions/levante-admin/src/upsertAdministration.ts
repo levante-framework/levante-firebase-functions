@@ -8,6 +8,7 @@ const { FieldValue } = admin.firestore;
 interface UpsertAdministrationData {
   name: string;
   publicName?: string;
+  normalizedName: string;
   assessments: IAssessment[]; // Use interface from common
   dateOpen: string; // Expect ISO string from client
   dateClose: string; // Expect ISO string from client
@@ -22,6 +23,7 @@ interface UpsertAdministrationData {
 interface IAdministrationDoc {
   name: string;
   publicName: string;
+  normalizedName: string;
   createdBy: string;
   groups: string[];
   families: string[];
@@ -114,6 +116,7 @@ export const upsertAdministration = onCall(async (request) => {
   const {
     name,
     publicName,
+    normalizedName,
     assessments,
     dateOpen,
     dateClose,
@@ -235,6 +238,7 @@ export const upsertAdministration = onCall(async (request) => {
           // Use Partial for updates
           name,
           publicName: publicName ?? name,
+          normalizedName,
           // createdBy should not be updated
           groups: orgs.groups ?? [],
           families: orgs.families ?? [],
@@ -284,6 +288,7 @@ export const upsertAdministration = onCall(async (request) => {
         const administrationData: IAdministrationDoc = {
           name,
           publicName: publicName ?? name,
+          normalizedName,
           createdBy: callerAdminUid,
           groups: orgs.groups ?? [],
           families: orgs.families ?? [],
