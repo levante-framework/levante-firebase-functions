@@ -52,11 +52,10 @@ const argv = yargs(process.argv.slice(2))
       type: "number",
       default: 500,
     },
-    outputFile: {
-      alias: "o",
-      description: "Output file path for results",
-      type: "string",
-      default: "./script-results.txt",
+    testSize: {
+      alias: "t",
+      description: "Amount of documents to test on. Only process these amount of documents",
+      type: "number",
     },
     // Add script-specific options here
   })

@@ -1,5 +1,5 @@
 import { CreateRequest, getAuth } from "firebase-admin/auth";
-import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore, FieldPath } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import _fromPairs from "lodash/fromPairs";
 import { v4 as uuidv4 } from "uuid";
@@ -199,6 +199,36 @@ export const createAdminUser = async ({
   //         +--------------------------------------------------------+
   const now = new Date();
 
+  // Build roles with siteName from adminOrgs.districts
+  const districtIds = adminOrgs?.districts ?? [];
+  const idToName = new Map<string, string>();
+  if (districtIds.length > 0) {
+    // Query in chunks of 30 using documentId() IN
+    const chunk = <T>(arr: T[], size: number): T[][] => {
+      const chunks: T[][] = [];
+      for (let i = 0; i < arr.length; i += size) {
+        chunks.push(arr.slice(i, i + size));
+      }
+      return chunks;
+    };
+    const idChunks = chunk(Array.from(new Set(districtIds)), 30);
+    for (const ids of idChunks) {
+      const snap = await db
+        .collection("districts")
+        .where(FieldPath.documentId(), "in", ids)
+        .get();
+      for (const doc of snap.docs) {
+        const data = doc.data();
+        idToName.set(doc.id, (data?.name as string) ?? "");
+      }
+    }
+  }
+  const rolesWithNames = districtIds.map((districtId) => ({
+    siteId: districtId,
+    role: ROLES.ADMIN,
+    siteName: idToName.get(districtId) ?? "",
+  }));
+
   const orgListToMap = (orgs?: string[]) => {
     if (orgs === undefined) {
       return {
@@ -222,6 +252,7 @@ export const createAdminUser = async ({
       archived: false,
       lastUpdated: FieldValue.serverTimestamp(),
       testData: isTestData ?? false,
+      roles: rolesWithNames,
     };
 
     for (const orgType of ["districts", "schools", "classes", "groups"]) {
@@ -251,6 +282,7 @@ export const createAdminUser = async ({
       createdAt: FieldValue.serverTimestamp(),
       lastUpdated: FieldValue.serverTimestamp(),
       testData: isTestData ?? false,
+      roles: rolesWithNames,
     };
   }
 

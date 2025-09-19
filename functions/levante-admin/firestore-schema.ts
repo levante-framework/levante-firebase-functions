@@ -216,6 +216,7 @@ interface User {
   sso?: string; // e.g., "google" only for admin users
   userType: "admin" | "teacher" | "student" | "parent";
   testData?: boolean;
+  roles: { siteId: string; role: string, siteName: string }[];
 }
 
 // Interface for the assignments subcollection of `users`
