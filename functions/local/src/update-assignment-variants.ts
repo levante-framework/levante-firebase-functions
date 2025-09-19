@@ -1,3 +1,9 @@
+/**
+ * Updates assignment documents with variant information for tasks.
+ * This script matches task parameters in user assignments with corresponding variants
+ * from the assessment project and adds variantId and variantName fields to assessments.
+ */
+
 import * as admin from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";

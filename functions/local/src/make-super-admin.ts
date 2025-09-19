@@ -1,3 +1,9 @@
+/**
+ * Makes a user a super admin by updating their userClaims.
+ * This script takes an email address and sets the super_admin flag to true
+ * in the user's custom claims document.
+ */
+
 import * as admin from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { Firestore, getFirestore } from "firebase-admin/firestore";

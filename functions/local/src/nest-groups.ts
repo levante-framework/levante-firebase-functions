@@ -1,4 +1,10 @@
 #!/usr/bin/env node
+/**
+ * Nests groups under a district in the organizational hierarchy.
+ * This script takes a district name and a list of group names, then updates
+ * the database to establish parent-child relationships between the district and groups.
+ */
+
 import * as admin from "firebase-admin/app";
 import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import yargs from "yargs";

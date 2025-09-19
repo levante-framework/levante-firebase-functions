@@ -1,3 +1,10 @@
+/**
+ * Score calculation utilities for various assessment tasks.
+ * This module provides functions to compute raw and standardized scores for different
+ * assessment tasks like PA, SWR, SRE, and percent-correct tasks, using lookup tables
+ * and age/grade-based normalization.
+ */
+
 // Interfaces
 import axios from "axios";
 import Papa from "papaparse";

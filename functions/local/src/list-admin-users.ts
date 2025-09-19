@@ -1,4 +1,10 @@
 #!/usr/bin/env node
+/**
+ * Lists admin users whose emails don't contain specific internal domains.
+ * This script queries for admin users and filters out those with internal domains
+ * like 'levante', 'test', 'stanford', etc., to identify external admin users.
+ */
+
 import * as admin from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import yargs from "yargs";

@@ -1,3 +1,9 @@
+/**
+ * Denormalizes administration data into assignment documents.
+ * This script copies administration properties (name, publicName, dateCreated, etc.)
+ * and assessment parameters from administration documents into user assignment documents.
+ */
+
 import * as admin from "firebase-admin/app";
 import { getFirestore, WriteResult } from "firebase-admin/firestore";
 

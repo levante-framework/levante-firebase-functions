@@ -1,4 +1,10 @@
 #!/usr/bin/env node
+/**
+ * Updates user claims to add district associations.
+ * This script adds a specified district ID to the adminOrgs and minimalAdminOrgs
+ * district arrays in userClaims documents for specified users.
+ */
+
 import * as admin from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import yargs from "yargs";

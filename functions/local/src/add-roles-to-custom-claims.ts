@@ -1,4 +1,10 @@
 #!/usr/bin/env node
+/**
+ * Adds user roles from Firestore user documents to Firebase Auth custom claims.
+ * This script processes users in batches and ensures their roles field from the database
+ * is synchronized with their Auth custom claims for authorization purposes.
+ */
+
 import * as admin from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";

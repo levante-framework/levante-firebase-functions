@@ -1,3 +1,9 @@
+/**
+ * Merges assessment user data into main user documents.
+ * This script copies subcollections (runs and trials) from the assessmentUsers collection
+ * into the corresponding user documents in the users collection, consolidating user data.
+ */
+
 import * as admin from "firebase-admin/app";
 import { getFirestore, WriteBatch } from "firebase-admin/firestore";
 import { DocumentReference } from "firebase-admin/firestore";

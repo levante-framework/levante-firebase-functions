@@ -1,3 +1,9 @@
+/**
+ * Adds the 'useNewPermissions: false' flag to userClaims documents.
+ * This script processes userClaims documents and sets the useNewPermissions flag
+ * to false for users who don't already have this flag explicitly set.
+ */
+
 import * as admin from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import yargs from "yargs";

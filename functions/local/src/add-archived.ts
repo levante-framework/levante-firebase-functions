@@ -1,3 +1,9 @@
+/**
+ * Adds an 'archived' field to documents that don't have it.
+ * This function processes collections and sets archived: false for documents
+ * that are missing this field, ensuring data consistency.
+ */
+
 import * as admin from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 

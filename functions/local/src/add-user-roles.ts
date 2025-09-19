@@ -1,3 +1,9 @@
+/**
+ * Adds role information to user documents based on their userType and organization associations.
+ * This script determines appropriate roles (super_admin, admin, participant) for users based on
+ * their userClaims and organization memberships, then updates their user documents accordingly.
+ */
+
 import * as admin from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import yargs from "yargs";

@@ -1,3 +1,9 @@
+/**
+ * Sets up the system permissions document in Firestore.
+ * This script creates a system/permissions document that defines role-based permissions
+ * for different user types (super_admin, site_admin, admin, research_assistant, participant).
+ */
+
 import * as admin from "firebase-admin/app";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 

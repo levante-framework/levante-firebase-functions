@@ -260,6 +260,7 @@ main().catch((error) => {
 
 ## Best Practices Checklist
 
+- [ ] Add a brief description of what the script does at the top of the file.
 - [ ] Always include dry run mode (default: true)
 - [ ] Support both dev and prod environments
 - [ ] Use batched Firestore operations with configurable batch size

@@ -1,3 +1,9 @@
+/**
+ * Toggles a user's super admin status.
+ * This script takes an email address and flips the super_admin flag in the user's
+ * custom claims document between true and false.
+ */
+
 import * as admin from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { Firestore, getFirestore } from "firebase-admin/firestore";

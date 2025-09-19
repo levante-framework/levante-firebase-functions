@@ -1,3 +1,9 @@
+/**
+ * Lists and optionally updates authentication provider information for users.
+ * This script identifies users who need provider updates (users with internal emails
+ * but missing provider data) and can either list them or update their provider configuration.
+ */
+
 import * as admin from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import yargs from "yargs";
