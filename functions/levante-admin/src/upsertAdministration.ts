@@ -1,7 +1,11 @@
 import admin from "firebase-admin";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
-import { IAssessment, IOrgsList } from "./interfaces"; // Assuming necessary types/helpers are in common
+import { IAssessment, IOrgsList, IAdministration } from "./interfaces"; // Assuming necessary types/helpers are in common
+import {
+  manualProcessNewAdministration,
+  manualProcessModifiedAdministration,
+} from "./administrations/manual-sync-administrations";
 const db = admin.firestore();
 const { FieldValue } = admin.firestore;
 
@@ -212,6 +216,7 @@ export const upsertAdministration = onCall(async (request) => {
 
   // 5. Firestore Transaction
   try {
+    let previousData: IAdministration | null = null;
     const newAdministrationId = await db.runTransaction(async (transaction) => {
       let administrationDocRef: admin.firestore.DocumentReference;
       let operationType: string; // To log 'create' or 'update'
@@ -229,6 +234,9 @@ export const upsertAdministration = onCall(async (request) => {
             `Administration with ID ${administrationId} not found for update.`
           );
         }
+
+        // Store previous data for comparison
+        previousData = existingDoc.data() as IAdministration;
 
         // Prepare data for update (merge: true will handle partial updates)
         const updateData: Partial<IAdministrationDoc> = {
@@ -331,6 +339,56 @@ export const upsertAdministration = onCall(async (request) => {
     logger.info("Finished administration upsert transaction", {
       administrationId: newAdministrationId,
     });
+
+    // 6. Assignment Synchronization
+    try {
+      logger.info("Starting manual assignment synchronization", {
+        administrationId: newAdministrationId,
+        operationType: administrationId ? "update" : "create",
+      });
+
+      const administrationDocRef = db
+        .collection("administrations")
+        .doc(newAdministrationId);
+
+      const administrationDoc = await administrationDocRef.get();
+
+      if (!administrationDoc.exists) {
+        throw new HttpsError(
+          "internal",
+          "Administration document not found after creation/update"
+        );
+      }
+
+      const administrationData = administrationDoc.data() as IAdministration;
+
+      if (administrationId && previousData) {
+        await manualProcessModifiedAdministration(
+          newAdministrationId,
+          administrationDocRef,
+          previousData,
+          administrationData
+        );
+      } else {
+        await manualProcessNewAdministration(
+          newAdministrationId,
+          administrationDocRef,
+          administrationData
+        );
+      }
+
+      logger.info("Completed manual assignment synchronization", {
+        administrationId: newAdministrationId,
+      });
+    } catch (syncError: any) {
+      logger.error("Error during manual assignment synchronization", {
+        error: syncError,
+        administrationId: newAdministrationId,
+      });
+      // Don't throw the error - the administration was created/updated successfully
+      // The sync error can be handled separately or retried
+    }
+
     return { status: "ok", administrationId: newAdministrationId };
   } catch (error: any) {
     logger.error("Error during administration upsert", { error });
