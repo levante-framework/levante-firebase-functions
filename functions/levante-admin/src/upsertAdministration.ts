@@ -134,6 +134,8 @@ export const upsertAdministration = onCall(async (request) => {
     legal,
   } = request.data as UpsertAdministrationData;
 
+  console.log("request.data: ", request.data);
+
   // Debug logging for date values
   logger.info("Date validation debug", {
     dateOpen,
@@ -158,48 +160,12 @@ export const upsertAdministration = onCall(async (request) => {
   let dateOpenedTs: admin.firestore.Timestamp;
   let dateClosedTs: admin.firestore.Timestamp;
   try {
-    console.log("\n=== About to parse dates ===");
-    console.log("dateOpen:", dateOpen);
-    console.log("dateClose:", dateClose);
-    console.log("dateOpen type:", typeof dateOpen);
-    console.log("dateClose type:", typeof dateClose);
-    console.log("dateOpen constructor:", dateOpen?.constructor?.name);
-    console.log("dateClose constructor:", dateClose?.constructor?.name);
-
-    console.log("\n------------DATE STUFF------------");
-
     const dateOpenObj = new Date(dateOpen);
     const dateCloseObj = new Date(dateClose);
 
-    console.log("\n=== Date objects created ===");
-    console.log("dateOpenObj:", dateOpenObj);
-    console.log("dateCloseObj:", dateCloseObj);
-    console.log("dateOpenObj type:", typeof dateOpenObj);
-    console.log("dateCloseObj type:", typeof dateCloseObj);
-    console.log("dateOpen valid:", !isNaN(dateOpenObj.getTime()));
-    console.log("dateClose valid:", !isNaN(dateCloseObj.getTime()));
-
-    console.log("firestore on admin:", admin.firestore);
-    console.log("firestore timestamp on admin:", admin.firestore.Timestamp);
-
-    const testServerTimestamp = admin.firestore.Timestamp.fromDate(new Date());
-    console.log("testServerTimestamp:", testServerTimestamp);
-
     dateOpenedTs = admin.firestore.Timestamp.fromDate(dateOpenObj);
     dateClosedTs = admin.firestore.Timestamp.fromDate(dateCloseObj);
-
-    console.log("\n=== Timestamps created successfully ===");
-    console.log("dateOpenedTs:", dateOpenedTs);
-    console.log("dateClosedTs:", dateClosedTs);
   } catch (e: unknown) {
-    console.error("\n=== Date parsing error ===");
-    console.error("Error message:", e instanceof Error ? e.message : String(e));
-    console.error("Error stack:", e instanceof Error ? e.stack : undefined);
-    console.error("dateOpen:", dateOpen);
-    console.error("dateClose:", dateClose);
-    console.error("dateOpen type:", typeof dateOpen);
-    console.error("dateClose type:", typeof dateClose);
-
     throw new HttpsError(
       "invalid-argument",
       "Invalid date format for dateOpen or dateClose. Use ISO 8601 format."
