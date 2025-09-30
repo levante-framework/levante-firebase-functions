@@ -2,7 +2,7 @@ import * as admin from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { Firestore, getFirestore } from "firebase-admin/firestore";
 
-const adminCredentialFile = process.env.ROAR_ADMIN_FIREBASE_CREDENTIALS;
+const adminCredentialFile = process.env.LEVANTE_ADMIN_FIREBASE_CREDENTIALS;
 
 if (!adminCredentialFile) {
   console.error(
@@ -31,7 +31,7 @@ const email = args[0];
 const adminApp = admin.initializeApp(
   {
     credential: admin.cert(adminCredentials),
-    projectId: "hs-levante-admin-dev",
+    projectId: "hs-levante-admin-prod",
   },
   "admin",
 );
@@ -41,11 +41,10 @@ const adminFirestore = getFirestore(adminApp);
 
 // Get the target user's current custom claims.
 await adminAuth.getUserByEmail(email).then((targetRecord) => {
-  const targetClaims = targetRecord.customClaims;
-  const adminUid = targetClaims?.adminUid;
-
+  const targetUid = targetRecord.uid;
+  
   return toggleSuperAdmin({
-    targetUid: adminUid,
+    targetUid: targetUid,
     db: adminFirestore,
   }).then(({ userClaims }) => {
     console.log(

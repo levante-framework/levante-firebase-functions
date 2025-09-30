@@ -1,10 +1,10 @@
 import * as admin from "firebase-admin";
 
 // Type alias for Firestore Timestamp
-type Timestamp = admin.firestore.Timestamp;
+export type Timestamp = admin.firestore.Timestamp;
 
 // Generic structure for organization references used in multiple places
-interface OrgRefMap {
+export interface OrgRefMap {
   classes: string[];
   districts: string[];
   families: string[];
@@ -13,20 +13,20 @@ interface OrgRefMap {
 }
 
 // Structure for Assessment Condition Rules within Administrations
-interface AssessmentConditionRule {
+export interface AssessmentConditionRule {
   field: string; // e.g., "userType"
   op: string; // e.g., "EQUAL", "AND"
   value: string | number | boolean | null; // e.g., "student"
 }
 
 // Structure for Assessment Conditions within Administrations
-interface AssessmentConditions {
+export interface AssessmentConditions {
   assigned: Record<string, unknown>; // Structure needs clarification based on usage
   conditions: AssessmentConditionRule[];
 }
 
 // Structure for individual Assessments within Administrations
-interface Assessment {
+export interface Assessment {
   conditions: AssessmentConditions;
   params: Record<string, unknown>; // Parameters specific to the task
   taskName: string; // e.g., "egma-math"
@@ -36,7 +36,7 @@ interface Assessment {
 }
 
 // Structure for Legal information within Administrations and AssignedOrgs
-interface LegalInfo {
+export interface LegalInfo {
   amount: string;
   assent: string | null;
   consent: string | null;
@@ -45,7 +45,7 @@ interface LegalInfo {
 
 // Interface for documents in the `administrations` collection
 // Stores metadata about each administration (assignment) including the sequence of tasks, involved organizations, and visibility control.
-interface Administration {
+export interface Administration {
   assessments: Assessment[];
   classes: string[]; // Document IDs from `classes` collection
   createdBy: string; // User UID
@@ -67,7 +67,7 @@ interface Administration {
 }
 
 // Interface for documents in the `assignedOrgs` subcollection of `administrations`
-interface AssignedOrg {
+export interface AssignedOrg {
   administrationId: string;
   createdBy: string; // User UID of the administration creator
   dateClosed: Timestamp; // Copied from administration
@@ -83,7 +83,7 @@ interface AssignedOrg {
 }
 
 // Interface for documents in the `readOrgs` subcollection of `administrations`
-interface readOrg {
+export interface ReadOrg {
   administrationId: string;
   createdBy: string; // User UID of the administration creator
   dateClosed: Timestamp; // Copied from administration
@@ -99,14 +99,14 @@ interface readOrg {
 }
 
 // Interface for the stats subcollection of `administrations`
-interface Stat {
+export interface Stat {
   assignment: Record<string, number>;
   survey: Record<string, number>;
 }
 
 // Interface for documents in the `classes` collection
 // Details about classes, including school affiliation and optional educational details
-interface Class {
+export interface Class {
   archived: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -119,7 +119,7 @@ interface Class {
 
 // Interface for documents in the `districts` collection
 // Manages information about districts (sites), including associated schools.
-interface District {
+export interface District {
   archived: boolean;
   createdAt: Timestamp;
   createdBy: string; // User UID
@@ -133,7 +133,7 @@ interface District {
 // Interface for documents in the `groups` collection
 // Purpose: Manages group (cohort) data, potentially representing subgroups within a district (site).
 // This is a catch all type group for when a group of users does not fit into the traditional group type.
-interface Group {
+export interface Group {
   archived: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
@@ -146,7 +146,7 @@ interface Group {
 
 // Interface for documents in the `schools` collection
 // Contains data about schools, including their districts.
-interface School {
+export interface School {
   archived: boolean;
   classes?: string[]; // Document IDs of classes
   createdAt: Timestamp;
@@ -159,7 +159,7 @@ interface School {
 
 // Structure for Claims within UserClaims
 // Manages custom claims for users, facilitating access control based on administrative roles or organizational (Group) affiliations.
-interface Claims {
+export interface Claims {
   adminOrgs: OrgRefMap;
   adminUid?: string; // Purpose needs clarification
   assessmentUid?: string;
@@ -169,33 +169,33 @@ interface Claims {
 }
 
 // Interface for documents in the `userClaims` collection (Document ID is User UID)
-interface UserClaims {
+export interface UserClaims {
   claims: Claims;
   lastUpdated: number; // Unix milliseconds timestamp?
   testData?: boolean;
 }
 
 // Structure for Admin-specific data within Users
-interface AdminData {
+export interface AdminData {
   administrationsCreated: string[]; // IDs of administrations
 }
 
 // Structure for organizational associations within Users
-interface OrgAssociationMap {
+export interface OrgAssociationMap {
   all: string[];
   current: string[];
   dates: Record<string, Timestamp>; // Structure needs clarification
 }
 
 // Structure for user legal document acceptance within Users
-interface UserLegal {
+export interface UserLegal {
   assent: Record<string, Timestamp>; // Keyed by form hash/identifier
   tos: Record<string, Timestamp>; // Keyed by ToS version hash/identifier
 }
 
 // Interface for documents in the `users` collection (Document ID is User UID)
 // Stores comprehensive user data including assignments and organizational affiliations.
-interface User {
+export interface User {
   adminData?: AdminData; // only for admin users
   assignments?: {
     // only for participants
@@ -216,12 +216,12 @@ interface User {
   sso?: string; // e.g., "google" only for admin users
   userType: "admin" | "teacher" | "student" | "parent";
   testData?: boolean;
-  roles: { siteId: string; role: string, siteName: string }[];
+  roles: { siteId: string; role: string; siteName: string }[];
 }
 
 // Interface for the assignments subcollection of `users`
 // Represents a specific administration assigned to a user.
-interface AssignmentAssessment {
+export interface AssignmentAssessment {
   progress: {
     survey: string;
     publicName: string;
@@ -277,7 +277,50 @@ interface AssignmentAssessment {
 }
 
 // Tracks versions of legal documents using GitHub as a reference point.
-interface legal {}
+export interface Legal {}
+
+
+/**
+ * Permission action types allowed in the system.
+ */
+export type PermissionAction = "create" | "read" | "update" | "delete" | "exclude";
+
+/**
+ * Interface for the permissions structure within the system/permissions document.
+ * Defines granular permissions for different admin roles.
+ */
+export interface RolePermissions {
+  groups: {
+    sites: PermissionAction[];
+    schools: PermissionAction[];
+    classes: PermissionAction[];
+    cohorts: PermissionAction[];
+  };
+  assignments: PermissionAction[];
+  users: PermissionAction[];
+  admins: {
+    site_admin: PermissionAction[];
+    admin: PermissionAction[];
+    research_assistant: PermissionAction[];
+  };
+  tasks: PermissionAction[];
+}
+
+/**
+ * Interface for documents in the `system` collection.
+ * Currently only contains the permissions document.
+ */
+export interface SystemPermissions {
+  permissions: {
+    super_admin: RolePermissions;
+    site_admin: RolePermissions;
+    admin: RolePermissions;
+    research_assistant: RolePermissions;
+    participant: RolePermissions;
+  };
+  updatedAt: Timestamp
+  version: string; // e.g., "1.1.0"
+}
 
 // --- Assessment & Task Data --- interfaces
 

@@ -75,7 +75,7 @@ service cloud.firestore {
              roles.hasAny(['research_assistant']) ? 'research_assistant' : 'participant';
     }
 
-    // New: Check if user has permission for a specific action
+    // New: Check if user has permission for a specific action (handles flat arrays)
     function hasPermission(resource, action) {
       let highestRole = getHighestRole();
       let permissions = getSystemPermissions();
@@ -83,6 +83,35 @@ service cloud.firestore {
       let resourcePerms = rolePerms.get(resource, []);
 
       return resourcePerms.hasAny([action]);
+    }
+
+    // Check if user has permission for a nested group type (sites, schools, classes, cohorts)
+    function hasGroupPermission(groupType, action) {
+      let highestRole = getHighestRole();
+      let permissions = getSystemPermissions();
+      let rolePerms = permissions.get(highestRole, {});
+      let groupsPerms = rolePerms.get('groups', {});
+      let groupTypePerms = groupsPerms.get(groupType, []);
+
+      return groupTypePerms.hasAny([action]);
+    }
+
+    
+    function hasAnyGroupPermission(action) {
+      return hasGroupPermission('sites', action)
+        || hasGroupPermission('schools', action)
+        || hasGroupPermission('classes', action)
+        || hasGroupPermission('cohorts', action);
+    }
+
+    function hasAdminRolePermission(adminRole, action) {
+      let highestRole = getHighestRole();
+      let permissions = getSystemPermissions();
+      let rolePerms = permissions.get(highestRole, {});
+      let adminsPerms = rolePerms.get('admins', {});
+      let adminRolePerms = adminsPerms.get(adminRole, []);
+
+      return adminRolePerms.hasAny([action]);
     }
 
     // New: Check if user is super_admin or site_admin
@@ -302,7 +331,7 @@ service cloud.firestore {
         let baseCheck = loggedIn() && (userAssignedToAdministration() || userCreatedAdministration() || isAdminForAnyOrgType(resource.data));
 
         return shouldUseNewPermissions() ?
-          (baseCheck && hasPermission('admins', 'read')) :
+          (baseCheck && hasPermission('assignments', 'read')) :
           baseCheck;
       }
 
@@ -310,7 +339,7 @@ service cloud.firestore {
         let baseCheck = loggedIn() && getUid() == request.resource.data.createdBy && isAdminForAnyOrgType(request.resource.data);
 
         return shouldUseNewPermissions() ?
-          (baseCheck && hasPermission('admins', 'create')) :
+          (baseCheck && hasPermission('assignments', 'create')) :
           baseCheck;
       }
 
@@ -318,13 +347,13 @@ service cloud.firestore {
         let baseCheck = loggedIn() && (userCreatedAdministration() || isAdminForAnyOrgType(resource.data)) && keysNotUpdated(['createdBy']);
 
         return shouldUseNewPermissions() ?
-          (baseCheck && hasPermission('admins', 'update')) :
+          (baseCheck && hasPermission('assignments', 'update')) :
           baseCheck;
       }
 
       function canDeleteAdministration() {
         return shouldUseNewPermissions() ?
-          hasPermission('admins', 'delete') :
+          hasPermission('assignments', 'delete') :
           false;
       }
 
@@ -345,38 +374,104 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/users/$(getUid())).data.get([orgType, 'current'], []);
     }
 
-    // Districts
+    // Districts (sites in new permission system)
     match /districts/{districtId} {
-      allow read: if loggedIn() && (districtId in getUserOrgs('districts') || isAdminForOrgType('districts', [districtId]));
-      allow write: if false;
+      function canReadDistrict() {
+        let baseCheck = loggedIn() && (districtId in getUserOrgs('districts') || isAdminForOrgType('districts', [districtId]));
+        
+        return shouldUseNewPermissions() ?
+          (baseCheck && hasGroupPermission('sites', 'read')) :
+          baseCheck;
+      }
+
+      function canWriteDistrict(action) {
+        return shouldUseNewPermissions() ?
+          hasGroupPermission('sites', action) :
+          false;
+      }
+
+      allow read: if canReadDistrict();
+      allow create: if canWriteDistrict('create');
+      allow update: if canWriteDistrict('update');
+      allow delete: if canWriteDistrict('delete');
     }
 
     // Schools
     match /schools/{schoolId} {
-      allow read: if schoolId in getUserOrgs('schools') || isAdminForOrgType('schools', [schoolId]) ||
-        isAdminForOrgType('districts', [resource.data.get('districtId', 'nullId')]);
-      allow create: if isAdminForOrgType('districts', [request.resource.data.get('districtId', 'nullId')]);
-      allow update, delete: if isAdminForOrgType('districts', [resource.data.get('districtId', 'nullId')]);
+      function canReadSchool() {
+        let baseCheck = schoolId in getUserOrgs('schools') || isAdminForOrgType('schools', [schoolId]) ||
+          isAdminForOrgType('districts', [resource.data.get('districtId', 'nullId')]);
+        
+        return shouldUseNewPermissions() ?
+          (baseCheck && hasGroupPermission('schools', 'read')) :
+          baseCheck;
+      }
+
+      function canCreateSchool() {
+        let baseCheck = isAdminForOrgType('districts', [request.resource.data.get('districtId', 'nullId')]);
+        
+        return shouldUseNewPermissions() ?
+          (baseCheck && hasGroupPermission('schools', 'create')) :
+          baseCheck;
+      }
+
+      function canUpdateDeleteSchool(action) {
+        let baseCheck = isAdminForOrgType('districts', [resource.data.get('districtId', 'nullId')]);
+        
+        return shouldUseNewPermissions() ?
+          (baseCheck && hasGroupPermission('schools', action)) :
+          baseCheck;
+      }
+
+      allow read: if canReadSchool();
+      allow create: if canCreateSchool();
+      allow update: if canUpdateDeleteSchool('update');
+      allow delete: if canUpdateDeleteSchool('delete');
     }
 
     // Classes
     match /classes/{classId} {
-      allow read: if classId in getUserOrgs('classes') || isAdminForOrgType('classes', [classId])
-        || isAdminForOrgType('schools', [resource.data.get('schoolId', 'nullId')])
-        || isAdminForOrgType('districts', [resource.data.get('districtId', 'nullId')]);
-      allow create: if isAdminForOrgType('districts', [request.resource.data.get('districtId', 'nullId')])
-        || isAdminForOrgType('schools', [request.resource.data.get('schoolId', 'nullId')]);
-      allow update, delete: if isAdminForOrgType('districts', [resource.data.get('districtId', 'nullId')])
-        || isAdminForOrgType('schools', [resource.data.get('schoolId', 'nullId')]);
+      function canReadClass() {
+        let baseCheck = classId in getUserOrgs('classes') || isAdminForOrgType('classes', [classId])
+          || isAdminForOrgType('schools', [resource.data.get('schoolId', 'nullId')])
+          || isAdminForOrgType('districts', [resource.data.get('districtId', 'nullId')]);
+        
+        return shouldUseNewPermissions() ?
+          (baseCheck && hasGroupPermission('classes', 'read')) :
+          baseCheck;
+      }
+
+      function canCreateClass() {
+        let baseCheck = isAdminForOrgType('districts', [request.resource.data.get('districtId', 'nullId')])
+          || isAdminForOrgType('schools', [request.resource.data.get('schoolId', 'nullId')]);
+        
+        return shouldUseNewPermissions() ?
+          (baseCheck && hasGroupPermission('classes', 'create')) :
+          baseCheck;
+      }
+
+      function canUpdateDeleteClass(action) {
+        let baseCheck = isAdminForOrgType('districts', [resource.data.get('districtId', 'nullId')])
+          || isAdminForOrgType('schools', [resource.data.get('schoolId', 'nullId')]);
+        
+        return shouldUseNewPermissions() ?
+          (baseCheck && hasGroupPermission('classes', action)) :
+          baseCheck;
+      }
+
+      allow read: if canReadClass();
+      allow create: if canCreateClass();
+      allow update: if canUpdateDeleteClass('update');
+      allow delete: if canUpdateDeleteClass('delete');
     }
 
-    // Groups
+    // Groups (cohorts in new permission system)
     match /groups/{groupId} {
       function canReadGroup() {
         let baseCheck = loggedIn() && (groupId in getUserOrgs('groups') || isAdminForOrgType('groups', [groupId]));
 
         return shouldUseNewPermissions() ?
-          (baseCheck && hasPermission('groups', 'read')) :
+          (baseCheck && hasGroupPermission('cohorts', 'read')) :
           baseCheck;
       }
 
@@ -384,7 +479,7 @@ service cloud.firestore {
         let baseCheck = isAdminForOrgType('groups', [groupId]);
 
         return shouldUseNewPermissions() ?
-          (baseCheck && hasPermission('groups', action)) :
+          (baseCheck && hasGroupPermission('cohorts', action)) :
           baseCheck;
       }
 
