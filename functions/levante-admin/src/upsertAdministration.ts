@@ -134,8 +134,6 @@ export const upsertAdministration = onCall(async (request) => {
     legal,
   } = request.data as UpsertAdministrationData;
 
-  console.log("request.data: ", request.data);
-
   // Debug logging for date values
   logger.info("Date validation debug", {
     dateOpen,
