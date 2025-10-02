@@ -1,8 +1,10 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import * as admin from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { logger, setGlobalOptions } from "firebase-functions/v2";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { CacheService, PermissionService } from "@levante-framework/permissions-core";
 import {
   onDocumentCreated,
   onDocumentDeleted,
@@ -44,6 +46,39 @@ import { syncOnRunDocUpdateEventHandler } from "./runs";
 admin.initializeApp({
   credential: admin.applicationDefault(),
 });
+
+// Initialize cache and permission services at module level for persistence across function calls
+const permissionCache = new CacheService(86400000); // 24 hours TTL
+const permissionService = new PermissionService(permissionCache);
+
+// Load permissions from Firestore at module level for persistence
+const loadPermissions = async () => {
+  try {
+    const db = getFirestore();
+    const permissionsDoc = await db.collection("config").doc("permissions").get();
+    if (permissionsDoc.exists) {
+      const permissionData = permissionsDoc.data();
+      const loadResult = permissionService.loadPermissions({
+        version: permissionData?.version || "1.0.0",
+        permissions: permissionData?.permissions || {},
+        updatedAt: permissionData?.updatedAt || new Date().toISOString(),
+      });
+      
+      if (!loadResult.success) {
+        logger.error("Failed to load permissions at module level", { errors: loadResult.errors });
+      } else {
+        logger.info("Permissions loaded successfully at module level", { version: permissionData?.version });
+      }
+    } else {
+      logger.warn("Permissions document not found in Firestore");
+    }
+  } catch (error) {
+    logger.error("Error loading permissions at module level", { error });
+  }
+};
+
+// Load permissions when module initializes
+loadPermissions();
 
 setGlobalOptions({ timeoutSeconds: 540 });
 
@@ -113,6 +148,62 @@ export const createAdministratorAccount = onCall(async (request) => {
   const adminOrgs = request.data.adminOrgs;
   const isTestData = request.data.isTestData ?? false;
   const requesterAdminUid = request.auth!.uid;
+
+  // Check permissions if using new permission system
+  const auth = getAuth();
+  const userRecord = await auth.getUser(requesterAdminUid);
+  const customClaims = userRecord.customClaims || {};
+  const useNewPermissions = customClaims.useNewPermissions === true;
+
+  if (useNewPermissions) {
+    // Ensure permissions are loaded
+    if (!permissionService.isPermissionsLoaded()) {
+      logger.error("Permissions not loaded for permission check");
+      throw new HttpsError("internal", "Permission system not properly initialized");
+    }
+
+    // Construct user object for permission check
+    const userRoles = customClaims.roles || [];
+    const user = {
+      uid: requesterAdminUid,
+      email: userRecord.email || email,
+      roles: userRoles,
+    };
+
+    // Check if user can create admins
+    // Determine the site ID from adminOrgs (use first district as the site)
+    const siteId = adminOrgs?.districts?.[0];
+    
+    if (!siteId) {
+      logger.error("No district specified for admin creation", { requesterAdminUid });
+      throw new HttpsError("invalid-argument", "District is required for admin creation");
+    }
+
+    const canCreateAdmin = permissionService.canPerformSiteAction(
+      user,
+      siteId,
+      "admins" as any,
+      "create" as any,
+      "district" as any
+    );
+
+    if (!canCreateAdmin) {
+      logger.error("Permission denied: user cannot create admins", {
+        requesterAdminUid,
+        siteId,
+      });
+      throw new HttpsError(
+        "permission-denied",
+        "You do not have permission to create administrator accounts"
+      );
+    }
+
+    logger.info("Permission check passed for admin creation", {
+      requesterAdminUid,
+      siteId,
+    });
+  }
+
   return await createAdminUser({
     email,
     name,
