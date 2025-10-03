@@ -4,7 +4,7 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { logger, setGlobalOptions } from "firebase-functions/v2";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { CacheService, PermissionService } from "@levante-framework/permissions-core";
+import { CacheService, PermissionService, type Role } from "@levante-framework/permissions-core";
 import {
   onDocumentCreated,
   onDocumentDeleted,
@@ -55,19 +55,19 @@ const permissionService = new PermissionService(permissionCache);
 const loadPermissions = async () => {
   try {
     const db = getFirestore();
-    const permissionsDoc = await db.collection("config").doc("permissions").get();
+    const permissionsDoc = await db.collection("system").doc("permissions").get();
     if (permissionsDoc.exists) {
       const permissionData = permissionsDoc.data();
+      if (!permissionData) throw new Error("Permissions document data is undefined");
+
       const loadResult = permissionService.loadPermissions({
-        version: permissionData?.version || "1.0.0",
-        permissions: permissionData?.permissions || {},
-        updatedAt: permissionData?.updatedAt || new Date().toISOString(),
+        version: permissionData.version,
+        permissions: permissionData.permissions,
+        updatedAt: permissionData.updatedAt,
       });
       
       if (!loadResult.success) {
         logger.error("Failed to load permissions at module level", { errors: loadResult.errors });
-      } else {
-        logger.info("Permissions loaded successfully at module level", { version: permissionData?.version });
       }
     } else {
       logger.warn("Permissions document not found in Firestore");
@@ -145,14 +145,15 @@ export const createAdministratorAccount = onCall(async (request) => {
   const email = request.data.email;
   const name = request.data.name;
   const orgs = request.data.orgs;
-  const adminOrgs = request.data.adminOrgs;
+  let adminOrgs = request.data.adminOrgs;
   const isTestData = request.data.isTestData ?? false;
   const requesterAdminUid = request.auth!.uid;
 
   // Check permissions if using new permission system
   const auth = getAuth();
   const userRecord = await auth.getUser(requesterAdminUid);
-  const customClaims = userRecord.customClaims || {};
+  const customClaims = userRecord.customClaims;
+  if (!customClaims) throw new Error("Custom claims are undefined");
   const useNewPermissions = customClaims.useNewPermissions === true;
 
   if (useNewPermissions) {
@@ -166,7 +167,7 @@ export const createAdministratorAccount = onCall(async (request) => {
     const userRoles = customClaims.roles || [];
     const user = {
       uid: requesterAdminUid,
-      email: userRecord.email || email,
+      email: '',
       roles: userRoles,
     };
 
@@ -179,29 +180,25 @@ export const createAdministratorAccount = onCall(async (request) => {
       throw new HttpsError("invalid-argument", "District is required for admin creation");
     }
 
-    const canCreateAdmin = permissionService.canPerformSiteAction(
-      user,
-      siteId,
-      "admins" as any,
-      "create" as any,
-      "district" as any
-    );
-
-    if (!canCreateAdmin) {
-      logger.error("Permission denied: user cannot create admins", {
-        requesterAdminUid,
-        siteId,
-      });
-      throw new HttpsError(
-        "permission-denied",
-        "You do not have permission to create administrator accounts"
-      );
+    // check for all sites in adminOrgs
+    const sitesWithMinRole = permissionService.getSitesWithMinRole(user, "admins" as Role);
+    if (!sitesWithMinRole.includes('*')) {
+      // cross check with adminOrgs
+      const sitesWithAdminOrgs = adminOrgs?.districts;
+      if (sitesWithAdminOrgs && sitesWithAdminOrgs.length > 0) {
+        const sitesWithAdminOrgsSet = new Set(sitesWithAdminOrgs);
+        const sitesWithMinRoleSet = new Set(sitesWithMinRole);
+        adminOrgs.districts = [...sitesWithAdminOrgsSet].filter((x: any) => sitesWithMinRoleSet.has(x));
+        if (adminOrgs.districts.length === 0) {
+          logger.error("Permission denied: user does not have access to any of the sites in adminOrgs", {
+            requesterAdminUid,
+            sitesWithAdminOrgs,
+            sitesWithMinRole,
+          });
+          throw new HttpsError("permission-denied", "You do not have permission to create administrator accounts");
+        }
+      }
     }
-
-    logger.info("Permission check passed for admin creation", {
-      requesterAdminUid,
-      siteId,
-    });
   }
 
   return await createAdminUser({
