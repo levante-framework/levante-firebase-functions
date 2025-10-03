@@ -258,6 +258,52 @@ export const createUsers = onCall(
     const userData = request.data.userData;
     const requestingUid = request.auth!.uid;
 
+    // New permission system gate: ensure caller can create users in all requested districts
+    try {
+      const auth = getAuth();
+      const userRecord = await auth.getUser(requestingUid);
+      const customClaims: any = userRecord.customClaims || {};
+      const useNewPermissions = customClaims.useNewPermissions === true;
+
+      if (useNewPermissions) {
+        await ensurePermissionsLoaded();
+        const user = buildPermissionsUserFromAuthRecord(userRecord);
+
+        // Collect distinct districts across all users (performance: dedupe once)
+        const requestedDistrictsSet = new Set<string>();
+        if (Array.isArray(userData)) {
+          for (const u of userData) {
+            const districts: unknown = u?.orgIds?.districts;
+            if (Array.isArray(districts)) {
+              for (const d of districts) if (typeof d === "string" && d) requestedDistrictsSet.add(d);
+            }
+          }
+        }
+
+        const requestedDistricts = Array.from(requestedDistrictsSet);
+        if (requestedDistricts.length > 0) {
+          const disallowed = requestedDistricts.filter(
+            (siteId) =>
+              !filterSitesByPermission(user, [siteId], {
+                resource: RESOURCES.USERS,
+                action: ACTIONS.CREATE,
+              }).length
+          );
+
+          if (disallowed.length > 0) {
+            throw new HttpsError(
+              "permission-denied",
+              `You do not have permission to create users in the following sites: ${disallowed.join(", ")}`
+            );
+          }
+        }
+      }
+    } catch (err) {
+      if (err instanceof HttpsError) throw err;
+      // For unexpected errors in permission path, surface as internal
+      throw new HttpsError("internal", (err as Error)?.message || "Permission check failed");
+    }
+
     const result = await _createUsers(requestingUid, userData);
     return result;
   }
