@@ -10,7 +10,7 @@ import {
 } from "@levante-framework/permissions-core";
 
 // Singleton permission service shared across functions
-const cache = new CacheService(86400000); // 24 hours TTL
+const cache = new CacheService(86_400_000); // 24 hours TTL
 const service = new PermissionService(cache);
 let loadingPromise: Promise<void> | null = null;
 
