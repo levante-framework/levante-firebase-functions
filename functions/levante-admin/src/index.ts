@@ -4,7 +4,12 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { logger, setGlobalOptions } from "firebase-functions/v2";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { CacheService, PermissionService, type Role } from "@levante-framework/permissions-core";
+import { ACTIONS, RESOURCES } from "@levante-framework/permissions-core";
+import {
+  ensurePermissionsLoaded,
+  buildPermissionsUserFromAuthRecord,
+  filterSitesByPermission,
+} from "./utils/permission-helpers";
 import {
   onDocumentCreated,
   onDocumentDeleted,
@@ -47,38 +52,10 @@ admin.initializeApp({
   credential: admin.applicationDefault(),
 });
 
-// Initialize cache and permission services at module level for persistence across function calls
-const permissionCache = new CacheService(86400000); // 24 hours TTL
-const permissionService = new PermissionService(permissionCache);
-
-// Load permissions from Firestore at module level for persistence
-const loadPermissions = async () => {
-  try {
-    const db = getFirestore();
-    const permissionsDoc = await db.collection("system").doc("permissions").get();
-    if (permissionsDoc.exists) {
-      const permissionData = permissionsDoc.data();
-      if (!permissionData) throw new Error("Permissions document data is undefined");
-
-      const loadResult = permissionService.loadPermissions({
-        version: permissionData.version,
-        permissions: permissionData.permissions,
-        updatedAt: permissionData.updatedAt,
-      });
-      
-      if (!loadResult.success) {
-        logger.error("Failed to load permissions at module level", { errors: loadResult.errors });
-      }
-    } else {
-      logger.warn("Permissions document not found in Firestore");
-    }
-  } catch (error) {
-    logger.error("Error loading permissions at module level", { error });
-  }
-};
-
-// Load permissions when module initializes
-loadPermissions();
+// Initialize permission system (lazy-loads on first use)
+ensurePermissionsLoaded().catch((error) =>
+  logger.error("Error initializing permissions at module load", { error })
+);
 
 setGlobalOptions({ timeoutSeconds: 540 });
 
@@ -142,64 +119,53 @@ export const updateUserRecord = onCall(async (request) => {
 });
 
 export const createAdministratorAccount = onCall(async (request) => {
-  const email = request.data.email;
-  const name = request.data.name;
-  const orgs = request.data.orgs;
   let adminOrgs = request.data.adminOrgs;
-  const isTestData = request.data.isTestData ?? false;
   const requesterAdminUid = request.auth!.uid;
 
   // Check permissions if using new permission system
   const auth = getAuth();
   const userRecord = await auth.getUser(requesterAdminUid);
-  const customClaims = userRecord.customClaims;
-  if (!customClaims) throw new Error("Custom claims are undefined");
+  const customClaims = (userRecord.customClaims as any) || {};
   const useNewPermissions = customClaims.useNewPermissions === true;
 
   if (useNewPermissions) {
-    // Ensure permissions are loaded
-    if (!permissionService.isPermissionsLoaded()) {
-      logger.error("Permissions not loaded for permission check");
-      throw new HttpsError("internal", "Permission system not properly initialized");
+    await ensurePermissionsLoaded();
+
+    const user = buildPermissionsUserFromAuthRecord(userRecord);
+
+    // Validate districts array exists
+    const requestedDistricts = adminOrgs?.districts ?? [];
+    if (!Array.isArray(requestedDistricts) || requestedDistricts.length === 0) {
+      logger.error("No districts provided for admin creation", { requesterAdminUid });
+      throw new HttpsError("invalid-argument", "At least one district is required for admin creation");
     }
 
-    // Construct user object for permission check
-    const userRoles = customClaims.roles || [];
-    const user = {
-      uid: requesterAdminUid,
-      email: '',
-      roles: userRoles,
-    };
+    // Filter to only districts where caller can create admins
+    const allowedDistricts = filterSitesByPermission(user, requestedDistricts, {
+      resource: RESOURCES.ADMINS,
+      action: ACTIONS.CREATE,
+      subResource: 'admin',
+    });
 
-    // Check if user can create admins
-    // Determine the site ID from adminOrgs (use first district as the site)
-    const siteId = adminOrgs?.districts?.[0];
-    
-    if (!siteId) {
-      logger.error("No district specified for admin creation", { requesterAdminUid });
-      throw new HttpsError("invalid-argument", "District is required for admin creation");
+    if (allowedDistricts.length === 0) {
+      logger.error("Permission denied: user cannot create admins in requested districts", {
+        requesterAdminUid,
+        requestedDistricts,
+      });
+      throw new HttpsError(
+        "permission-denied",
+        "You do not have permission to create administrator accounts in the specified districts"
+      );
     }
 
-    // check for all sites in adminOrgs
-    const sitesWithMinRole = permissionService.getSitesWithMinRole(user, "admins" as Role);
-    if (!sitesWithMinRole.includes('*')) {
-      // cross check with adminOrgs
-      const sitesWithAdminOrgs = adminOrgs?.districts;
-      if (sitesWithAdminOrgs && sitesWithAdminOrgs.length > 0) {
-        const sitesWithAdminOrgsSet = new Set(sitesWithAdminOrgs);
-        const sitesWithMinRoleSet = new Set(sitesWithMinRole);
-        adminOrgs.districts = [...sitesWithAdminOrgsSet].filter((x: any) => sitesWithMinRoleSet.has(x));
-        if (adminOrgs.districts.length === 0) {
-          logger.error("Permission denied: user does not have access to any of the sites in adminOrgs", {
-            requesterAdminUid,
-            sitesWithAdminOrgs,
-            sitesWithMinRole,
-          });
-          throw new HttpsError("permission-denied", "You do not have permission to create administrator accounts");
-        }
-      }
-    }
+    // Keep only allowed districts
+    adminOrgs.districts = allowedDistricts;
   }
+
+  const email = request.data.email;
+  const name = request.data.name;
+  const orgs = request.data.orgs;
+  const isTestData = request.data.isTestData ?? false;
 
   return await createAdminUser({
     email,
