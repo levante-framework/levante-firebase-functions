@@ -1,8 +1,15 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
 import * as admin from "firebase-admin/app";
+import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { logger, setGlobalOptions } from "firebase-functions/v2";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { ACTIONS, RESOURCES } from "@levante-framework/permissions-core";
+import {
+  ensurePermissionsLoaded,
+  buildPermissionsUserFromAuthRecord,
+  filterSitesByPermission,
+} from "./utils/permission-helpers";
 import {
   onDocumentCreated,
   onDocumentDeleted,
@@ -39,11 +46,17 @@ import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import _isEmpty from "lodash/isEmpty";
 import { _upsertOrg, OrgData } from "./upsert-org";
 import { syncOnRunDocUpdateEventHandler } from "./runs";
+import { upsertAdministrationHandler } from "./upsertAdministration";
 
 // initialize 'default' app on Google cloud platform
 admin.initializeApp({
   credential: admin.applicationDefault(),
 });
+
+// Initialize permission system (lazy-loads on first use)
+ensurePermissionsLoaded().catch((error) =>
+  logger.error("Error initializing permissions at module load", { error })
+);
 
 setGlobalOptions({ timeoutSeconds: 540 });
 
@@ -107,12 +120,54 @@ export const updateUserRecord = onCall(async (request) => {
 });
 
 export const createAdministratorAccount = onCall(async (request) => {
+  let adminOrgs = request.data.adminOrgs;
+  const requesterAdminUid = request.auth!.uid;
+
+  // Check permissions if using new permission system
+  const auth = getAuth();
+  const userRecord = await auth.getUser(requesterAdminUid);
+  const customClaims = (userRecord.customClaims as any) || {};
+  const useNewPermissions = customClaims.useNewPermissions === true;
+
+  if (useNewPermissions) {
+    await ensurePermissionsLoaded();
+
+    const user = buildPermissionsUserFromAuthRecord(userRecord);
+
+    // Validate districts array exists
+    const requestedDistricts = adminOrgs?.districts ?? [];
+    if (!Array.isArray(requestedDistricts) || requestedDistricts.length === 0) {
+      logger.error("No districts provided for admin creation", { requesterAdminUid });
+      throw new HttpsError("invalid-argument", "At least one district is required for admin creation");
+    }
+
+    // Filter to only districts where caller can create admins
+    const allowedDistricts = filterSitesByPermission(user, requestedDistricts, {
+      resource: RESOURCES.ADMINS,
+      action: ACTIONS.CREATE,
+      subResource: 'admin',
+    });
+
+    if (allowedDistricts.length === 0) {
+      logger.error("Permission denied: user cannot create admins in requested districts", {
+        requesterAdminUid,
+        requestedDistricts,
+      });
+      throw new HttpsError(
+        "permission-denied",
+        "You do not have permission to create administrator accounts in the specified districts"
+      );
+    }
+
+    // Keep only allowed districts
+    adminOrgs.districts = allowedDistricts;
+  }
+
   const email = request.data.email;
   const name = request.data.name;
   const orgs = request.data.orgs;
-  const adminOrgs = request.data.adminOrgs;
   const isTestData = request.data.isTestData ?? false;
-  const requesterAdminUid = request.auth!.uid;
+
   return await createAdminUser({
     email,
     name,
@@ -204,6 +259,47 @@ export const createUsers = onCall(
     const userData = request.data.userData;
     const requestingUid = request.auth!.uid;
 
+    // New permission system gate: ensure caller can create users in the requested site
+    try {
+      const auth = getAuth();
+      const userRecord = await auth.getUser(requestingUid);
+      const customClaims: any = userRecord.customClaims || {};
+      const useNewPermissions = customClaims.useNewPermissions === true;
+
+      if (useNewPermissions) {
+        await ensurePermissionsLoaded();
+        const user = buildPermissionsUserFromAuthRecord(userRecord);
+
+        // Expect a single site identifier on the request
+        const siteId: string | undefined = (request.data.siteId || request.data.districtId) as
+          | string
+          | undefined;
+
+        if (!siteId) {
+          throw new HttpsError(
+            "invalid-argument",
+            "A siteId (or districtId) is required to create users"
+          );
+        }
+
+        const allowed = filterSitesByPermission(user, [siteId], {
+          resource: RESOURCES.USERS,
+          action: ACTIONS.CREATE,
+        }).length > 0;
+
+        if (!allowed) {
+          throw new HttpsError(
+            "permission-denied",
+            `You do not have permission to create users in site ${siteId}`
+          );
+        }
+      }
+    } catch (err) {
+      if (err instanceof HttpsError) throw err;
+      // For unexpected errors in permission path, surface as internal
+      throw new HttpsError("internal", (err as Error)?.message || "Permission check failed");
+    }
+
     const result = await _createUsers(requestingUid, userData);
     return result;
   }
@@ -229,6 +325,44 @@ export const saveSurveyResponses = onCall(async (request) => {
 export const linkUsers = onCall(async (request) => {
   const requestingUid = request.auth!.uid;
   const users = request.data.users;
+  // New permission system gate: ensure caller can update users in the requested site
+  try {
+    const auth = getAuth();
+    const userRecord = await auth.getUser(requestingUid);
+    const customClaims: any = userRecord.customClaims || {};
+    const useNewPermissions = customClaims.useNewPermissions === true;
+
+    if (useNewPermissions) {
+      await ensurePermissionsLoaded();
+      const user = buildPermissionsUserFromAuthRecord(userRecord);
+
+      const siteId: string | undefined = (request.data.siteId || request.data.districtId) as
+        | string
+        | undefined;
+
+      if (!siteId) {
+        throw new HttpsError(
+          "invalid-argument",
+          "A siteId (or districtId) is required to link users"
+        );
+      }
+
+      const allowed = filterSitesByPermission(user, [siteId], {
+        resource: RESOURCES.USERS,
+        action: ACTIONS.UPDATE,
+      }).length > 0;
+
+      if (!allowed) {
+        throw new HttpsError(
+          "permission-denied",
+          `You do not have permission to link users in site ${siteId}`
+        );
+      }
+    }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", (err as Error)?.message || "Permission check failed");
+  }
   return await _linkUsers(requestingUid, users);
 });
 
@@ -434,7 +568,55 @@ export const deleteAdministration = onCall(async (request) => {
   }
 });
 
-export * from "./upsertAdministration";
+export const upsertAdministration = onCall(async (request) => {
+  const requestingUid = request.auth?.uid;
+  if (!requestingUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated.");
+  }
+
+  // New permission system gate: verify caller can create/update administrations in the requested site
+  try {
+    const auth = getAuth();
+    const userRecord = await auth.getUser(requestingUid);
+    const customClaims: any = userRecord.customClaims || {};
+    const useNewPermissions = customClaims.useNewPermissions === true;
+
+    if (useNewPermissions) {
+      await ensurePermissionsLoaded();
+      const user = buildPermissionsUserFromAuthRecord(userRecord);
+
+      const action = request.data?.administrationId ? ACTIONS.UPDATE : ACTIONS.CREATE;
+      const siteId: string | undefined = (request.data.siteId || request.data.districtId) as
+        | string
+        | undefined;
+
+      if (!siteId) {
+        throw new HttpsError(
+          "invalid-argument",
+          "A siteId (or districtId) is required to upsert administrations"
+        );
+      }
+
+      const allowed = filterSitesByPermission(user, [siteId], {
+        resource: RESOURCES.TASKS,
+        action,
+      }).length > 0;
+
+      if (!allowed) {
+        throw new HttpsError(
+          "permission-denied",
+          `You do not have permission to ${action} administrations in site ${siteId}`
+        );
+      }
+    }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", (err as Error)?.message || "Permission check failed");
+  }
+
+  // Delegate to handler
+  return await upsertAdministrationHandler(requestingUid, request.data);
+});
 
 export { completeTask } from "./tasks/completeTask";
 export { startTask } from "./tasks/startTask";
