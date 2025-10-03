@@ -24,6 +24,10 @@ import {
   addAssignmentToUsers,
   updateAssignmentForUsers,
 } from "./assignment-utils";
+import {
+  summarizeIdListForLog,
+  summarizeOrgsForLog,
+} from "../utils/logging";
 
 /**
  * Sync globally defined adminstrations with user-specific assignments.
@@ -134,10 +138,8 @@ export const syncAssignmentsOnUserUpdateEventHandler = async ({
     );
 
     logger.debug(`user ${roarUid} changed`, {
-      prevOrgs,
-      currOrgs,
-      currOrgLists,
-      prevOrgLists,
+      prevOrgSummary: summarizeOrgsForLog(prevOrgLists),
+      currOrgSummary: summarizeOrgsForLog(currOrgLists),
     });
 
     if (!_isEmpty(currOrgLists) && !_isEqual(prevOrgs, currOrgs)) {
@@ -215,7 +217,8 @@ export const updateAssignmentsForOrgChunkHandler = async ({
     });
 
     logger.info(`Updating assignment ${administrationId} for users`, {
-      usersToUpdate,
+      orgChunkSummary: summarizeOrgsForLog(orgChunk),
+      userSummary: summarizeIdListForLog(usersToUpdate),
     });
 
     if (usersToUpdate.length !== 0) {

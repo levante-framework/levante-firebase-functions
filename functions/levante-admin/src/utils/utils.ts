@@ -8,7 +8,7 @@ import {
 import { GoogleAuth } from "google-auth-library";
 import _invert from "lodash/invert";
 import _without from "lodash/without";
-import { IOrgsMap } from "../interfaces";
+import { IOrgsMap, } from "../interfaces";
 import { config } from "./config";
 
 /**

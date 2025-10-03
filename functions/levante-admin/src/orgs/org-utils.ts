@@ -20,7 +20,10 @@ import _uniq from "lodash/uniq";
 import _without from "lodash/without";
 import { IOrgsList, ORG_NAMES } from "../interfaces";
 import { doesDocExist, pluralizeFirestoreCollection } from "../utils/utils";
-import { getAdministrationsFromOrgs } from "../administrations/administration-utils";
+import {
+  getAdministrationsFromOrgs,
+} from "../administrations/administration-utils";
+import { summarizeIdListForLog, summarizeOrgsForLog } from "../utils/logging";
 
 /**
  * Get schools and subgroup from a specified district.
@@ -651,7 +654,10 @@ export const getUsersFromOrgs = async ({
     }
   }
 
-  logger.debug("found all users from orgs", { orgs, users });
+  logger.debug("found users from orgs", {
+    orgSummary: summarizeOrgsForLog(orgs),
+    userSummary: summarizeIdListForLog(users),
+  });
   return users;
 };
 

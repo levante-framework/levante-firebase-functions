@@ -13,6 +13,7 @@ import _isEmpty from "lodash/isEmpty";
 import _includes from "lodash/includes";
 import _chunk from "lodash/chunk";
 import { HttpsError } from "firebase-functions/v2/https";
+import { logger } from "firebase-functions/v2";
 import bcrypt from "bcrypt";
 import { isEmulated } from "../utils/utils";
 import { ROLES } from "../utils/constants";
@@ -107,11 +108,16 @@ async function validateEmails(emails: string[], auth: Auth): Promise<string[]> {
         });
       }
     } catch (error) {
-      console.error("Error processing emails:", error);
+      logger.error("Error processing emails", {
+        error,
+        chunkSize: chunk.length,
+      });
     }
   }
 
-  console.log(`Found ${emailsAlreadyInUse.length} existing emails in use.`);
+  logger.debug("Found existing emails in use", {
+    count: emailsAlreadyInUse.length,
+  });
 
   return emailsAlreadyInUse;
 }
@@ -136,9 +142,9 @@ async function getValidEmails({
 
     try {
       const emailsAlreadyInUse = await validateEmails(newEmails, auth);
-      console.log(
-        `Found ${emailsAlreadyInUse.length} new emails already in use`
-      );
+      logger.debug("Found new emails already in use", {
+        count: emailsAlreadyInUse.length,
+      });
 
       // Filter out emails that are already in use
       const newValidEmails = newEmails.filter(
@@ -147,12 +153,14 @@ async function getValidEmails({
       validEmails.push(...newValidEmails);
       processedUsers += newValidEmails.length;
     } catch (error) {
-      console.error("Error checking new emails:", error);
+      logger.error("Error checking new emails", { error });
       throw error;
     }
   }
 
-  console.log(`Successfully validated ${validEmails.length} unique emails`);
+  logger.debug("Successfully validated unique emails", {
+    count: validEmails.length,
+  });
   return validEmails.slice(0, users.length); // Ensure we return exactly the number of emails needed
 }
 
@@ -178,7 +186,7 @@ export const _createUsers = async (
     return null;
   });
 
-  console.log("currentClaims:", currentClaims);
+
   if (
     (validateRequesterPermissions && !currentClaims) ||
     (validateRequesterPermissions &&
@@ -415,7 +423,11 @@ export const _createUsers = async (
       authUserData.passwordHash = Buffer.from(hashedPassword);
     }
 
-    console.log("authUserData: ", authUserData);
+    logger.debug("Prepared auth user data", {
+      uid: authUserData.uid,
+      email: authUserData.email,
+      rolesCount: authUserData.customClaims.roles.length,
+    });
 
     // TODO: Migrate to using username for login
     let username = "";
@@ -452,7 +464,10 @@ export const _createUsers = async (
     try {
       if (isEmulated()) {
         // For emulators, create users individually using createUser
-        console.log("Creating users individually for emulator...");
+        logger.debug("Creating users individually for emulator", {
+          count: usersToRegister.length,
+          project,
+        });
         const results: Array<
           | { success: true; uid: string }
           | { success: false; error: any; user: AdminAuthUserData }
@@ -477,7 +492,11 @@ export const _createUsers = async (
 
             results.push({ success: true, uid: userRecord.uid });
           } catch (error: any) {
-            console.error(`Failed to create user ${user.email}:`, error);
+            logger.error("Failed to create user in emulator", {
+              email: user.email,
+              error,
+              project,
+            });
             results.push({ success: false, error, user });
           }
         }
@@ -485,9 +504,6 @@ export const _createUsers = async (
         const failureCount = results.filter((r) => !r.success).length;
         const successCount = results.filter((r) => r.success).length;
 
-        console.log(
-          `Emulator user creation results: ${successCount} success, ${failureCount} failures`
-        );
 
         if (failureCount > 0 && currentRetry < maxRetries) {
           const failedUsers = results
@@ -498,18 +514,24 @@ export const _createUsers = async (
                   .user
             );
 
-          console.log(
-            `Retrying ${failedUsers.length} failed users (attempt ${
-              currentRetry + 1
-            }/${maxRetries})`
-          );
+          logger.warn("Retrying failed emulator user creations", {
+            retryCount: currentRetry + 1,
+            maxRetries,
+            failedCount: failedUsers.length,
+            project,
+          });
           await createAuthUsers(failedUsers, project, currentRetry + 1);
         } else if (failureCount > 0 && currentRetry >= maxRetries) {
-          console.error(
-            `Maximum retries (${maxRetries}) exceeded. 
-            Failed in project ${project} to create users: `,
-            results.filter((r) => !r.success)
-          );
+          logger.error("Maximum retries exceeded creating emulator users", {
+            maxRetries,
+            project,
+            failedUsers: results
+              .filter((r) => !r.success)
+              .map((r) =>
+                (r as { success: false; error: any; user: AdminAuthUserData })
+                  .user.email
+              ),
+          });
           throw new Error(
             `Maximum retries (${maxRetries}) exceeded. Failed to create ${failureCount} users`
           );
@@ -540,17 +562,21 @@ export const _createUsers = async (
         // Retry with failed users
         await createAuthUsers(failedUsers, project, currentRetry + 1);
       } else if (failedUsers.length > 0 && currentRetry >= maxRetries) {
-        console.error(
-          `Maximum retries (${maxRetries}) exceeded. 
-          Failed in project ${project} to create users: `,
-          failedUsers
-        );
+        logger.error("Maximum retries exceeded importing users", {
+          maxRetries,
+          project,
+          failedCount: failedUsers.length,
+        });
         throw new Error(
           `Maximum retries (${maxRetries}) exceeded. Failed to create all users`
         );
       }
     } catch (error: any) {
-      console.error("An error occurred while creating users: ", error);
+      logger.error("An error occurred while creating users", {
+        error,
+        project,
+        attempt: currentRetry,
+      });
       throw new Error(error.message);
     }
   }
@@ -576,15 +602,15 @@ export const _createUsers = async (
         .filter((doc): doc is Promise<WriteResult> => doc !== null);
 
       if (failedDocs.length === 0) {
-        console.log(`Successfully set all ${db} UID claims docs`);
         return;
       }
 
-      console.log(
-        `${failedDocs.length} ${db} UID claims docs failed (attempt ${
-          attempt + 1
-        }/${maxRetries}). Retrying...`
-      );
+      logger.warn("Retrying failed UID claims doc writes", {
+        database: db,
+        failedCount: failedDocs.length,
+        attempt: attempt + 1,
+        maxRetries,
+      });
       remainingDocs = failedDocs;
 
       if (attempt < maxRetries - 1) {
@@ -602,11 +628,9 @@ export const _createUsers = async (
   try {
     await setClaimsDocs(adminUserClaimsDocs, "admin");
   } catch (error) {
-    console.error("Fatal error setting UID claims docs:", error);
+    logger.error("Fatal error setting UID claims docs", { error });
     throw error;
   }
-
-  console.log("Created auth users and set claims docs");
 
   // Once the Auth User is created, populate the corresponding user's doc in firestore
   const adminUserDocs: Promise<WriteResult>[] = [];
@@ -700,7 +724,7 @@ export const _createUsers = async (
   try {
     prepareUserDocs();
   } catch (error) {
-    console.error("Error setting UID claims: ", error);
+    logger.error("Error preparing user docs", { error });
   }
 
   async function createUserDocs(userDocs: Promise<WriteResult>[], db: string) {
@@ -718,15 +742,16 @@ export const _createUsers = async (
         .filter((doc): doc is Promise<WriteResult> => doc !== null);
 
       if (failedDocs.length === 0) {
-        console.log(`Successfully created all ${db} user docs`);
+        logger.debug(`Successfully created all ${db} user docs`);
         return;
       }
 
-      console.log(
-        `${failedDocs.length} ${db} user docs failed (attempt ${
-          attempt + 1
-        }/${maxRetries}). Retrying...`
-      );
+      logger.warn("Retrying failed user doc writes", {
+        database: db,
+        failedCount: failedDocs.length,
+        attempt: attempt + 1,
+        maxRetries,
+      });
       remainingDocs = failedDocs;
 
       if (attempt < maxRetries - 1) {
@@ -745,7 +770,7 @@ export const _createUsers = async (
   try {
     await createUserDocs(adminUserDocs, "admin");
   } catch (error) {
-    console.error("Error creating user docs:", error);
+    logger.error("Error creating user docs", { error });
     throw error;
   }
 

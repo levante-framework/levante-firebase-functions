@@ -5,6 +5,7 @@ import {
   DocumentSnapshot,
   Firestore,
 } from "firebase-admin/firestore";
+import { logger } from "firebase-functions/v2";
 import { IExtendedAssignedAssessment } from "../interfaces";
 import {
   getAssignmentDoc,
@@ -107,7 +108,12 @@ export const completeTask = onCall(async (request) => {
 
     return { success: true, message: "Task completed successfully" };
   } catch (error) {
-    console.error("Failed to complete task:", error);
+    logger.error("Failed to complete task", {
+      error,
+      administrationId: request.data?.administrationId,
+      taskId: request.data?.taskId,
+      userId: request.data?.userId,
+    });
 
     if (error instanceof HttpsError) {
       throw error;

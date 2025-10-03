@@ -5,6 +5,7 @@ import {
   Filter,
   FieldPath,
 } from "firebase-admin/firestore";
+import { summarizeRunsForLog } from "../utils/logging";
 
 export const updateBestRunAndCompletion = async ({
   roarUid,
@@ -15,10 +16,6 @@ export const updateBestRunAndCompletion = async ({
   assignmentId: string;
   taskId: string;
 }) => {
-  logger.debug(
-    `Selecting best run for task ${taskId} in assignment ${assignmentId} for user ${roarUid}`
-  );
-
   const db = getFirestore();
 
   const { bestRunId, completed, allRunIds, completedOn, startedOn } = await db
@@ -35,22 +32,33 @@ export const updateBestRunAndCompletion = async ({
           )
         );
 
-        const runs = await transaction.get(runsQuery).then((querySnapshot) => {
-          if (querySnapshot.empty) {
-            return [];
-          }
+        const runs = await transaction
+          .get(runsQuery)
+          .then((querySnapshot) => {
+            if (querySnapshot.empty) {
+              return [];
+            }
 
-          return querySnapshot.docs.map((doc) => ({
-            id: doc.id,
-            data: doc.data(),
-            ref: doc.ref,
-          }));
-        });
+            return querySnapshot.docs.map((doc) => ({
+              id: doc.id,
+              data: doc.data(),
+              ref: doc.ref,
+            }));
+          });
+
+        const runSummary = summarizeRunsForLog(
+          runs.map(({ id, data }) => ({ id, data }))
+        );
 
         if (runs.length === 0) {
           logger.warn(
-            `Assignment at users/${roarUid}/assignments/${assignmentId} ` +
-              "does not contain any runs for task ${ taskId }"
+            `Assignment at users/${roarUid}/assignments/${assignmentId} does not contain runs for task ${taskId}`,
+            {
+              roarUid,
+              assignmentId,
+              taskId,
+              runSummary,
+            }
           );
           return {
             bestRunId: null,
@@ -58,6 +66,7 @@ export const updateBestRunAndCompletion = async ({
             allRunIds: [],
             completedOn: null,
             startedOn: null,
+            runSummary,
           };
         }
 
@@ -72,6 +81,7 @@ export const updateBestRunAndCompletion = async ({
             allRunIds: [runs[0].id],
             completedOn: runs[0].data.timeFinished,
             startedOn: runs[0].data.timeStarted,
+            runSummary,
           };
         }
 
@@ -147,6 +157,7 @@ export const updateBestRunAndCompletion = async ({
           allRunIds: allRunIds,
           completedOn: timeFinished,
           startedOn: timeStarted,
+          runSummary,
         };
       },
       { maxAttempts: 1000 }
@@ -160,11 +171,6 @@ export const updateBestRunAndCompletion = async ({
       });
       throw error;
     });
-
-  logger.debug(
-    `Run ${bestRunId} selected as best run for task ${taskId} in ` +
-      `assignment ${assignmentId} for user ${roarUid}`
-  );
 
   if (bestRunId) {
     const assignmentDocRef = db

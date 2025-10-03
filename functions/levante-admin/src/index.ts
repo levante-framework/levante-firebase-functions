@@ -313,7 +313,10 @@ export const saveSurveyResponses = onCall(async (request) => {
     return result;
     // eslint-disable @typescript-eslint/no-explicit-any
   } catch (error: any) {
-    console.error("Error writing survey responses: ", error);
+    logger.error("Error writing survey responses", {
+      error,
+      requestingUid,
+    });
     throw new HttpsError(
       "internal",
       error.message ||

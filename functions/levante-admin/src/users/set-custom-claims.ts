@@ -166,7 +166,10 @@ export const setUidClaimsHandler = async ({
   try {
     user = await _auth.getUser(targetUid);
   } catch (error) {
-    console.log("Error getting user in setUidClaimsHandler: ", error);
+    logger.error("Error getting user in setUidClaimsHandler", {
+      error,
+      targetUid,
+    });
     throw Error(
       `Error getting user with uid in setUidClaimsHandler ${targetUid}: ${error}`
     );

@@ -186,10 +186,13 @@ export const createAdminUser = async ({
         { merge: true }
       )
       .then(() => {
-        console.log("Updated userClaims doc");
+        logger.debug("Updated userClaims doc", { userClaimsDoc: userClaimsDocRef.path });
       })
       .catch((error) => {
-        console.error("Error updating userClaims doc: ", error);
+        logger.error("Error updating userClaims doc", {
+          error,
+          userClaimsDoc: userClaimsDocRef.path,
+        });
         throw new Error("Error updating userClaims doc");
       });
   }
