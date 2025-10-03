@@ -258,7 +258,7 @@ export const createUsers = onCall(
     const userData = request.data.userData;
     const requestingUid = request.auth!.uid;
 
-    // New permission system gate: ensure caller can create users in all requested districts
+    // New permission system gate: ensure caller can create users in the requested site
     try {
       const auth = getAuth();
       const userRecord = await auth.getUser(requestingUid);
@@ -269,33 +269,28 @@ export const createUsers = onCall(
         await ensurePermissionsLoaded();
         const user = buildPermissionsUserFromAuthRecord(userRecord);
 
-        // Collect distinct districts across all users (performance: dedupe once)
-        const requestedDistrictsSet = new Set<string>();
-        if (Array.isArray(userData)) {
-          for (const u of userData) {
-            const districts: unknown = u?.orgIds?.districts;
-            if (Array.isArray(districts)) {
-              for (const d of districts) if (typeof d === "string" && d) requestedDistrictsSet.add(d);
-            }
-          }
+        // Expect a single site identifier on the request
+        const siteId: string | undefined = (request.data.siteId || request.data.districtId) as
+          | string
+          | undefined;
+
+        if (!siteId) {
+          throw new HttpsError(
+            "invalid-argument",
+            "A siteId (or districtId) is required to create users"
+          );
         }
 
-        const requestedDistricts = Array.from(requestedDistrictsSet);
-        if (requestedDistricts.length > 0) {
-          const disallowed = requestedDistricts.filter(
-            (siteId) =>
-              !filterSitesByPermission(user, [siteId], {
-                resource: RESOURCES.USERS,
-                action: ACTIONS.CREATE,
-              }).length
-          );
+        const allowed = filterSitesByPermission(user, [siteId], {
+          resource: RESOURCES.USERS,
+          action: ACTIONS.CREATE,
+        }).length > 0;
 
-          if (disallowed.length > 0) {
-            throw new HttpsError(
-              "permission-denied",
-              `You do not have permission to create users in the following sites: ${disallowed.join(", ")}`
-            );
-          }
+        if (!allowed) {
+          throw new HttpsError(
+            "permission-denied",
+            `You do not have permission to create users in site ${siteId}`
+          );
         }
       }
     } catch (err) {
@@ -329,6 +324,44 @@ export const saveSurveyResponses = onCall(async (request) => {
 export const linkUsers = onCall(async (request) => {
   const requestingUid = request.auth!.uid;
   const users = request.data.users;
+  // New permission system gate: ensure caller can update users in the requested site
+  try {
+    const auth = getAuth();
+    const userRecord = await auth.getUser(requestingUid);
+    const customClaims: any = userRecord.customClaims || {};
+    const useNewPermissions = customClaims.useNewPermissions === true;
+
+    if (useNewPermissions) {
+      await ensurePermissionsLoaded();
+      const user = buildPermissionsUserFromAuthRecord(userRecord);
+
+      const siteId: string | undefined = (request.data.siteId || request.data.districtId) as
+        | string
+        | undefined;
+
+      if (!siteId) {
+        throw new HttpsError(
+          "invalid-argument",
+          "A siteId (or districtId) is required to link users"
+        );
+      }
+
+      const allowed = filterSitesByPermission(user, [siteId], {
+        resource: RESOURCES.USERS,
+        action: ACTIONS.UPDATE,
+      }).length > 0;
+
+      if (!allowed) {
+        throw new HttpsError(
+          "permission-denied",
+          `You do not have permission to link users in site ${siteId}`
+        );
+      }
+    }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", (err as Error)?.message || "Permission check failed");
+  }
   return await _linkUsers(requestingUid, users);
 });
 
