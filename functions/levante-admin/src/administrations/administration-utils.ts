@@ -26,6 +26,11 @@ import {
   getOnlyExistingOrgs,
   getReadOrgs,
 } from "../orgs/org-utils";
+import {
+  summarizeAdministrationsForLog,
+  summarizeIdListForLog,
+  summarizeOrgsForLog,
+} from "../utils/logging";
 
 /**
  * Retrieve all administrations associated with the provided orgs.
@@ -140,9 +145,9 @@ export const getAdministrationsFromOrgs = async ({
   }
 
   if (verbose) {
-    logger.debug("found all administrations from orgs", {
-      orgs,
-      administrations,
+    logger.debug("found administrations from orgs", {
+      administrationSummary: summarizeIdListForLog(administrations),
+      requestedOrgSummary: summarizeOrgsForLog(orgs),
     });
   }
   return {
@@ -162,7 +167,10 @@ export const processUserRemovedOrgs = async (
   roarUid: string,
   removedOrgs: IOrgsList
 ) => {
-  logger.debug("Detected removed orgs", { removedOrgs });
+  logger.debug("Detected removed orgs", {
+    roarUid,
+    removedOrgSummary: summarizeOrgsForLog(removedOrgs),
+  });
   const db = getFirestore();
   await db.runTransaction(async (transaction) => {
     const removedExhaustiveOrgs = await getExhaustiveOrgs({
@@ -374,7 +382,7 @@ export const standardizeAdministrationOrgs = async ({
 
   if (verbose) {
     logger.debug(`Standardized orgs for administration ${administrationId}`, {
-      minimalOrgs,
+      minimalOrgSummary: summarizeOrgsForLog(minimalOrgs),
     });
   }
 
@@ -458,7 +466,7 @@ export const getAdministrationsForAdministrator = async ({
         });
 
       logger.debug(`Found administrations for ${administratorRoarUid}`, {
-        administrations,
+        administrationSummary: summarizeAdministrationsForLog(administrations),
       });
 
       if (idsOnly) {
@@ -471,7 +479,7 @@ export const getAdministrationsForAdministrator = async ({
     if (verbose) {
       logger.debug(
         `Requesting administrator ${administratorRoarUid} has adminOrgs. Returning matching administrations`,
-        { adminOrgs }
+        { adminOrgSummary: summarizeOrgsForLog(adminOrgs) }
       );
     }
 
@@ -491,7 +499,7 @@ export const getAdministrationsForAdministrator = async ({
 
     if (verbose) {
       logger.debug(`Found administrations for ${administratorRoarUid}`, {
-        administrations,
+        administrationSummary: summarizeAdministrationsForLog(administrations),
       });
     }
 
@@ -503,6 +511,12 @@ export const getAdministrationsForAdministrator = async ({
       id,
       ...data,
     }));
+
+    if (verbose) {
+      logger.debug(`Returning administrations for ${administratorRoarUid}`, {
+        administrationSummary: summarizeAdministrationsForLog(result),
+      });
+    }
 
     return result;
   });

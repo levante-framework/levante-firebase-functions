@@ -58,7 +58,7 @@
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.0",
     "@types/node": "^22.7.9",
-    "@vitest/coverage-v8": "^2.1.9",
+    "@vitest/coverage-v8": "^3.2.4",
     "prettier": "3.3.2",
     "puppeteer": "^24.8.0",
     "ts-node": "^10.9.2",

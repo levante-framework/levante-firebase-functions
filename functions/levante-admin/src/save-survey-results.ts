@@ -1,4 +1,5 @@
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { logger } from "firebase-functions/v2";
 import {
   shouldCompleteAssignment,
   getAssignmentDocRef,
@@ -228,6 +229,11 @@ export async function writeSurveyResponses(requesterUid, data) {
     returnObj.success = true;
     returnObj.message = "Survey responses written successfully";
   } catch (error) {
+    logger.error("Error writing survey responses in transaction", {
+      error,
+      administrationId,
+      requesterUid,
+    });
     throw new Error(`Error writing survey responses: ${error}`);
   }
 

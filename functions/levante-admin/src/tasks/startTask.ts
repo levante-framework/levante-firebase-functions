@@ -1,4 +1,5 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
+import { logger } from "firebase-functions/v2";
 import { getFirestore, Transaction } from "firebase-admin/firestore";
 import {
   updateAssignedAssessment,
@@ -241,7 +242,13 @@ export const startTask = onCall(async (request): Promise<StartTaskResult> => {
 
     return result;
   } catch (error) {
-    console.error("Failed to start task:", error);
+    logger.error("Failed to start task", {
+      error,
+      administrationId: request.data?.administrationId,
+      taskId: request.data?.taskId,
+      targetUid: request.data?.targetUid,
+      callerUid: request.auth?.uid,
+    });
 
     if (error instanceof HttpsError) {
       throw error;

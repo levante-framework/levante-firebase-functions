@@ -1,4 +1,5 @@
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { logger } from "firebase-functions/v2";
 
 interface User {
   id: string;
@@ -29,6 +30,9 @@ export async function _linkUsers(
   });
 
   if (!currentClaims.super_admin && !currentClaims.admin) {
+    logger.error("Requester lacks permissions to link users", {
+      requestingUid,
+    });
     throw new Error("User does not have permission to link users");
   }
 

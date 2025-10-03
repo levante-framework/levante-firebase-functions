@@ -26,6 +26,11 @@ import {
 import { getReadOrgs, isEmptyOrgs } from "../orgs/org-utils";
 import { evaluateCondition } from "../administrations/conditions";
 import { removeUndefinedFields } from "../utils/utils";
+import {
+  summarizeAssignmentForLog,
+  summarizeAssessmentsForLog,
+  summarizeIdListForLog,
+} from "../utils/logging";
 
 /**
  * Parse a Firestore Timestamp or Date instance
@@ -96,6 +101,14 @@ export const removeAssignmentFromUsers = async (
   administrationId: string,
   transaction: Transaction
 ) => {
+  if (!users.length) {
+    return [];
+  }
+
+  logger.debug(`Removing assignment ${administrationId} for users`, {
+    userSummary: summarizeIdListForLog(users),
+  });
+
   return Promise.all(
     _map(users, (user) =>
       removeAssignmentFromUser(user, administrationId, transaction)
@@ -170,7 +183,6 @@ const prepareNewAssignment = async (
         // whether or not we push the assessment to the user's
         // assignedAssessments array.
         if (assigned) {
-          console.log("evaluating conditions");
           pushAssessment = evaluateCondition({
             userData: userData.data()! as IUserData,
             condition: assigned,
@@ -235,12 +247,12 @@ const prepareNewAssignment = async (
 
     if (!_isEqual(cleanedAssessments, assessments)) {
       logger.warn(
-        `[prepareNewAssignment]: cleaned assessments do not match original assessments:`,
+        `[prepareNewAssignment]: cleaned assessments do not match original assessments`,
         {
-          original: assessments,
-          cleaned: cleanedAssessments,
           administrationId,
           assignmentPath: assignmentRef.path,
+          originalSummary: summarizeAssessmentsForLog(assessments),
+          cleanedSummary: summarizeAssessmentsForLog(cleanedAssessments),
         }
       );
     }
@@ -291,21 +303,20 @@ export const addAssignmentToUsers = async (
 ) => {
   console.log("hit addAssignmentToUsers");
   const assignments = await Promise.all(
-    _map(users, (user) => {
-      console.log("hit prepareNewAssignment");
-      return prepareNewAssignment(
+    _map(users, (user) =>
+      prepareNewAssignment(
         user,
         administrationId,
         administrationData,
         transaction
-      );
-    })
+      )
+    )
   );
 
   return _map(assignments, ([assignmentRef, assignmentData]) => {
     if (assignmentRef && assignmentData) {
       logger.debug(`Adding new assignment at ${assignmentRef.path}`, {
-        assignmentData,
+        assignmentSummary: summarizeAssignmentForLog(assignmentData),
       });
       return transaction.set(assignmentRef, assignmentData, { merge: true });
     } else {
@@ -605,15 +616,15 @@ export const updateAssignmentForUser = async (
       const cleanedAssessments = removeUndefinedFields(updatedAssessments);
 
       if (!_isEqual(cleanedAssessments, updatedAssessments)) {
-        logger.warn(
-          `[updateAssignmentForUser]: cleaned assessments do not match original assessments:`,
-          {
-            original: updatedAssessments,
-            cleaned: cleanedAssessments,
-            administrationId,
-            assignmentPath: assignmentRef.path,
-          }
-        );
+      logger.warn(
+        `[updateAssignmentForUser]: cleaned assessments do not match original assessments`,
+        {
+          administrationId,
+          assignmentPath: assignmentRef.path,
+          originalSummary: summarizeAssessmentsForLog(updatedAssessments),
+          cleanedSummary: summarizeAssessmentsForLog(cleanedAssessments),
+        }
+      );
       }
 
       const assignmentData: DocumentData = {
@@ -686,7 +697,7 @@ export const updateAssignmentForUsers = async (
   return _map(assignments, ([assignmentRef, assignmentData]) => {
     if (assignmentRef && assignmentData) {
       logger.info(`Updating or creating assignment ${assignmentRef.path}`, {
-        assignmentData,
+        assignmentSummary: summarizeAssignmentForLog(assignmentData),
       });
       return transaction.set(assignmentRef, assignmentData, { merge: true });
     } else if (assignmentRef) {

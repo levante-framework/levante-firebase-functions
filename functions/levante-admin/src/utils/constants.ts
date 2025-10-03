@@ -5,3 +5,5 @@ export const ROLES = {
   RESEARCH_ASSISTANT: "research_assistant",
   PARTICIPANT: "participant",
 };
+
+export const LOG_SIZE = 3;

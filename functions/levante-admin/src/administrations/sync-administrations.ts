@@ -37,6 +37,10 @@ import {
   getAdministrationsFromOrgs,
   standardizeAdministrationOrgs,
 } from "./administration-utils";
+import {
+  summarizeIdListForLog,
+  summarizeOrgsForLog,
+} from "../utils/logging";
 import { getFunctionUrl, MAX_TRANSACTIONS } from "../utils/utils";
 
 export const processRemovedAdministration = async (
@@ -44,6 +48,11 @@ export const processRemovedAdministration = async (
   prevOrgs: IOrgsList
 ) => {
   const db = getFirestore();
+
+  logger.debug("processRemovedAdministration", {
+    administrationId,
+    prevOrgSummary: summarizeOrgsForLog(prevOrgs),
+  });
 
   // Get all of the previous users and remove their assignments.  The
   // maximum number of docs we can remove in a single transaction is
@@ -113,11 +122,10 @@ export const processNewAdministration = async (
 
   for (const orgChunk of chunkOrgs(minimalOrgs, 100)) {
     logger.debug("Enqueueing task for org chunk", {
-      orgChunk,
       administrationId,
       targetUri,
       taskName,
-      queue,
+      orgChunkSummary: summarizeOrgsForLog(orgChunk),
     });
 
     enqueues.push(
@@ -152,8 +160,8 @@ export const processModifiedAdministration = async (
   const currOrgs: IOrgsList = _pick(currData, ORG_NAMES);
 
   logger.debug(`Processing modified administration ${administrationId}`, {
-    currOrgs,
-    prevOrgs,
+    currOrgSummary: summarizeOrgsForLog(currOrgs),
+    prevOrgSummary: summarizeOrgsForLog(prevOrgs),
   });
 
   //        +--------------+
@@ -169,7 +177,9 @@ export const processModifiedAdministration = async (
 
   logger.debug(
     `Detected these removed orgs for updated administration ${administrationId}`,
-    removedOrgs
+    {
+      removedOrgSummary: summarizeOrgsForLog(removedOrgs),
+    }
   );
 
   const numRemovedOrgs = _reduce(
@@ -207,7 +217,7 @@ export const processModifiedAdministration = async (
       });
 
       logger.debug(`Removing assignment ${administrationId} from users`, {
-        usersToRemove,
+        userSummary: summarizeIdListForLog(usersToRemove),
       });
 
       if (usersToRemove.length !== 0) {
@@ -262,12 +272,10 @@ export const processModifiedAdministration = async (
 
   for (const orgChunk of chunkOrgs(minimalOrgs, 100)) {
     logger.debug("Enqueueing task for org chunk", {
-      orgChunk,
-      currData,
       administrationId,
       targetUri,
       taskName,
-      queue,
+      orgChunkSummary: summarizeOrgsForLog(orgChunk),
     });
     enqueues.push(
       queue.enqueue(
@@ -293,7 +301,10 @@ export const processUserAddedOrgs = async (
   roarUid: string,
   addedOrgs: IOrgsList
 ) => {
-  logger.debug("Detected added orgs", { addedOrgs });
+  logger.debug("Detected added orgs", {
+    userId: roarUid,
+    addedOrgSummary: summarizeOrgsForLog(addedOrgs),
+  });
   const db = getFirestore();
   await db.runTransaction(async (transaction) => {
     const addedExhaustiveOrgs = await getExhaustiveOrgs({

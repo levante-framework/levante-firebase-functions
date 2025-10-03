@@ -1,5 +1,6 @@
 import { logger } from "firebase-functions/v2";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { summarizeOrgsForLog } from "../utils/logging";
 
 // ----------------THIS FUNCTION IS A PLACEHOLDER----------------
 // This function is a placeholder for the actual implementation of the
@@ -47,6 +48,17 @@ export async function deleteOrg(
         // have to take place before any writes, updates, or deletions. We
         // are potentially reading school docs to get all of the classes.
         const { schools = [], classes = [], groups: subGroups = [] } = orgData;
+
+        logger.debug("Preparing org dependencies for deletion", {
+          orgId,
+          orgsCollection,
+          recursive,
+          dependencySummary: summarizeOrgsForLog({
+            schools,
+            classes,
+            groups: subGroups,
+          }),
+        });
 
         if (recursive) {
           for (const school of schools) {
@@ -108,7 +120,11 @@ export async function deleteOrg(
       `Successfully deleted organization ${orgId} from ${orgsCollection}`
     );
   } catch (error) {
-    logger.error(`Error deleting organization ${orgId}:`, error);
+    logger.error(`Error deleting organization ${orgId}`, {
+      error,
+      orgId,
+      orgsCollection,
+    });
     throw error;
   }
 }
