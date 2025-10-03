@@ -46,6 +46,7 @@ import { onTaskDispatched } from "firebase-functions/v2/tasks";
 import _isEmpty from "lodash/isEmpty";
 import { _upsertOrg, OrgData } from "./upsert-org";
 import { syncOnRunDocUpdateEventHandler } from "./runs";
+import { upsertAdministrationHandler } from "./upsertAdministration";
 
 // initialize 'default' app on Google cloud platform
 admin.initializeApp({
@@ -567,7 +568,55 @@ export const deleteAdministration = onCall(async (request) => {
   }
 });
 
-export * from "./upsertAdministration";
+export const upsertAdministration = onCall(async (request) => {
+  const requestingUid = request.auth?.uid;
+  if (!requestingUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated.");
+  }
+
+  // New permission system gate: verify caller can create/update administrations in the requested site
+  try {
+    const auth = getAuth();
+    const userRecord = await auth.getUser(requestingUid);
+    const customClaims: any = userRecord.customClaims || {};
+    const useNewPermissions = customClaims.useNewPermissions === true;
+
+    if (useNewPermissions) {
+      await ensurePermissionsLoaded();
+      const user = buildPermissionsUserFromAuthRecord(userRecord);
+
+      const action = request.data?.administrationId ? ACTIONS.UPDATE : ACTIONS.CREATE;
+      const siteId: string | undefined = (request.data.siteId || request.data.districtId) as
+        | string
+        | undefined;
+
+      if (!siteId) {
+        throw new HttpsError(
+          "invalid-argument",
+          "A siteId (or districtId) is required to upsert administrations"
+        );
+      }
+
+      const allowed = filterSitesByPermission(user, [siteId], {
+        resource: RESOURCES.TASKS,
+        action,
+      }).length > 0;
+
+      if (!allowed) {
+        throw new HttpsError(
+          "permission-denied",
+          `You do not have permission to ${action} administrations in site ${siteId}`
+        );
+      }
+    }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError("internal", (err as Error)?.message || "Permission check failed");
+  }
+
+  // Delegate to handler
+  return await upsertAdministrationHandler(requestingUid, request.data);
+});
 
 export { completeTask } from "./tasks/completeTask";
 export { startTask } from "./tasks/startTask";

@@ -1,5 +1,5 @@
 import admin from "firebase-admin";
-import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import { IAssessment, IOrgsList } from "./interfaces"; // Assuming necessary types/helpers are in common
 const db = admin.firestore();
@@ -44,16 +44,10 @@ interface IAdministrationDoc {
   updatedAt: admin.firestore.Timestamp;
 }
 
-export const upsertAdministration = onCall(async (request) => {
-  // 1. Authentication Check
-  if (!request.auth) {
-    throw new HttpsError(
-      "unauthenticated",
-      "The function must be called while authenticated."
-    );
-  }
-  const callerAdminUid = request.auth.uid;
-
+export const upsertAdministrationHandler = async (
+  callerAdminUid: string,
+  data: UpsertAdministrationData
+) => {
   logger.info("Administration upsert started", { callerUid: callerAdminUid });
 
   // 2. Authorization Check (Verify caller is an admin or super_admin via userClaims collection)
@@ -132,7 +126,7 @@ export const upsertAdministration = onCall(async (request) => {
     administrationId,
     isTestData = false,
     legal,
-  } = request.data as UpsertAdministrationData;
+  } = data as UpsertAdministrationData;
 
   // Debug logging for date values
   logger.info("Date validation debug", {
@@ -311,4 +305,4 @@ export const upsertAdministration = onCall(async (request) => {
       `Failed to upsert administration: ${error.message}`
     );
   }
-});
+};
