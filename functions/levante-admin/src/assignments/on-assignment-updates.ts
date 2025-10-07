@@ -1,16 +1,15 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import {
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import type {
   CollectionReference,
   DocumentReference,
   FieldPath,
-  FieldValue,
   Transaction,
-  getFirestore,
 } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
-import _isEmpty from "lodash-es/isEmpty";
-import _reduce from "lodash-es/reduce";
-import _without from "lodash-es/without";
+import _isEmpty from "lodash-es/isEmpty.js";
+import _reduce from "lodash-es/reduce.js";
+import _without from "lodash-es/without.js";
 import {
   DocumentCreatedEvent,
   DocumentDeletedEvent,

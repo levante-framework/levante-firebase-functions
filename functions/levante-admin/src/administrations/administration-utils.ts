@@ -1,23 +1,23 @@
-import {
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import type {
   CollectionReference,
   DocumentReference,
   FieldPath,
   Filter,
-  getFirestore,
   Query,
   Transaction,
-  FieldValue,
 } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
-import _flatten from "lodash-es/flatten";
-import _isEqual from "lodash-es/isEqual";
-import _pick from "lodash-es/pick";
-import _toPairs from "lodash-es/toPairs";
-import _union from "lodash-es/union";
-import _reduce from "lodash-es/reduce";
-import _map from "lodash-es/map";
-import _fromPairs from "lodash-es/fromPairs";
-import { IAdministration, IOrgsList, ORG_NAMES } from "../interfaces.js";
+import _flatten from "lodash-es/flatten.js";
+import _isEqual from "lodash-es/isEqual.js";
+import _pick from "lodash-es/pick.js";
+import _toPairs from "lodash-es/toPairs.js";
+import _union from "lodash-es/union.js";
+import _reduce from "lodash-es/reduce.js";
+import _map from "lodash-es/map.js";
+import _fromPairs from "lodash-es/fromPairs.js";
+import type { IAdministration, IOrgsList } from "../interfaces.js";
+import { ORG_NAMES } from "../interfaces.js";
 import { removeOrgsFromAssignments } from "../assignments/assignment-utils.js";
 import {
   chunkOrgs,

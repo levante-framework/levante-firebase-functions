@@ -1,9 +1,11 @@
-import { CreateRequest, getAuth } from "firebase-admin/auth";
-import { FieldValue, getFirestore, FieldPath } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
+import type { CreateRequest } from "firebase-admin/auth";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import type { FieldPath } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
-import _fromPairs from "lodash-es/fromPairs";
+import _fromPairs from "lodash-es/fromPairs.js";
 import { v4 as uuidv4 } from "uuid";
-import { ICustomClaims, IName, IOrgsList } from "../interfaces.js";
+import type { ICustomClaims, IName, IOrgsList } from "../interfaces.js";
 import {
   appendOrRemoveAdminOrgs,
   setUidClaimsHandler,

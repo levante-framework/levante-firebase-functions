@@ -1,24 +1,24 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import {
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import type {
   DocumentData,
   DocumentSnapshot,
   FieldPath,
-  FieldValue,
   Filter,
-  getFirestore,
   Transaction,
 } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
-import _chunk from "lodash-es/chunk";
-import _cloneDeep from "lodash-es/cloneDeep";
-import _get from "lodash-es/get";
-import _isEmpty from "lodash-es/isEmpty";
-import _toPairs from "lodash-es/toPairs";
-import _union from "lodash-es/union";
-import _uniq from "lodash-es/uniq";
-import _without from "lodash-es/without";
-import { IOrgsList, ORG_NAMES } from "../interfaces.js";
+import _chunk from "lodash-es/chunk.js";
+import _cloneDeep from "lodash-es/cloneDeep.js";
+import _get from "lodash-es/get.js";
+import _isEmpty from "lodash-es/isEmpty.js";
+import _toPairs from "lodash-es/toPairs.js";
+import _union from "lodash-es/union.js";
+import _uniq from "lodash-es/uniq.js";
+import _without from "lodash-es/without.js";
+import type { IOrgsList } from "../interfaces.js";
+import { ORG_NAMES } from "../interfaces.js";
 import { doesDocExist, pluralizeFirestoreCollection } from "../utils/utils.js";
 import { getAdministrationsFromOrgs } from "../administrations/administration-utils.js";
 import { summarizeIdListForLog, summarizeOrgsForLog } from "../utils/logging.js";

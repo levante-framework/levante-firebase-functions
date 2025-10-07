@@ -1,32 +1,35 @@
 import {
-  DocumentReference,
   getFirestore,
-  Filter,
-  Transaction,
   FieldValue,
-  Firestore,
   Timestamp,
+  Filter,
+} from "firebase-admin/firestore";
+import type {
+  DocumentReference,
+  Transaction,
+  Firestore,
 } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import { getFunctions } from "firebase-admin/functions";
-import _chunk from "lodash-es/chunk";
-import _difference from "lodash-es/difference";
-import _forEach from "lodash-es/forEach";
-import _fromPairs from "lodash-es/fromPairs";
-import _isEqual from "lodash-es/isEqual";
-import _map from "lodash-es/map";
-import _pick from "lodash-es/pick";
-import _uniqBy from "lodash-es/uniqBy";
-import _without from "lodash-es/without";
-import _reduce from "lodash-es/reduce";
-import { IAdministration, IOrgsList, ORG_NAMES } from "../interfaces.js";
+import _chunk from "lodash-es/chunk.js";
+import _difference from "lodash-es/difference.js";
+import _forEach from "lodash-es/forEach.js";
+import _fromPairs from "lodash-es/fromPairs.js";
+import _isEqual from "lodash-es/isEqual.js";
+import _map from "lodash-es/map.js";
+import _pick from "lodash-es/pick.js";
+import _uniqBy from "lodash-es/uniqBy.js";
+import _without from "lodash-es/without.js";
+import _reduce from "lodash-es/reduce.js";
+import type { IAdministration, IOrgsList } from "../interfaces.js";
+import { ORG_NAMES } from "../interfaces.js";
 import {
   chunkOrgs,
   getExhaustiveOrgs,
   getOnlyExistingOrgs,
   getUsersFromOrgs,
 } from "../orgs/org-utils.js";
-import { UpdateAction } from "../utils/transactions.js";
+import type { UpdateAction } from "../utils/transactions.js";
 import {
   removeAssignmentFromUsers,
   removeOrgsFromAssignments,

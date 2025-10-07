@@ -1,6 +1,6 @@
 import { Firestore, Transaction } from "firebase-admin/firestore";
 import { DocumentSnapshot } from "firebase-admin/firestore";
-import { IExtendedAssignedAssessment } from "../interfaces.js";
+import type { IExtendedAssignedAssessment } from "../interfaces.js";
 
 export function getAssignmentDocRef(
   db: Firestore,

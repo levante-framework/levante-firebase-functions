@@ -1,7 +1,7 @@
 import { LOG_SIZE } from "./constants.js";
 import { removeUndefinedFields } from "./utils.js";
-import { IOrgsList } from "../interfaces.js";
-import { DocumentData } from "firebase-admin/firestore";
+import type { IOrgsList } from "../interfaces.js";
+import type { DocumentData } from "firebase-admin/firestore";
 
 const LOG_SAMPLE_SIZE = LOG_SIZE;
 

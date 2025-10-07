@@ -6,7 +6,7 @@ import {
   Firestore,
 } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
-import { IExtendedAssignedAssessment } from "../interfaces.js";
+import type { IExtendedAssignedAssessment } from "../interfaces.js";
 import {
   getAssignmentDoc,
   getAssignmentDocRef,

@@ -1,21 +1,21 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import { Auth, getAuth } from "firebase-admin/auth";
-import {
+import type { Auth } from "firebase-admin/auth";
+import { getAuth } from "firebase-admin/auth";
+import { getFirestore, FieldPath } from "firebase-admin/firestore";
+import type {
   DocumentData,
   DocumentReference,
-  FieldPath,
   Firestore,
-  getFirestore,
   Query,
 } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
-import _concat from "lodash-es/concat";
-import _isEmpty from "lodash-es/isEmpty";
-import _set from "lodash-es/set";
-import _toPairs from "lodash-es/toPairs";
-import _uniq from "lodash-es/uniq";
-import _without from "lodash-es/without";
+import _concat from "lodash-es/concat.js";
+import _isEmpty from "lodash-es/isEmpty.js";
+import _set from "lodash-es/set.js";
+import _toPairs from "lodash-es/toPairs.js";
+import _uniq from "lodash-es/uniq.js";
+import _without from "lodash-es/without.js";
 import {
   getIdentityProviderDocRef,
   IdentityProviderType,

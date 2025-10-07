@@ -43,8 +43,9 @@ import { _linkUsers } from "./user-linking.js";
 import { writeSurveyResponses } from "./save-survey-results.js";
 import { _editUsers } from "./edit-users.js";
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
-import _isEmpty from "lodash-es/isEmpty";
-import { _upsertOrg, OrgData } from "./upsert-org.js";
+import _isEmpty from "lodash-es/isEmpty.js";
+import { _upsertOrg } from "./upsert-org.js";
+import type { OrgData } from "./upsert-org.js";
 import { syncOnRunDocUpdateEventHandler } from "./runs/index.js";
 import { upsertAdministrationHandler } from "./upsertAdministration.js";
 

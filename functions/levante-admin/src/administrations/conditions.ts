@@ -1,5 +1,5 @@
-import _get from "lodash-es/get";
-import { IUserData } from "../interfaces.js";
+import _get from "lodash-es/get.js";
+import type { IUserData } from "../interfaces.js";
 
 /**
  * Enum representing different comparison operators.

@@ -2,7 +2,7 @@ import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
-import _pick from "lodash-es/pick";
+import _pick from "lodash-es/pick.js";
 import { ORG_NAMES } from "../interfaces.js";
 
 /**

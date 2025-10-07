@@ -1,12 +1,13 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
-import { getFirestore, Transaction } from "firebase-admin/firestore";
+import { getFirestore } from "firebase-admin/firestore";
+import type { Transaction } from "firebase-admin/firestore";
 import {
   updateAssignedAssessment,
   getAssignmentDoc,
   getAssignmentDocRef,
 } from "../utils/assignment.js";
-import {
+import type {
   IUserData,
   IAssignedAssessment,
   IExtendedAssignedAssessment,
@@ -14,8 +15,8 @@ import {
   IAssessment,
   IAdministration,
 } from "../interfaces.js";
-import _get from "lodash-es/get";
-import _nth from "lodash-es/nth";
+import _get from "lodash-es/get.js";
+import _nth from "lodash-es/nth.js";
 
 const db = getFirestore();
 

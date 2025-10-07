@@ -1,7 +1,7 @@
 import admin from "firebase-admin";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
-import { IAssessment, IOrgsList } from "./interfaces.js"; // Assuming necessary types/helpers are in common
+import type { IAssessment, IOrgsList } from "./interfaces.js"; // Assuming necessary types/helpers are in common
 const db = admin.firestore();
 const { FieldValue } = admin.firestore;
 

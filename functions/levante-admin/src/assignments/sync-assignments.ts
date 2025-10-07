@@ -1,16 +1,17 @@
-import { FieldPath, FieldValue, getFirestore } from "firebase-admin/firestore";
+import { getFirestore, FieldValue, FieldPath } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
-import _chunk from "lodash-es/chunk";
-import _difference from "lodash-es/difference";
-import _fromPairs from "lodash-es/fromPairs";
-import _get from "lodash-es/get";
-import _isEmpty from "lodash-es/isEmpty";
-import _isEqual from "lodash-es/isEqual";
-import _map from "lodash-es/map";
-import _pick from "lodash-es/pick";
-import _reduce from "lodash-es/reduce";
-import _toPairs from "lodash-es/toPairs";
-import { IAdministration, IOrgsList, ORG_NAMES } from "../interfaces.js";
+import _chunk from "lodash-es/chunk.js";
+import _difference from "lodash-es/difference.js";
+import _fromPairs from "lodash-es/fromPairs.js";
+import _get from "lodash-es/get.js";
+import _isEmpty from "lodash-es/isEmpty.js";
+import _isEqual from "lodash-es/isEqual.js";
+import _map from "lodash-es/map.js";
+import _pick from "lodash-es/pick.js";
+import _reduce from "lodash-es/reduce.js";
+import _toPairs from "lodash-es/toPairs.js";
+import type { IAdministration, IOrgsList } from "../interfaces.js";
+import { ORG_NAMES } from "../interfaces.js";
 import {
   processModifiedAdministration,
   processNewAdministration,

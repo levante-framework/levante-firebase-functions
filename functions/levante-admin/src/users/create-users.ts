@@ -1,17 +1,13 @@
 import { getAuth, type UserImportResult, type Auth } from "firebase-admin/auth";
-import {
-  getFirestore,
-  FieldPath,
-  type DocumentReference,
-  type WriteResult,
-} from "firebase-admin/firestore";
-import _get from "lodash-es/get";
-import _head from "lodash-es/head";
-import _split from "lodash-es/split";
-import _set from "lodash-es/set";
-import _isEmpty from "lodash-es/isEmpty";
-import _includes from "lodash-es/includes";
-import _chunk from "lodash-es/chunk";
+import { getFirestore, FieldPath } from "firebase-admin/firestore";
+import type { DocumentReference, WriteResult } from "firebase-admin/firestore";
+import _get from "lodash-es/get.js";
+import _head from "lodash-es/head.js";
+import _split from "lodash-es/split.js";
+import _set from "lodash-es/set.js";
+import _isEmpty from "lodash-es/isEmpty.js";
+import _includes from "lodash-es/includes.js";
+import _chunk from "lodash-es/chunk.js";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import bcrypt from "bcrypt";

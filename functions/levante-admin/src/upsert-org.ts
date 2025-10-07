@@ -1,9 +1,5 @@
-import {
-  getFirestore,
-  FieldValue,
-  FieldPath,
-  DocumentData,
-} from "firebase-admin/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import type { FieldPath, DocumentData } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 
