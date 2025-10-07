@@ -1,5 +1,4 @@
-import { getFirestore } from "firebase-admin/firestore";
-import type { FieldValue } from "firebase-admin/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import type { AuthUserRecord } from "firebase-functions/v2/identity";
 import { logger } from "firebase-functions/v2";
 import _head from "lodash-es/head.js";

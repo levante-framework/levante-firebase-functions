@@ -1,10 +1,8 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getFirestore, FieldValue, FieldPath, Filter } from "firebase-admin/firestore";
 import type {
   DocumentData,
   DocumentSnapshot,
-  FieldPath,
-  Filter,
   Transaction,
 } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";

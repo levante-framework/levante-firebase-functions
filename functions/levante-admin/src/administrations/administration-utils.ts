@@ -1,9 +1,7 @@
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getFirestore, FieldValue, FieldPath, Filter } from "firebase-admin/firestore";
 import type {
   CollectionReference,
   DocumentReference,
-  FieldPath,
-  Filter,
   Query,
   Transaction,
 } from "firebase-admin/firestore";

@@ -2,7 +2,7 @@ import retry from "async-retry";
 import { logger } from "firebase-functions/v2";
 import { updateBestRunAndCompletion } from "./update-best-run-and-completion.js";
 import { selectCategoryScore } from "./select-category-score.js";
-import { DocumentWrittenEvent } from "../utils/utils.js";
+import { type DocumentWrittenEvent } from "../utils/utils.js";
 
 /**
  * Compute the best run for a given task in a given assignment.

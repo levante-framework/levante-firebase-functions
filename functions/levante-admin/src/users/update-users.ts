@@ -4,12 +4,8 @@ import { getAuth } from "firebase-admin/auth";
 import { logger } from "firebase-functions/v2";
 import type { FieldPathsAndValues, StudentDataInput } from "../interfaces.js";
 import { delay, pluralizeFirestoreCollection } from "../utils/utils.js";
-import { getFirestore } from "firebase-admin/firestore";
-import type {
-  DocumentReference,
-  FieldPath,
-  Transaction,
-} from "firebase-admin/firestore";
+import { getFirestore, FieldPath } from "firebase-admin/firestore";
+import type { DocumentReference, Transaction } from "firebase-admin/firestore";
 import _flatten from "lodash-es/flatten.js";
 import _get from "lodash-es/get.js";
 import _intersection from "lodash-es/intersection.js";

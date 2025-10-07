@@ -18,7 +18,7 @@ import {
   processRemovedAdministration,
   processUserAddedOrgs,
 } from "../administrations/sync-administrations.js";
-import { DocumentWrittenEvent, MAX_TRANSACTIONS } from "../utils/utils.js";
+import { type DocumentWrittenEvent, MAX_TRANSACTIONS } from "../utils/utils.js";
 import { processUserRemovedOrgs } from "../administrations/administration-utils.js";
 import { getUsersFromOrgs } from "../orgs/org-utils.js";
 import {
