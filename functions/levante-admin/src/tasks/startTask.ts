@@ -1,7 +1,7 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import { getFirestore } from "firebase-admin/firestore";
-import type { Transaction } from "firebase-admin/firestore";
+import type { Firestore, Transaction } from "firebase-admin/firestore";
 import {
   updateAssignedAssessment,
   getAssignmentDoc,
@@ -18,8 +18,6 @@ import type {
 import _get from "lodash-es/get.js";
 import _nth from "lodash-es/nth.js";
 
-const db = getFirestore();
-
 const emptyOrg = () => {
   return {
     current: [],
@@ -32,6 +30,7 @@ const emptyOrg = () => {
  * Gets user data from the admin database
  */
 async function getMyData(
+  db: Firestore,
   targetUid: string,
   transaction?: Transaction
 ): Promise<{ userData: IUserData; assessmentPid: string }> {
@@ -78,6 +77,7 @@ async function getMyData(
  * Marks an assignment as started
  */
 async function startAssignment(
+  db: Firestore,
   administrationId: string,
   targetUid: string,
   transaction: Transaction
@@ -107,6 +107,7 @@ interface StartTaskResult {
  * This function prepares the task for starting and returns the necessary data for firekit (client)
  */
 export const startTask = onCall(async (request): Promise<StartTaskResult> => {
+  const db = getFirestore();
   try {
     // Validate authentication
     if (!request.auth) {
@@ -194,7 +195,7 @@ export const startTask = onCall(async (request): Promise<StartTaskResult> => {
       }
 
       // Get user data
-      const { userData, assessmentPid } = await getMyData(uid, transaction);
+      const { userData, assessmentPid } = await getMyData(db, uid, transaction);
 
       // Get assignment metadata
       const assigningOrgs = assignmentData.assigningOrgs as IOrgsList;
@@ -221,7 +222,7 @@ export const startTask = onCall(async (request): Promise<StartTaskResult> => {
           Boolean(a.startedOn)
         )
       ) {
-        await startAssignment(administrationId, uid, transaction);
+        await startAssignment(db, administrationId, uid, transaction);
       }
 
       // Prepare the task information for firekit using the assessment definition from administration

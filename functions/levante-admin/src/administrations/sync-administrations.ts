@@ -40,7 +40,10 @@ import {
   getAdministrationsFromOrgs,
   standardizeAdministrationOrgs,
 } from "./administration-utils.js";
-import { summarizeIdListForLog, summarizeOrgsForLog } from "../utils/logging.js";
+import {
+  summarizeIdListForLog,
+  summarizeOrgsForLog,
+} from "../utils/logging.js";
 import { getFunctionUrl, MAX_TRANSACTIONS } from "../utils/utils.js";
 
 export const processRemovedAdministration = async (

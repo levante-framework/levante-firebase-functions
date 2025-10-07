@@ -13,9 +13,6 @@ import {
   shouldCompleteAssignment,
 } from "../utils/assignment.js";
 
-// Initialize Firestore
-const db = getFirestore();
-
 /**
  * Updates an assigned assessment with the provided updates
  */
@@ -48,6 +45,9 @@ function updateAssignedTaskInTransaction(
  * Marks a task in the current assignment as completed and checks if the entire assignment is now complete
  */
 export const completeTask = onCall(async (request) => {
+  // Initialize Firestore
+  const db = getFirestore();
+
   try {
     // Validate authentication
     if (!request.auth) {

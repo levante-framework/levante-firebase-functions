@@ -25,7 +25,10 @@ import {
   addAssignmentToUsers,
   updateAssignmentForUsers,
 } from "./assignment-utils.js";
-import { summarizeIdListForLog, summarizeOrgsForLog } from "../utils/logging.js";
+import {
+  summarizeIdListForLog,
+  summarizeOrgsForLog,
+} from "../utils/logging.js";
 
 /**
  * Sync globally defined adminstrations with user-specific assignments.

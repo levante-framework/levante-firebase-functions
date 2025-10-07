@@ -1,5 +1,10 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import { getFirestore, FieldValue, FieldPath, Filter } from "firebase-admin/firestore";
+import {
+  getFirestore,
+  FieldValue,
+  FieldPath,
+  Filter,
+} from "firebase-admin/firestore";
 import type {
   DocumentData,
   DocumentSnapshot,
@@ -19,7 +24,10 @@ import type { IOrgsList } from "../interfaces.js";
 import { ORG_NAMES } from "../interfaces.js";
 import { doesDocExist, pluralizeFirestoreCollection } from "../utils/utils.js";
 import { getAdministrationsFromOrgs } from "../administrations/administration-utils.js";
-import { summarizeIdListForLog, summarizeOrgsForLog } from "../utils/logging.js";
+import {
+  summarizeIdListForLog,
+  summarizeOrgsForLog,
+} from "../utils/logging.js";
 
 /**
  * Get schools and subgroup from a specified district.

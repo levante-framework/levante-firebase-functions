@@ -1,9 +1,12 @@
-import admin from "firebase-admin";
+import {
+  getFirestore,
+  FieldValue,
+  Timestamp,
+  type DocumentReference,
+} from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import type { IAssessment, IOrgsList } from "./interfaces.js"; // Assuming necessary types/helpers are in common
-const db = admin.firestore();
-const { FieldValue } = admin.firestore;
 
 interface UpsertAdministrationData {
   name: string;
@@ -30,9 +33,9 @@ interface IAdministrationDoc {
   classes: string[];
   schools: string[];
   districts: string[];
-  dateCreated: admin.firestore.Timestamp;
-  dateOpened: admin.firestore.Timestamp;
-  dateClosed: admin.firestore.Timestamp;
+  dateCreated: Timestamp;
+  dateOpened: Timestamp;
+  dateClosed: Timestamp;
   assessments: IAssessment[];
   sequential: boolean;
   tags: string[];
@@ -40,8 +43,8 @@ interface IAdministrationDoc {
   testData: boolean;
   readOrgs?: IOrgsList;
   minimalOrgs?: IOrgsList;
-  createdAt: admin.firestore.Timestamp;
-  updatedAt: admin.firestore.Timestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 }
 
 export const upsertAdministrationHandler = async (
@@ -49,6 +52,7 @@ export const upsertAdministrationHandler = async (
   data: UpsertAdministrationData
 ) => {
   logger.info("Administration upsert started", { callerUid: callerAdminUid });
+  const db = getFirestore();
 
   // 2. Authorization Check (Verify caller is an admin or super_admin via userClaims collection)
   try {
@@ -149,14 +153,14 @@ export const upsertAdministrationHandler = async (
     );
   }
 
-  let dateOpenedTs: admin.firestore.Timestamp;
-  let dateClosedTs: admin.firestore.Timestamp;
+  let dateOpenedTs: Timestamp;
+  let dateClosedTs: Timestamp;
   try {
     const dateOpenObj = new Date(dateOpen);
     const dateCloseObj = new Date(dateClose);
 
-    dateOpenedTs = admin.firestore.Timestamp.fromDate(dateOpenObj);
-    dateClosedTs = admin.firestore.Timestamp.fromDate(dateCloseObj);
+    dateOpenedTs = Timestamp.fromDate(dateOpenObj);
+    dateClosedTs = Timestamp.fromDate(dateCloseObj);
   } catch (e: unknown) {
     throw new HttpsError(
       "invalid-argument",
@@ -174,7 +178,7 @@ export const upsertAdministrationHandler = async (
   // 5. Firestore Transaction
   try {
     const newAdministrationId = await db.runTransaction(async (transaction) => {
-      let administrationDocRef: admin.firestore.DocumentReference;
+      let administrationDocRef: DocumentReference;
       let operationType: string; // To log 'create' or 'update'
 
       if (administrationId) {
@@ -228,7 +232,7 @@ export const upsertAdministrationHandler = async (
             groups: orgs.groups ?? [],
             families: orgs.families ?? [],
           },
-          updatedAt: FieldValue.serverTimestamp() as admin.firestore.Timestamp,
+          updatedAt: FieldValue.serverTimestamp() as Timestamp,
         };
 
         // --- Write 1 (Update Path) --- Update administration doc using transaction.update()
@@ -253,8 +257,7 @@ export const upsertAdministrationHandler = async (
           classes: orgs.classes ?? [],
           schools: orgs.schools ?? [],
           districts: orgs.districts ?? [],
-          dateCreated:
-            FieldValue.serverTimestamp() as admin.firestore.Timestamp,
+          dateCreated: FieldValue.serverTimestamp() as Timestamp,
           dateOpened: dateOpenedTs,
           dateClosed: dateClosedTs,
           assessments: assessments,
@@ -264,8 +267,8 @@ export const upsertAdministrationHandler = async (
           testData: isTestData ?? false,
           readOrgs: orgs,
           minimalOrgs: orgs,
-          createdAt: FieldValue.serverTimestamp() as admin.firestore.Timestamp,
-          updatedAt: FieldValue.serverTimestamp() as admin.firestore.Timestamp,
+          createdAt: FieldValue.serverTimestamp() as Timestamp,
+          updatedAt: FieldValue.serverTimestamp() as Timestamp,
         };
 
         // --- Write 1 (Create Path) --- Create administration doc
