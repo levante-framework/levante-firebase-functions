@@ -5,18 +5,18 @@ import {
   type DocumentReference,
   type WriteResult,
 } from "firebase-admin/firestore";
-import _get from "lodash/get";
-import _head from "lodash/head";
-import _split from "lodash/split";
-import _set from "lodash/set";
-import _isEmpty from "lodash/isEmpty";
-import _includes from "lodash/includes";
-import _chunk from "lodash/chunk";
+import _get from "lodash-es/get";
+import _head from "lodash-es/head";
+import _split from "lodash-es/split";
+import _set from "lodash-es/set";
+import _isEmpty from "lodash-es/isEmpty";
+import _includes from "lodash-es/includes";
+import _chunk from "lodash-es/chunk";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import bcrypt from "bcrypt";
-import { isEmulated } from "../utils/utils";
-import { ROLES } from "../utils/constants";
+import { isEmulated } from "../utils/utils.js";
+import { ROLES } from "../utils/constants.js";
 
 interface InputUser {
   userType: string;
@@ -185,7 +185,6 @@ export const _createUsers = async (
     }
     return null;
   });
-
 
   if (
     (validateRequesterPermissions && !currentClaims) ||
@@ -504,7 +503,6 @@ export const _createUsers = async (
         const failureCount = results.filter((r) => !r.success).length;
         const successCount = results.filter((r) => r.success).length;
 
-
         if (failureCount > 0 && currentRetry < maxRetries) {
           const failedUsers = results
             .filter((r) => !r.success)
@@ -527,9 +525,10 @@ export const _createUsers = async (
             project,
             failedUsers: results
               .filter((r) => !r.success)
-              .map((r) =>
-                (r as { success: false; error: any; user: AdminAuthUserData })
-                  .user.email
+              .map(
+                (r) =>
+                  (r as { success: false; error: any; user: AdminAuthUserData })
+                    .user.email
               ),
           });
           throw new Error(

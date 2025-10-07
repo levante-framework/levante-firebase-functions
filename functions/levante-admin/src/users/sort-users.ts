@@ -1,8 +1,8 @@
 import { EmailIdentifier, getAuth, UserRecord } from "firebase-admin/auth";
 import { boolean } from "boolean";
-import _chunk from "lodash/chunk";
-import _concat from "lodash/concat";
-import { StudentDataInput } from "../interfaces";
+import _chunk from "lodash-es/chunk";
+import _concat from "lodash-es/concat";
+import { StudentDataInput } from "../interfaces.js";
 
 export interface User<T> {
   userData: T;

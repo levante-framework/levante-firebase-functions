@@ -1,33 +1,30 @@
 import { FieldPath, FieldValue, getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
-import _chunk from "lodash/chunk";
-import _difference from "lodash/difference";
-import _fromPairs from "lodash/fromPairs";
-import _get from "lodash/get";
-import _isEmpty from "lodash/isEmpty";
-import _isEqual from "lodash/isEqual";
-import _map from "lodash/map";
-import _pick from "lodash/pick";
-import _reduce from "lodash/reduce";
-import _toPairs from "lodash/toPairs";
-import { IAdministration, IOrgsList, ORG_NAMES } from "../interfaces";
+import _chunk from "lodash-es/chunk";
+import _difference from "lodash-es/difference";
+import _fromPairs from "lodash-es/fromPairs";
+import _get from "lodash-es/get";
+import _isEmpty from "lodash-es/isEmpty";
+import _isEqual from "lodash-es/isEqual";
+import _map from "lodash-es/map";
+import _pick from "lodash-es/pick";
+import _reduce from "lodash-es/reduce";
+import _toPairs from "lodash-es/toPairs";
+import { IAdministration, IOrgsList, ORG_NAMES } from "../interfaces.js";
 import {
   processModifiedAdministration,
   processNewAdministration,
   processRemovedAdministration,
   processUserAddedOrgs,
-} from "../administrations/sync-administrations";
-import { DocumentWrittenEvent, MAX_TRANSACTIONS } from "../utils/utils";
-import { processUserRemovedOrgs } from "../administrations/administration-utils";
-import { getUsersFromOrgs } from "../orgs/org-utils";
+} from "../administrations/sync-administrations.js";
+import { DocumentWrittenEvent, MAX_TRANSACTIONS } from "../utils/utils.js";
+import { processUserRemovedOrgs } from "../administrations/administration-utils.js";
+import { getUsersFromOrgs } from "../orgs/org-utils.js";
 import {
   addAssignmentToUsers,
   updateAssignmentForUsers,
-} from "./assignment-utils";
-import {
-  summarizeIdListForLog,
-  summarizeOrgsForLog,
-} from "../utils/logging";
+} from "./assignment-utils.js";
+import { summarizeIdListForLog, summarizeOrgsForLog } from "../utils/logging.js";
 
 /**
  * Sync globally defined adminstrations with user-specific assignments.

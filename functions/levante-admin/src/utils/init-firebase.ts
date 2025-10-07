@@ -1,7 +1,7 @@
 import * as admin from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
-import { config } from "./config";
+import { config } from "./config.js";
 
 /**
  * Initializes the Firebase admin SDK with configuration from environment variables

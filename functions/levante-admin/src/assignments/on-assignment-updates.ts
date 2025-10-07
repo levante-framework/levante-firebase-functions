@@ -8,14 +8,14 @@ import {
   getFirestore,
 } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
-import _isEmpty from "lodash/isEmpty";
-import _reduce from "lodash/reduce";
-import _without from "lodash/without";
+import _isEmpty from "lodash-es/isEmpty";
+import _reduce from "lodash-es/reduce";
+import _without from "lodash-es/without";
 import {
   DocumentCreatedEvent,
   DocumentDeletedEvent,
   DocumentUpdatedEvent,
-} from "../utils/utils";
+} from "../utils/utils.js";
 
 type Status = "assigned" | "started" | "completed";
 

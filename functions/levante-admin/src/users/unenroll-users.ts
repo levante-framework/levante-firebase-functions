@@ -5,10 +5,10 @@ import {
   getFirestore,
   Transaction,
 } from "firebase-admin/firestore";
-import _union from "lodash/union";
-import { User } from "./sort-users";
-import { emptyOrgs } from "../utils/utils";
-import { StudentDataInput } from "../interfaces";
+import _union from "lodash-es/union";
+import { User } from "./sort-users.js";
+import { emptyOrgs } from "../utils/utils.js";
+import { StudentDataInput } from "../interfaces.js";
 import { logger } from "firebase-functions/v2";
 
 /**

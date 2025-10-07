@@ -10,16 +10,16 @@ import {
 } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
-import _concat from "lodash/concat";
-import _isEmpty from "lodash/isEmpty";
-import _set from "lodash/set";
-import _toPairs from "lodash/toPairs";
-import _uniq from "lodash/uniq";
-import _without from "lodash/without";
+import _concat from "lodash-es/concat";
+import _isEmpty from "lodash-es/isEmpty";
+import _set from "lodash-es/set";
+import _toPairs from "lodash-es/toPairs";
+import _uniq from "lodash-es/uniq";
+import _without from "lodash-es/without";
 import {
   getIdentityProviderDocRef,
   IdentityProviderType,
-} from "./identity-providers";
+} from "./identity-providers.js";
 
 /**
  * Retrieve the ROAR UID of a user.

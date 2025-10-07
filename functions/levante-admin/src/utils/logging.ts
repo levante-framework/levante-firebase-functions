@@ -1,6 +1,6 @@
-import { LOG_SIZE } from "./constants";
-import { removeUndefinedFields } from "./utils";
-import { IOrgsList } from "../interfaces";
+import { LOG_SIZE } from "./constants.js";
+import { removeUndefinedFields } from "./utils.js";
+import { IOrgsList } from "../interfaces.js";
 import { DocumentData } from "firebase-admin/firestore";
 
 const LOG_SAMPLE_SIZE = LOG_SIZE;
@@ -160,5 +160,3 @@ export const summarizeRunsForLog = (
   }),
   truncated: runs.length > sampleSize,
 });
-
-

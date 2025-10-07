@@ -9,28 +9,28 @@ import {
   FieldValue,
 } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
-import _flatten from "lodash/flatten";
-import _isEqual from "lodash/isEqual";
-import _pick from "lodash/pick";
-import _toPairs from "lodash/toPairs";
-import _union from "lodash/union";
-import _reduce from "lodash/reduce";
-import _map from "lodash/map";
-import _fromPairs from "lodash/fromPairs";
-import { IAdministration, IOrgsList, ORG_NAMES } from "../interfaces";
-import { removeOrgsFromAssignments } from "../assignments/assignment-utils";
+import _flatten from "lodash-es/flatten";
+import _isEqual from "lodash-es/isEqual";
+import _pick from "lodash-es/pick";
+import _toPairs from "lodash-es/toPairs";
+import _union from "lodash-es/union";
+import _reduce from "lodash-es/reduce";
+import _map from "lodash-es/map";
+import _fromPairs from "lodash-es/fromPairs";
+import { IAdministration, IOrgsList, ORG_NAMES } from "../interfaces.js";
+import { removeOrgsFromAssignments } from "../assignments/assignment-utils.js";
 import {
   chunkOrgs,
   getExhaustiveOrgs,
   getMinimalOrgs,
   getOnlyExistingOrgs,
   getReadOrgs,
-} from "../orgs/org-utils";
+} from "../orgs/org-utils.js";
 import {
   summarizeAdministrationsForLog,
   summarizeIdListForLog,
   summarizeOrgsForLog,
-} from "../utils/logging";
+} from "../utils/logging.js";
 
 /**
  * Retrieve all administrations associated with the provided orgs.

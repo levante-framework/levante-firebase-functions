@@ -5,7 +5,7 @@ import {
   updateAssignedAssessment,
   getAssignmentDoc,
   getAssignmentDocRef,
-} from "../utils/assignment";
+} from "../utils/assignment.js";
 import {
   IUserData,
   IAssignedAssessment,
@@ -13,9 +13,9 @@ import {
   IOrgsList,
   IAssessment,
   IAdministration,
-} from "../interfaces";
-import _get from "lodash/get";
-import _nth from "lodash/nth";
+} from "../interfaces.js";
+import _get from "lodash-es/get";
+import _nth from "lodash-es/nth";
 
 const db = getFirestore();
 

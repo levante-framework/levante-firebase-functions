@@ -8,29 +8,29 @@ import {
   getFirestore,
 } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
-import _flatten from "lodash/flatten";
-import _get from "lodash/get";
-import _intersection from "lodash/intersection";
-import _isEqual from "lodash/isEqual";
-import _map from "lodash/map";
-import _pick from "lodash/pick";
-import _reduce from "lodash/reduce";
-import _without from "lodash/without";
+import _flatten from "lodash-es/flatten";
+import _get from "lodash-es/get";
+import _intersection from "lodash-es/intersection";
+import _isEqual from "lodash-es/isEqual";
+import _map from "lodash-es/map";
+import _pick from "lodash-es/pick";
+import _reduce from "lodash-es/reduce";
+import _without from "lodash-es/without";
 import {
   FieldPathsAndValues,
   IAdministration,
   IOrgsList,
   IUserData,
   ORG_NAMES,
-} from "../interfaces";
-import { getReadOrgs, isEmptyOrgs } from "../orgs/org-utils";
-import { evaluateCondition } from "../administrations/conditions";
-import { removeUndefinedFields } from "../utils/utils";
+} from "../interfaces.js";
+import { getReadOrgs, isEmptyOrgs } from "../orgs/org-utils.js";
+import { evaluateCondition } from "../administrations/conditions.js";
+import { removeUndefinedFields } from "../utils/utils.js";
 import {
   summarizeAssignmentForLog,
   summarizeAssessmentsForLog,
   summarizeIdListForLog,
-} from "../utils/logging";
+} from "../utils/logging.js";
 
 /**
  * Parse a Firestore Timestamp or Date instance
@@ -616,15 +616,15 @@ export const updateAssignmentForUser = async (
       const cleanedAssessments = removeUndefinedFields(updatedAssessments);
 
       if (!_isEqual(cleanedAssessments, updatedAssessments)) {
-      logger.warn(
-        `[updateAssignmentForUser]: cleaned assessments do not match original assessments`,
-        {
-          administrationId,
-          assignmentPath: assignmentRef.path,
-          originalSummary: summarizeAssessmentsForLog(updatedAssessments),
-          cleanedSummary: summarizeAssessmentsForLog(cleanedAssessments),
-        }
-      );
+        logger.warn(
+          `[updateAssignmentForUser]: cleaned assessments do not match original assessments`,
+          {
+            administrationId,
+            assignmentPath: assignmentRef.path,
+            originalSummary: summarizeAssessmentsForLog(updatedAssessments),
+            cleanedSummary: summarizeAssessmentsForLog(cleanedAssessments),
+          }
+        );
       }
 
       const assignmentData: DocumentData = {

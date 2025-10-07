@@ -6,12 +6,12 @@ import {
   Firestore,
 } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
-import { IExtendedAssignedAssessment } from "../interfaces";
+import { IExtendedAssignedAssessment } from "../interfaces.js";
 import {
   getAssignmentDoc,
   getAssignmentDocRef,
   shouldCompleteAssignment,
-} from "../utils/assignment";
+} from "../utils/assignment.js";
 
 // Initialize Firestore
 const db = getFirestore();

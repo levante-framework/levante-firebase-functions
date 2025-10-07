@@ -9,7 +9,7 @@ import {
   ensurePermissionsLoaded,
   buildPermissionsUserFromAuthRecord,
   filterSitesByPermission,
-} from "./utils/permission-helpers";
+} from "./utils/permission-helpers.js";
 import {
   onDocumentCreated,
   onDocumentDeleted,
@@ -20,33 +20,33 @@ import {
   appendOrRemoveAdminOrgs,
   setUidClaimsInBothProjects,
   getRoarUid,
-} from "./users/set-custom-claims";
-import { createAdminUser } from "./users/admin-user";
-import { updateUserRecordHandler } from "./users/edit-users";
-import { _createUsers } from "./users/create-users";
-import { createSoftDeleteCloudFunction } from "./utils/soft-delete";
+} from "./users/set-custom-claims.js";
+import { createAdminUser } from "./users/admin-user.js";
+import { updateUserRecordHandler } from "./users/edit-users.js";
+import { _createUsers } from "./users/create-users.js";
+import { createSoftDeleteCloudFunction } from "./utils/soft-delete.js";
 import {
   syncAssignmentCreatedEventHandler,
   syncAssignmentDeletedEventHandler,
   syncAssignmentUpdatedEventHandler,
-} from "./assignments/on-assignment-updates";
+} from "./assignments/on-assignment-updates.js";
 import {
   syncAssignmentsOnUserUpdateEventHandler,
   updateAssignmentsForOrgChunkHandler,
   syncAssignmentsOnAdministrationUpdateEventHandler,
-} from "./assignments/sync-assignments";
-import { getAdministrationsForAdministrator } from "./administrations/administration-utils";
-import { _deleteAdministration } from "./administrations/delete-administration";
-import { unenrollOrg } from "./orgs/org-utils";
-import { deleteOrg } from "./orgs/delete-org";
-import { _linkUsers } from "./user-linking";
-import { writeSurveyResponses } from "./save-survey-results";
-import { _editUsers } from "./edit-users";
+} from "./assignments/sync-assignments.js";
+import { getAdministrationsForAdministrator } from "./administrations/administration-utils.js";
+import { _deleteAdministration } from "./administrations/delete-administration.js";
+import { unenrollOrg } from "./orgs/org-utils.js";
+import { deleteOrg } from "./orgs/delete-org.js";
+import { _linkUsers } from "./user-linking.js";
+import { writeSurveyResponses } from "./save-survey-results.js";
+import { _editUsers } from "./edit-users.js";
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
-import _isEmpty from "lodash/isEmpty";
-import { _upsertOrg, OrgData } from "./upsert-org";
-import { syncOnRunDocUpdateEventHandler } from "./runs";
-import { upsertAdministrationHandler } from "./upsertAdministration";
+import _isEmpty from "lodash-es/isEmpty";
+import { _upsertOrg, OrgData } from "./upsert-org.js";
+import { syncOnRunDocUpdateEventHandler } from "./runs/index.js";
+import { upsertAdministrationHandler } from "./upsertAdministration.js";
 
 // initialize 'default' app on Google cloud platform
 admin.initializeApp({
@@ -137,22 +137,30 @@ export const createAdministratorAccount = onCall(async (request) => {
     // Validate districts array exists
     const requestedDistricts = adminOrgs?.districts ?? [];
     if (!Array.isArray(requestedDistricts) || requestedDistricts.length === 0) {
-      logger.error("No districts provided for admin creation", { requesterAdminUid });
-      throw new HttpsError("invalid-argument", "At least one district is required for admin creation");
+      logger.error("No districts provided for admin creation", {
+        requesterAdminUid,
+      });
+      throw new HttpsError(
+        "invalid-argument",
+        "At least one district is required for admin creation"
+      );
     }
 
     // Filter to only districts where caller can create admins
     const allowedDistricts = filterSitesByPermission(user, requestedDistricts, {
       resource: RESOURCES.ADMINS,
       action: ACTIONS.CREATE,
-      subResource: 'admin',
+      subResource: "admin",
     });
 
     if (allowedDistricts.length === 0) {
-      logger.error("Permission denied: user cannot create admins in requested districts", {
-        requesterAdminUid,
-        requestedDistricts,
-      });
+      logger.error(
+        "Permission denied: user cannot create admins in requested districts",
+        {
+          requesterAdminUid,
+          requestedDistricts,
+        }
+      );
       throw new HttpsError(
         "permission-denied",
         "You do not have permission to create administrator accounts in the specified districts"
@@ -271,9 +279,8 @@ export const createUsers = onCall(
         const user = buildPermissionsUserFromAuthRecord(userRecord);
 
         // Expect a single site identifier on the request
-        const siteId: string | undefined = (request.data.siteId || request.data.districtId) as
-          | string
-          | undefined;
+        const siteId: string | undefined = (request.data.siteId ||
+          request.data.districtId) as string | undefined;
 
         if (!siteId) {
           throw new HttpsError(
@@ -282,10 +289,11 @@ export const createUsers = onCall(
           );
         }
 
-        const allowed = filterSitesByPermission(user, [siteId], {
-          resource: RESOURCES.USERS,
-          action: ACTIONS.CREATE,
-        }).length > 0;
+        const allowed =
+          filterSitesByPermission(user, [siteId], {
+            resource: RESOURCES.USERS,
+            action: ACTIONS.CREATE,
+          }).length > 0;
 
         if (!allowed) {
           throw new HttpsError(
@@ -297,7 +305,10 @@ export const createUsers = onCall(
     } catch (err) {
       if (err instanceof HttpsError) throw err;
       // For unexpected errors in permission path, surface as internal
-      throw new HttpsError("internal", (err as Error)?.message || "Permission check failed");
+      throw new HttpsError(
+        "internal",
+        (err as Error)?.message || "Permission check failed"
+      );
     }
 
     const result = await _createUsers(requestingUid, userData);
@@ -339,9 +350,8 @@ export const linkUsers = onCall(async (request) => {
       await ensurePermissionsLoaded();
       const user = buildPermissionsUserFromAuthRecord(userRecord);
 
-      const siteId: string | undefined = (request.data.siteId || request.data.districtId) as
-        | string
-        | undefined;
+      const siteId: string | undefined = (request.data.siteId ||
+        request.data.districtId) as string | undefined;
 
       if (!siteId) {
         throw new HttpsError(
@@ -350,10 +360,11 @@ export const linkUsers = onCall(async (request) => {
         );
       }
 
-      const allowed = filterSitesByPermission(user, [siteId], {
-        resource: RESOURCES.USERS,
-        action: ACTIONS.UPDATE,
-      }).length > 0;
+      const allowed =
+        filterSitesByPermission(user, [siteId], {
+          resource: RESOURCES.USERS,
+          action: ACTIONS.UPDATE,
+        }).length > 0;
 
       if (!allowed) {
         throw new HttpsError(
@@ -364,7 +375,10 @@ export const linkUsers = onCall(async (request) => {
     }
   } catch (err) {
     if (err instanceof HttpsError) throw err;
-    throw new HttpsError("internal", (err as Error)?.message || "Permission check failed");
+    throw new HttpsError(
+      "internal",
+      (err as Error)?.message || "Permission check failed"
+    );
   }
   return await _linkUsers(requestingUid, users);
 });
@@ -588,10 +602,11 @@ export const upsertAdministration = onCall(async (request) => {
       await ensurePermissionsLoaded();
       const user = buildPermissionsUserFromAuthRecord(userRecord);
 
-      const action = request.data?.administrationId ? ACTIONS.UPDATE : ACTIONS.CREATE;
-      const siteId: string | undefined = (request.data.siteId || request.data.districtId) as
-        | string
-        | undefined;
+      const action = request.data?.administrationId
+        ? ACTIONS.UPDATE
+        : ACTIONS.CREATE;
+      const siteId: string | undefined = (request.data.siteId ||
+        request.data.districtId) as string | undefined;
 
       if (!siteId) {
         throw new HttpsError(
@@ -600,10 +615,11 @@ export const upsertAdministration = onCall(async (request) => {
         );
       }
 
-      const allowed = filterSitesByPermission(user, [siteId], {
-        resource: RESOURCES.TASKS,
-        action,
-      }).length > 0;
+      const allowed =
+        filterSitesByPermission(user, [siteId], {
+          resource: RESOURCES.TASKS,
+          action,
+        }).length > 0;
 
       if (!allowed) {
         throw new HttpsError(
@@ -614,15 +630,18 @@ export const upsertAdministration = onCall(async (request) => {
     }
   } catch (err) {
     if (err instanceof HttpsError) throw err;
-    throw new HttpsError("internal", (err as Error)?.message || "Permission check failed");
+    throw new HttpsError(
+      "internal",
+      (err as Error)?.message || "Permission check failed"
+    );
   }
 
   // Delegate to handler
   return await upsertAdministrationHandler(requestingUid, request.data);
 });
 
-export { completeTask } from "./tasks/completeTask";
-export { startTask } from "./tasks/startTask";
+export { completeTask } from "./tasks/completeTask.js";
+export { startTask } from "./tasks/startTask.js";
 
 export const syncOnRunDocUpdate = onDocumentWritten(
   {

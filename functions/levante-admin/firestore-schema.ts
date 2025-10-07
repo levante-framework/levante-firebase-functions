@@ -279,11 +279,15 @@ export interface AssignmentAssessment {
 // Tracks versions of legal documents using GitHub as a reference point.
 export interface Legal {}
 
-
 /**
  * Permission action types allowed in the system.
  */
-export type PermissionAction = "create" | "read" | "update" | "delete" | "exclude";
+export type PermissionAction =
+  | "create"
+  | "read"
+  | "update"
+  | "delete"
+  | "exclude";
 
 /**
  * Interface for the permissions structure within the system/permissions document.
@@ -318,7 +322,7 @@ export interface SystemPermissions {
     research_assistant: RolePermissions;
     participant: RolePermissions;
   };
-  updatedAt: Timestamp
+  updatedAt: Timestamp;
   version: string; // e.g., "1.1.0"
 }
 

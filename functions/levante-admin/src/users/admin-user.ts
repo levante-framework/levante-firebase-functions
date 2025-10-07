@@ -1,15 +1,15 @@
 import { CreateRequest, getAuth } from "firebase-admin/auth";
 import { FieldValue, getFirestore, FieldPath } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
-import _fromPairs from "lodash/fromPairs";
+import _fromPairs from "lodash-es/fromPairs";
 import { v4 as uuidv4 } from "uuid";
-import { ICustomClaims, IName, IOrgsList } from "../interfaces";
+import { ICustomClaims, IName, IOrgsList } from "../interfaces.js";
 import {
   appendOrRemoveAdminOrgs,
   setUidClaimsHandler,
   validateAdminStatus,
-} from "./set-custom-claims";
-import { ROLES } from "../utils/constants";
+} from "./set-custom-claims.js";
+import { ROLES } from "../utils/constants.js";
 
 /**
  * Creates an admin user in both the admin and assessment Firebase projects.
@@ -186,7 +186,9 @@ export const createAdminUser = async ({
         { merge: true }
       )
       .then(() => {
-        logger.debug("Updated userClaims doc", { userClaimsDoc: userClaimsDocRef.path });
+        logger.debug("Updated userClaims doc", {
+          userClaimsDoc: userClaimsDocRef.path,
+        });
       })
       .catch((error) => {
         logger.error("Error updating userClaims doc", {
