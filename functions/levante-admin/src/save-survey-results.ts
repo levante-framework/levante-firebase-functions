@@ -4,7 +4,7 @@ import {
   shouldCompleteAssignment,
   getAssignmentDocRef,
   getAssignmentDoc,
-} from "./utils/assignment";
+} from "./utils/assignment.js";
 
 type Response = {
   responseTime: string;

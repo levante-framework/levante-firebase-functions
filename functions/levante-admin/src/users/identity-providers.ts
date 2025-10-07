@@ -1,12 +1,7 @@
-import {
-  DocumentReference,
-  FieldValue,
-  Filter,
-  getFirestore,
-  Transaction,
-} from "firebase-admin/firestore";
+import { getFirestore, FieldValue, Filter } from "firebase-admin/firestore";
+import type { DocumentReference, Transaction } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
-import { IAdminClaims } from "../interfaces";
+import type { IAdminClaims } from "../interfaces.js";
 
 export enum IdentityProviderType {}
 

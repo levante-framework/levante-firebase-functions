@@ -1,8 +1,8 @@
 import { getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
-import _cloneDeep from "lodash/cloneDeep";
-import _get from "lodash/get";
-import _set from "lodash/set";
+import _cloneDeep from "lodash-es/cloneDeep.js";
+import _get from "lodash-es/get.js";
+import _set from "lodash-es/set.js";
 
 export const selectCategoryScore = async ({
   roarUid,

@@ -1,8 +1,8 @@
 import { getAuth } from "firebase-admin/auth";
 import { logger } from "firebase-functions/v2";
 import { HttpsError } from "firebase-functions/v2/https";
-import _set from "lodash/set";
-import _isEmpty from "lodash/isEmpty";
+import _set from "lodash-es/set.js";
+import _isEmpty from "lodash-es/isEmpty.js";
 
 /**
  * Update the userRecord for a user in the both the admin and assessment apps.

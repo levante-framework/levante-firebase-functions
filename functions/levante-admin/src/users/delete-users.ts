@@ -2,8 +2,8 @@ import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
-import _pick from "lodash/pick";
-import { ORG_NAMES } from "../interfaces";
+import _pick from "lodash-es/pick.js";
+import { ORG_NAMES } from "../interfaces.js";
 
 /**
  * Deletes a user from the database and Firebase Auth.

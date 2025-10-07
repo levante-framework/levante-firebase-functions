@@ -1,6 +1,6 @@
 import { logger } from "firebase-functions/v2";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { summarizeOrgsForLog } from "../utils/logging";
+import { summarizeOrgsForLog } from "../utils/logging.js";
 
 // ----------------THIS FUNCTION IS A PLACEHOLDER----------------
 // This function is a placeholder for the actual implementation of the

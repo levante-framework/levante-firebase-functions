@@ -1,14 +1,15 @@
-import { getAuth, UserRecord } from "firebase-admin/auth";
-import {
+import { getAuth } from "firebase-admin/auth";
+import type { UserRecord } from "firebase-admin/auth";
+import { getFirestore } from "firebase-admin/firestore";
+import type {
   DocumentData,
   DocumentReference,
-  getFirestore,
   Transaction,
 } from "firebase-admin/firestore";
-import _union from "lodash/union";
-import { User } from "./sort-users";
-import { emptyOrgs } from "../utils/utils";
-import { StudentDataInput } from "../interfaces";
+import _union from "lodash-es/union.js";
+import type { User } from "./sort-users.js";
+import { emptyOrgs } from "../utils/utils.js";
+import type { StudentDataInput } from "../interfaces.js";
 import { logger } from "firebase-functions/v2";
 
 /**

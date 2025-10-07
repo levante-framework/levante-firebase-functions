@@ -5,7 +5,7 @@ import {
   Filter,
   FieldPath,
 } from "firebase-admin/firestore";
-import { summarizeRunsForLog } from "../utils/logging";
+import { summarizeRunsForLog } from "../utils/logging.js";
 
 export const updateBestRunAndCompletion = async ({
   roarUid,
@@ -32,19 +32,17 @@ export const updateBestRunAndCompletion = async ({
           )
         );
 
-        const runs = await transaction
-          .get(runsQuery)
-          .then((querySnapshot) => {
-            if (querySnapshot.empty) {
-              return [];
-            }
+        const runs = await transaction.get(runsQuery).then((querySnapshot) => {
+          if (querySnapshot.empty) {
+            return [];
+          }
 
-            return querySnapshot.docs.map((doc) => ({
-              id: doc.id,
-              data: doc.data(),
-              ref: doc.ref,
-            }));
-          });
+          return querySnapshot.docs.map((doc) => ({
+            id: doc.id,
+            data: doc.data(),
+            ref: doc.ref,
+          }));
+        });
 
         const runSummary = summarizeRunsForLog(
           runs.map(({ id, data }) => ({ id, data }))

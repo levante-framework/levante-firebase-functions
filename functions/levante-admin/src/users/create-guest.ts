@@ -1,13 +1,13 @@
-import { FieldValue, getFirestore } from "firebase-admin/firestore";
-import { AuthUserRecord } from "firebase-functions/v2/identity";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import type { AuthUserRecord } from "firebase-functions/v2/identity";
 import { logger } from "firebase-functions/v2";
-import _head from "lodash/head";
-import _split from "lodash/split";
-import _get from "lodash/get";
-import _set from "lodash/set";
-import _isEmpty from "lodash/isEmpty";
-import _includes from "lodash/includes";
-import { emptyOrgs } from "../utils/utils";
+import _head from "lodash-es/head.js";
+import _split from "lodash-es/split.js";
+import _get from "lodash-es/get.js";
+import _set from "lodash-es/set.js";
+import _isEmpty from "lodash-es/isEmpty.js";
+import _includes from "lodash-es/includes.js";
+import { emptyOrgs } from "../utils/utils.js";
 
 export const createGuestDocs = async (
   user: AuthUserRecord,

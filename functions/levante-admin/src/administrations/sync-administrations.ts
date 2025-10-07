@@ -1,47 +1,50 @@
 import {
-  DocumentReference,
   getFirestore,
-  Filter,
-  Transaction,
   FieldValue,
-  Firestore,
   Timestamp,
+  Filter,
+} from "firebase-admin/firestore";
+import type {
+  DocumentReference,
+  Transaction,
+  Firestore,
 } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import { getFunctions } from "firebase-admin/functions";
-import _chunk from "lodash/chunk";
-import _difference from "lodash/difference";
-import _forEach from "lodash/forEach";
-import _fromPairs from "lodash/fromPairs";
-import _isEqual from "lodash/isEqual";
-import _map from "lodash/map";
-import _pick from "lodash/pick";
-import _uniqBy from "lodash/uniqBy";
-import _without from "lodash/without";
-import _reduce from "lodash/reduce";
-import { IAdministration, IOrgsList, ORG_NAMES } from "../interfaces";
+import _chunk from "lodash-es/chunk.js";
+import _difference from "lodash-es/difference.js";
+import _forEach from "lodash-es/forEach.js";
+import _fromPairs from "lodash-es/fromPairs.js";
+import _isEqual from "lodash-es/isEqual.js";
+import _map from "lodash-es/map.js";
+import _pick from "lodash-es/pick.js";
+import _uniqBy from "lodash-es/uniqBy.js";
+import _without from "lodash-es/without.js";
+import _reduce from "lodash-es/reduce.js";
+import type { IAdministration, IOrgsList } from "../interfaces.js";
+import { ORG_NAMES } from "../interfaces.js";
 import {
   chunkOrgs,
   getExhaustiveOrgs,
   getOnlyExistingOrgs,
   getUsersFromOrgs,
-} from "../orgs/org-utils";
-import { UpdateAction } from "../utils/transactions";
+} from "../orgs/org-utils.js";
+import type { UpdateAction } from "../utils/transactions.js";
 import {
   removeAssignmentFromUsers,
   removeOrgsFromAssignments,
   updateAssignmentForUser,
   // updateAssignmentForUsers,
-} from "../assignments/assignment-utils";
+} from "../assignments/assignment-utils.js";
 import {
   getAdministrationsFromOrgs,
   standardizeAdministrationOrgs,
-} from "./administration-utils";
+} from "./administration-utils.js";
 import {
   summarizeIdListForLog,
   summarizeOrgsForLog,
-} from "../utils/logging";
-import { getFunctionUrl, MAX_TRANSACTIONS } from "../utils/utils";
+} from "../utils/logging.js";
+import { getFunctionUrl, MAX_TRANSACTIONS } from "../utils/utils.js";
 
 export const processRemovedAdministration = async (
   administrationId: string,

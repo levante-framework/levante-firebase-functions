@@ -1,15 +1,15 @@
-import { ParamsOf } from "firebase-functions/v2";
-import {
+import type { ParamsOf } from "firebase-functions/v2";
+import type {
   Change,
   DocumentSnapshot,
   FirestoreEvent,
   QueryDocumentSnapshot,
 } from "firebase-functions/v2/firestore";
 import { GoogleAuth } from "google-auth-library";
-import _invert from "lodash/invert";
-import _without from "lodash/without";
-import { IOrgsMap, } from "../interfaces";
-import { config } from "./config";
+import _invert from "lodash-es/invert.js";
+import _without from "lodash-es/without.js";
+import type { IOrgsMap } from "../interfaces.js";
+import { config } from "./config.js";
 
 /**
  * Checks if the functions are running in an emulator environment.

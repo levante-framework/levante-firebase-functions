@@ -1,25 +1,25 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import { Auth, getAuth } from "firebase-admin/auth";
-import {
+import type { Auth } from "firebase-admin/auth";
+import { getAuth } from "firebase-admin/auth";
+import { getFirestore, FieldPath } from "firebase-admin/firestore";
+import type {
   DocumentData,
   DocumentReference,
-  FieldPath,
   Firestore,
-  getFirestore,
   Query,
 } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
-import _concat from "lodash/concat";
-import _isEmpty from "lodash/isEmpty";
-import _set from "lodash/set";
-import _toPairs from "lodash/toPairs";
-import _uniq from "lodash/uniq";
-import _without from "lodash/without";
+import _concat from "lodash-es/concat.js";
+import _isEmpty from "lodash-es/isEmpty.js";
+import _set from "lodash-es/set.js";
+import _toPairs from "lodash-es/toPairs.js";
+import _uniq from "lodash-es/uniq.js";
+import _without from "lodash-es/without.js";
 import {
   getIdentityProviderDocRef,
   IdentityProviderType,
-} from "./identity-providers";
+} from "./identity-providers.js";
 
 /**
  * Retrieve the ROAR UID of a user.

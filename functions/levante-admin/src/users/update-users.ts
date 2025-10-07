@@ -1,22 +1,18 @@
 import { UserRecord } from "firebase-admin/auth";
-import { User } from "./sort-users";
+import type { User } from "./sort-users.js";
 import { getAuth } from "firebase-admin/auth";
 import { logger } from "firebase-functions/v2";
-import { FieldPathsAndValues, StudentDataInput } from "../interfaces";
-import { delay, pluralizeFirestoreCollection } from "../utils/utils";
-import {
-  DocumentReference,
-  FieldPath,
-  getFirestore,
-  Transaction,
-} from "firebase-admin/firestore";
-import _flatten from "lodash/flatten";
-import _get from "lodash/get";
-import _intersection from "lodash/intersection";
-import _set from "lodash/set";
-import _isEmpty from "lodash/isEmpty";
-import _omit from "lodash/omit";
-import _union from "lodash/union";
+import type { FieldPathsAndValues, StudentDataInput } from "../interfaces.js";
+import { delay, pluralizeFirestoreCollection } from "../utils/utils.js";
+import { getFirestore, FieldPath } from "firebase-admin/firestore";
+import type { DocumentReference, Transaction } from "firebase-admin/firestore";
+import _flatten from "lodash-es/flatten.js";
+import _get from "lodash-es/get.js";
+import _intersection from "lodash-es/intersection.js";
+import _set from "lodash-es/set.js";
+import _isEmpty from "lodash-es/isEmpty.js";
+import _omit from "lodash-es/omit.js";
+import _union from "lodash-es/union.js";
 
 const userRecordFields = ["name", "password"];
 

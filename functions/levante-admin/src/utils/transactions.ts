@@ -1,9 +1,8 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import {
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import type {
   DocumentReference,
-  getFirestore,
   Transaction,
-  FieldValue,
   Firestore,
 } from "firebase-admin/firestore";
 

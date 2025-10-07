@@ -6,15 +6,12 @@ import {
   Firestore,
 } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
-import { IExtendedAssignedAssessment } from "../interfaces";
+import type { IExtendedAssignedAssessment } from "../interfaces.js";
 import {
   getAssignmentDoc,
   getAssignmentDocRef,
   shouldCompleteAssignment,
-} from "../utils/assignment";
-
-// Initialize Firestore
-const db = getFirestore();
+} from "../utils/assignment.js";
 
 /**
  * Updates an assigned assessment with the provided updates
@@ -48,6 +45,9 @@ function updateAssignedTaskInTransaction(
  * Marks a task in the current assignment as completed and checks if the entire assignment is now complete
  */
 export const completeTask = onCall(async (request) => {
+  // Initialize Firestore
+  const db = getFirestore();
+
   try {
     // Validate authentication
     if (!request.auth) {
