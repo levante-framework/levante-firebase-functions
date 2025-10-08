@@ -24,7 +24,13 @@ import {
 import { createAdminUser } from "./users/admin-user.js";
 import { updateUserRecordHandler } from "./users/edit-users.js";
 import { _createUsers } from "./users/create-users.js";
-import { _createAdministratorWithRoles, sanitizeRoles } from "./users/create-administrator-with-roles.js";
+import {
+  _createAdministratorWithRoles,
+  sanitizeRoles,
+  _updateAdministratorWithRoles,
+  _removeAdministratorFromSite,
+} from "./users/create-administrator.js";
+import type { AdministratorRoleDefinition } from "./users/create-administrator.js";
 import { createSoftDeleteCloudFunction } from "./utils/soft-delete.js";
 import {
   syncAssignmentCreatedEventHandler,
@@ -252,6 +258,53 @@ export const createAdministrator = onCall(async (request) => {
     roles: sanitizedRoles,
     requesterAdminUid,
     isTestData,
+  });
+});
+
+export const updateAdministrator = onCall(async (request) => {
+  const requesterAdminUid = request.auth?.uid;
+  if (!requesterAdminUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated");
+  }
+
+  const adminUidInput = request.data?.adminUid;
+  if (typeof adminUidInput !== "string" || adminUidInput.trim().length === 0) {
+    throw new HttpsError("invalid-argument", "A valid adminUid is required");
+  }
+
+  const rolesInput = request.data?.roles;
+  if (!Array.isArray(rolesInput)) {
+    throw new HttpsError("invalid-argument", "Roles must be provided as an array");
+  }
+  const roles = rolesInput as AdministratorRoleDefinition[];
+
+  return await _updateAdministratorWithRoles({
+    adminUid: adminUidInput.trim(),
+    roles,
+    requesterAdminUid,
+  });
+});
+
+export const removeAdministratorFromSite = onCall(async (request) => {
+  const requesterAdminUid = request.auth?.uid;
+  if (!requesterAdminUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated");
+  }
+
+  const adminUidInput = request.data?.adminUid;
+  if (typeof adminUidInput !== "string" || adminUidInput.trim().length === 0) {
+    throw new HttpsError("invalid-argument", "A valid adminUid is required");
+  }
+
+  const siteIdInput = request.data?.siteId;
+  if (typeof siteIdInput !== "string" || siteIdInput.trim().length === 0) {
+    throw new HttpsError("invalid-argument", "A valid siteId is required");
+  }
+
+  return await _removeAdministratorFromSite({
+    adminUid: adminUidInput.trim(),
+    siteId: siteIdInput.trim(),
+    requesterAdminUid,
   });
 });
 
