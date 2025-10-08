@@ -24,6 +24,7 @@ import {
 import { createAdminUser } from "./users/admin-user.js";
 import { updateUserRecordHandler } from "./users/edit-users.js";
 import { _createUsers } from "./users/create-users.js";
+import { _createAdministratorWithRoles, sanitizeRoles } from "./users/create-administrator-with-roles.js";
 import { createSoftDeleteCloudFunction } from "./utils/soft-delete.js";
 import {
   syncAssignmentCreatedEventHandler,
@@ -186,6 +187,71 @@ export const createAdministratorAccount = onCall(async (request) => {
     isTestData,
     // Necessary for the LEVANTE admins (to write the ``admin`` property)
     addUserClaimsAdminProperty: true,
+  });
+});
+
+export const createAdministrator = onCall(async (request) => {
+  const requesterAdminUid = request.auth?.uid;
+  if (!requesterAdminUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated");
+  }
+
+  const {
+    email,
+    name,
+    roles,
+    isTestData = false,
+  } = request.data ?? {};
+
+  const auth = getAuth();
+  const requesterRecord = await auth.getUser(requesterAdminUid);
+  const customClaims: any = requesterRecord.customClaims || {};
+  const useNewPermissions = customClaims.useNewPermissions === true;
+
+  if (!useNewPermissions) {
+    throw new HttpsError(
+      "permission-denied",
+      "New permission system must be enabled to create administrators with roles"
+    );
+  }
+
+  const sanitizedRoles = sanitizeRoles(roles);
+  if (sanitizedRoles.length === 0) {
+    throw new HttpsError(
+      "invalid-argument",
+      "A non-empty roles array is required"
+    );
+  }
+
+  await ensurePermissionsLoaded();
+  const requestingUser = buildPermissionsUserFromAuthRecord(requesterRecord);
+
+  const allowedDistricts = filterSitesByPermission(requestingUser, sanitizedRoles.map((role) => role.siteId), {
+    resource: RESOURCES.ADMINS,
+    action: ACTIONS.CREATE,
+    subResource: "admin",
+  });
+
+  if (allowedDistricts.length === 0) {
+    logger.error(
+      "Permission denied: user cannot create administrators in requested sites",
+      {
+        requesterAdminUid,
+        requestedSites: sanitizedRoles.map((role) => role.siteId),
+      }
+    );
+    throw new HttpsError(
+      "permission-denied",
+      "You do not have permission to create administrator accounts in the specified sites"
+    );
+  }
+
+  return await _createAdministratorWithRoles({
+    email,
+    name,
+    roles: sanitizedRoles,
+    requesterAdminUid,
+    isTestData,
   });
 });
 
