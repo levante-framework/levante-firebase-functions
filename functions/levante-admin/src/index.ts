@@ -4,11 +4,12 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { logger, setGlobalOptions } from "firebase-functions/v2";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { ACTIONS, RESOURCES } from "@levante-framework/permissions-core";
+import { ACTIONS, RESOURCES, ADMIN_SUB_RESOURCES } from "@levante-framework/permissions-core";
 import {
   ensurePermissionsLoaded,
   buildPermissionsUserFromAuthRecord,
   filterSitesByPermission,
+  getPermissionService,
 } from "./utils/permission-helpers.js";
 import {
   onDocumentCreated,
@@ -29,8 +30,9 @@ import {
   sanitizeRoles,
 } from "./users/create-administrator.js";
 import {
-  _updateAdministratorWithRoles,
-  _removeAdministratorFromSite,
+  loadAdministratorContext,
+  calculateAdministratorRoleDiff,
+  applyAdministratorRoleMutation,
 } from "./users/update-administrator.js";
 import type { AdministratorRoleDefinition } from "./users/create-administrator.js";
 import { createSoftDeleteCloudFunction } from "./utils/soft-delete.js";
@@ -302,12 +304,41 @@ export const updateAdministrator = onCall(async (request) => {
 
   await ensurePermissionsLoaded();
   const requestingUser = buildPermissionsUserFromAuthRecord(requesterRecord);
+  const targetAdminUid = adminUidInput.trim();
+  const context = await loadAdministratorContext(targetAdminUid);
 
-  return await _updateAdministratorWithRoles({
-    adminUid: adminUidInput.trim(),
-    roles: sanitizedRoles,
-    requesterAdminUid,
-    requestingUser,
+  if (sanitizedRoles.length > 0) {
+    const allowedUpdateSites: string[] = [];
+    const permissionsService = getPermissionService();
+    for (const role of sanitizedRoles) {
+      const allowed = permissionsService.canPerformSiteAction(
+        requestingUser,
+        role.siteId,
+        RESOURCES.ADMINS,
+        ACTIONS.UPDATE,
+        role.role as (typeof ADMIN_SUB_RESOURCES)[keyof typeof ADMIN_SUB_RESOURCES]
+      );
+      if (allowed) {
+        allowedUpdateSites.push(role.siteId);
+      }
+    }
+
+    if (allowedUpdateSites.length !== sanitizedRoles.length) {
+      const denied = sanitizedRoles.filter(
+        (siteId) => !allowedUpdateSites.includes(siteId)
+      );
+      throw new HttpsError(
+        "permission-denied",
+        `You do not have permission to update administrators in sites: ${denied.join(
+          ", "
+        )}`
+      );
+    }
+  }
+
+  return await applyAdministratorRoleMutation({
+    context,
+    updatedRoles: sanitizedRoles,
   });
 });
 
@@ -341,12 +372,30 @@ export const removeAdministratorFromSite = onCall(async (request) => {
 
   await ensurePermissionsLoaded();
   const requestingUser = buildPermissionsUserFromAuthRecord(requesterRecord);
+  const targetAdminUid = adminUidInput.trim();
+  const targetSiteId = siteIdInput.trim();
+  const context = await loadAdministratorContext(targetAdminUid);
 
-  return await _removeAdministratorFromSite({
-    adminUid: adminUidInput.trim(),
-    siteId: siteIdInput.trim(),
-    requesterAdminUid,
+  const permissionsService = getPermissionService();
+  const allowedDeleteSites = permissionsService.canPerformSiteAction(
     requestingUser,
+    targetSiteId,
+    RESOURCES.ADMINS,
+    ACTIONS.DELETE,
+    "admin"
+  );
+
+  if (!allowedDeleteSites) {
+    throw new HttpsError(
+      "permission-denied",
+      `You do not have permission to remove administrators from site ${targetSiteId}`
+    );
+  }
+  
+
+  return await applyAdministratorRoleMutation({
+    context,
+    updatedRoles: [],
   });
 });
 
