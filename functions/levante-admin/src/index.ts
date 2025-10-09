@@ -31,8 +31,8 @@ import {
 } from "./users/create-administrator.js";
 import {
   loadAdministratorContext,
-  calculateAdministratorRoleDiff,
-  applyAdministratorRoleMutation,
+  removeAdministratorRoles,
+  updateAdministratorRoles,
 } from "./users/update-administrator.js";
 import type { AdministratorRoleDefinition } from "./users/create-administrator.js";
 import { createSoftDeleteCloudFunction } from "./utils/soft-delete.js";
@@ -200,7 +200,7 @@ export const createAdministratorAccount = onCall(async (request) => {
   });
 });
 
-export const createAdministrator = onCall(async (request) => {
+const createAdministrator = onCall(async (request) => {
   const requesterAdminUid = request.auth?.uid;
   if (!requesterAdminUid) {
     throw new HttpsError("unauthenticated", "User must be authenticated");
@@ -235,19 +235,16 @@ export const createAdministrator = onCall(async (request) => {
 
   await ensurePermissionsLoaded();
   const requestingUser = buildPermissionsUserFromAuthRecord(requesterRecord);
+  
+  const permissionsService = getPermissionService();
+  const allowedSites = sanitizedRoles.filter((role) => permissionsService.canPerformSiteAction(requestingUser, role.siteId, RESOURCES.ADMINS, ACTIONS.CREATE, role.role as (typeof ADMIN_SUB_RESOURCES)[keyof typeof ADMIN_SUB_RESOURCES]));
 
-  const allowedDistricts = filterSitesByPermission(requestingUser, sanitizedRoles.map((role) => role.siteId), {
-    resource: RESOURCES.ADMINS,
-    action: ACTIONS.CREATE,
-    subResource: "admin",
-  });
-
-  if (allowedDistricts.length === 0) {
+  if (allowedSites.length === 0) {
     logger.error(
       "Permission denied: user cannot create administrators in requested sites",
       {
         requesterAdminUid,
-        requestedSites: sanitizedRoles.map((role) => role.siteId),
+        requestedSites: allowedSites.map((role) => role.siteId),
       }
     );
     throw new HttpsError(
@@ -259,13 +256,13 @@ export const createAdministrator = onCall(async (request) => {
   return await _createAdministratorWithRoles({
     email,
     name,
-    roles: sanitizedRoles,
+    roles: allowedSites,
     requesterAdminUid,
     isTestData,
   });
 });
 
-export const updateAdministrator = onCall(async (request) => {
+const updateAdministrator = onCall(async (request) => {
   const requesterAdminUid = request.auth?.uid;
   if (!requesterAdminUid) {
     throw new HttpsError("unauthenticated", "User must be authenticated");
@@ -325,7 +322,7 @@ export const updateAdministrator = onCall(async (request) => {
 
     if (allowedUpdateSites.length !== sanitizedRoles.length) {
       const denied = sanitizedRoles.filter(
-        (siteId) => !allowedUpdateSites.includes(siteId)
+        (role) => !allowedUpdateSites.includes(role.siteId)
       );
       throw new HttpsError(
         "permission-denied",
@@ -336,13 +333,13 @@ export const updateAdministrator = onCall(async (request) => {
     }
   }
 
-  return await applyAdministratorRoleMutation({
+  return await updateAdministratorRoles({
     context,
     updatedRoles: sanitizedRoles,
   });
 });
 
-export const removeAdministratorFromSite = onCall(async (request) => {
+const removeAdministratorFromSite = onCall(async (request) => {
   const requesterAdminUid = request.auth?.uid;
   if (!requesterAdminUid) {
     throw new HttpsError("unauthenticated", "User must be authenticated");
@@ -393,9 +390,9 @@ export const removeAdministratorFromSite = onCall(async (request) => {
   }
   
 
-  return await applyAdministratorRoleMutation({
+  return await removeAdministratorRoles({
     context,
-    updatedRoles: [],
+    siteId: targetSiteId,
   });
 });
 

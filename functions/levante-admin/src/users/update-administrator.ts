@@ -20,12 +20,6 @@ export interface AdministratorContext {
   previousRoles: AdministratorRoleDefinition[];
 }
 
-export interface AdministratorRoleDiff {
-  sitesRequiringUpdate: string[];
-  sitesRemoved: string[];
-}
-
-
 export const loadAdministratorContext = async (
   adminUid: string
 ): Promise<AdministratorContext> => {
@@ -67,7 +61,7 @@ export const loadAdministratorContext = async (
 };
 
 
-export const applyAdministratorRoleMutation = async ({
+export const updateAdministratorRoles = async ({
   context,
   updatedRoles,
 }: {
@@ -77,7 +71,126 @@ export const applyAdministratorRoleMutation = async ({
   const auth = getAuth();
   const db = getFirestore();
 
-  const { removedSiteIds } = await db.runTransaction(async (transaction) => {
+  const sanitizedRoles = await db.runTransaction(async (transaction) => {
+      const adminDoc = await transaction.get(context.adminUserDocRef);
+      if (!adminDoc.exists) {
+        throw new HttpsError(
+          "not-found",
+          "Administrator user document not found"
+        );
+      }
+
+      const adminDocData = adminDoc.data() as Record<string, unknown>;
+      const currentRoles = sanitizeRoles(
+        Array.isArray(adminDoc.data()?.roles)
+          ? (adminDoc.data()!.roles as AdministratorRoleDefinition[])
+          : []
+      );
+
+      const siteIdsToUpdate = new Set<string>();
+      const mergedRolesMap = new Map<string, AdministratorRoleDefinition>();
+      for (const role of currentRoles) {
+        mergedRolesMap.set(role.siteId, role);
+      }
+      for (const incomingRole of updatedRoles) {
+        mergedRolesMap.set(incomingRole.siteId, { ...incomingRole });
+        siteIdsToUpdate.add(incomingRole.siteId);
+      }
+
+      const mergedRoles = sanitizeRoles(Array.from(mergedRolesMap.values()));
+
+      const now = FieldValue.serverTimestamp();
+      transaction.update(context.adminUserDocRef, {
+        roles: mergedRoles,
+        updatedAt: now,
+      });
+
+      for (const siteId of siteIdsToUpdate) {
+        const role = mergedRolesMap.get(siteId);
+        if (!role) {
+          continue;
+        }
+
+        const districtDocRef = db.collection("districts").doc(siteId);
+        const districtSnapshot = await transaction.get(districtDocRef);
+
+        if (!districtSnapshot.exists) {
+          throw new HttpsError(
+            "not-found",
+            `District document ${siteId} not found`
+          );
+        }
+
+        const administrators = Array.isArray(
+          districtSnapshot.data()?.administrators
+        )
+          ? (districtSnapshot.data()!.administrators as Array<
+              Record<string, unknown>
+            >)
+          : [];
+
+        const existingEntry = administrators.find(
+          (entry) =>
+            entry?.adminUid === context.adminUid &&
+            (entry?.siteId === siteId)
+        );
+
+        const otherAdministrators = administrators.filter(
+          (entry) =>
+            entry?.adminUid !== context.adminUid ||(entry.siteId !== siteId)
+        );
+
+        const updatedAdministrators = [
+          ...otherAdministrators,
+          {
+            ...existingEntry,
+            adminUid: context.adminUid,
+            siteId,
+            role: role.role,
+            status: ADMINISTRATOR_STATUS.ACTIVE,
+            name: context.targetRecord.displayName
+          },
+        ];
+
+        transaction.update(districtDocRef, {
+          administrators: updatedAdministrators,
+          updatedAt: now,
+        });
+      }
+
+      return mergedRoles;
+    }
+  );
+
+  const existingClaims: Record<string, unknown> =
+    (context.targetRecord.customClaims as Record<string, unknown>) ?? {};
+  const updatedClaims = {
+    ...existingClaims,
+    roles: sanitizedRoles,
+    useNewPermissions: true,
+    adminUid: context.adminUid,
+  };
+
+  await auth.setCustomUserClaims(context.adminUid, updatedClaims);
+
+  return {
+    status: "ok" as const,
+    adminUid: context.adminUid,
+    roles: sanitizedRoles,
+  };
+};
+
+export const removeAdministratorRoles = async ({
+  context,
+  siteId,
+}: {
+  context: AdministratorContext;
+  siteId: string;
+}) => {
+  const auth = getAuth();
+  const db = getFirestore();
+
+  const { remainingRoles } = await db.runTransaction(async (transaction) => {
     const adminDoc = await transaction.get(context.adminUserDocRef);
     if (!adminDoc.exists) {
       throw new HttpsError("not-found", "Administrator user document not found");
@@ -90,79 +203,62 @@ export const applyAdministratorRoleMutation = async ({
         : []
     );
 
+    const remainingRoles = sanitizeRoles(
+      currentRoles.filter((role) => role.siteId !== siteId)
+    );
+    const now = FieldValue.serverTimestamp();
+
     transaction.update(context.adminUserDocRef, {
-      roles: updatedRoles,
-      updatedAt: FieldValue.serverTimestamp(),
+      roles: remainingRoles,
+      updatedAt: now,
     });
 
-    const siteIdsToProcess = new Set<string>();
-    for (const role of updatedRoles) {
-      siteIdsToProcess.add(role.siteId);
+    const districtDocRef = db.collection("districts").doc(siteId);
+    const districtSnapshot = await transaction.get(districtDocRef);
+
+    if (!districtSnapshot.exists) {
+      throw new HttpsError("not-found", `District document ${siteId} not found`);
     }
 
-    for (const siteId of siteIdsToProcess) {
-      const districtDocRef = db.collection("districts").doc(siteId);
-      const districtSnapshot = await transaction.get(districtDocRef);
+    const administrators = districtSnapshot.data()?.administrators ?? [];
 
-      if (!districtSnapshot.exists) {
-        throw new HttpsError(
-          "not-found",
-          `District document ${siteId} not found`
-        );
-      }
+    const existingEntry = administrators.find(
+      (entry) =>
+        entry?.adminUid === context.adminUid && (entry?.siteId === siteId)
+    );
 
-      const administrators = Array.isArray(
-        districtSnapshot.data()?.administrators
-      )
-        ? (districtSnapshot.data()!.administrators as Array<
-            Record<string, unknown>
-          >)
-        : [];
+    const otherAdministrators = administrators.filter(
+      (entry) =>
+        entry?.adminUid !== context.adminUid || (entry.siteId !== siteId)
+    );
 
-      const filteredAdministrators = administrators.filter(
-        (entry) => entry?.adminUid !== context.adminUid
-      );
+    const updatedAdministrators = existingEntry
+      ? [
+          ...otherAdministrators,
+          {
+            ...existingEntry,
+            adminUid: context.adminUid,
+            siteId,
+            status: ADMINISTRATOR_STATUS.INACTIVE,
+            role: existingEntry.role,
+            name: context.targetRecord.displayName,
+          },
+        ]
+      : otherAdministrators;
 
-      const rolesForSite = updatedRoles.filter(
-        (role) => role.siteId === siteId
-      );
+    transaction.update(districtDocRef, {
+      administrators: updatedAdministrators,
+      updatedAt: now,
+    });
 
-      const updatedAdministrators = [...filteredAdministrators];
-
-      for (const role of rolesForSite) {
-        updatedAdministrators.push({
-          adminUid: context.adminUid,
-          name: adminDocData.name,
-          status: ADMINISTRATOR_STATUS.ACTIVE,
-          role: role.role,
-        });
-      }
-
-      transaction.update(districtDocRef, {
-        administrators: updatedAdministrators,
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-    }
-
-    const removedSiteIds = currentRoles
-      .filter(
-        (role) =>
-          !updatedRoles.some(
-            (nextRole) =>
-              nextRole.siteId === role.siteId && nextRole.role === role.role
-          )
-      )
-      .map((role) => role.siteId);
-
-    return { removedSiteIds: Array.from(new Set(removedSiteIds)) };
+    return { remainingRoles };
   });
 
   const existingClaims: Record<string, unknown> =
     (context.targetRecord.customClaims as Record<string, unknown>) ?? {};
   const updatedClaims = {
     ...existingClaims,
-    // this will override any existing roles
-    roles: updatedRoles,
+    roles: remainingRoles,
     useNewPermissions: true,
     adminUid: context.adminUid,
   };
@@ -172,7 +268,6 @@ export const applyAdministratorRoleMutation = async ({
   return {
     status: "ok" as const,
     adminUid: context.adminUid,
-    roles: updatedRoles,
-    removedSiteIds,
+    roles: remainingRoles,
   };
 };
