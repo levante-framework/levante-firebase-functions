@@ -7,3 +7,8 @@ export const ROLES = {
 };
 
 export const LOG_SIZE = 3;
+
+export const ADMINISTRATOR_STATUS = {
+  ACTIVE: "active",
+  INACTIVE: "inactive",
+};

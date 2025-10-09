@@ -4,11 +4,12 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { logger, setGlobalOptions } from "firebase-functions/v2";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { ACTIONS, RESOURCES } from "@levante-framework/permissions-core";
+import { ACTIONS, RESOURCES, ADMIN_SUB_RESOURCES } from "@levante-framework/permissions-core";
 import {
   ensurePermissionsLoaded,
   buildPermissionsUserFromAuthRecord,
   filterSitesByPermission,
+  getPermissionService,
 } from "./utils/permission-helpers.js";
 import {
   onDocumentCreated,
@@ -24,6 +25,16 @@ import {
 import { createAdminUser } from "./users/admin-user.js";
 import { updateUserRecordHandler } from "./users/edit-users.js";
 import { _createUsers } from "./users/create-users.js";
+import {
+  _createAdministratorWithRoles,
+  sanitizeRoles,
+} from "./users/create-administrator.js";
+import {
+  loadAdministratorContext,
+  removeAdministratorRoles,
+  updateAdministratorRoles,
+} from "./users/update-administrator.js";
+import type { AdministratorRoleDefinition } from "./users/create-administrator.js";
 import { createSoftDeleteCloudFunction } from "./utils/soft-delete.js";
 import {
   syncAssignmentCreatedEventHandler,
@@ -186,6 +197,202 @@ export const createAdministratorAccount = onCall(async (request) => {
     isTestData,
     // Necessary for the LEVANTE admins (to write the ``admin`` property)
     addUserClaimsAdminProperty: true,
+  });
+});
+
+const createAdministrator = onCall(async (request) => {
+  const requesterAdminUid = request.auth?.uid;
+  if (!requesterAdminUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated");
+  }
+
+  const {
+    email,
+    name,
+    roles,
+    isTestData = false,
+  } = request.data ?? {};
+
+  const auth = getAuth();
+  const requesterRecord = await auth.getUser(requesterAdminUid);
+  const customClaims: any = requesterRecord.customClaims || {};
+  const useNewPermissions = customClaims.useNewPermissions === true;
+
+  if (!useNewPermissions) {
+    throw new HttpsError(
+      "permission-denied",
+      "New permission system must be enabled to create administrators with roles"
+    );
+  }
+
+  const sanitizedRoles = sanitizeRoles(roles);
+  if (sanitizedRoles.length === 0) {
+    throw new HttpsError(
+      "invalid-argument",
+      "A non-empty roles array is required"
+    );
+  }
+
+  await ensurePermissionsLoaded();
+  const requestingUser = buildPermissionsUserFromAuthRecord(requesterRecord);
+  
+  const permissionsService = getPermissionService();
+  const allowedSites = sanitizedRoles.filter((role) => permissionsService.canPerformSiteAction(requestingUser, role.siteId, RESOURCES.ADMINS, ACTIONS.CREATE, role.role as (typeof ADMIN_SUB_RESOURCES)[keyof typeof ADMIN_SUB_RESOURCES]));
+
+  if (allowedSites.length === 0) {
+    logger.error(
+      "Permission denied: user cannot create administrators in requested sites",
+      {
+        requesterAdminUid,
+        requestedSites: allowedSites.map((role) => role.siteId),
+      }
+    );
+    throw new HttpsError(
+      "permission-denied",
+      "You do not have permission to create administrator accounts in the specified sites"
+    );
+  }
+
+  return await _createAdministratorWithRoles({
+    email,
+    name,
+    roles: allowedSites,
+    requesterAdminUid,
+    isTestData,
+  });
+});
+
+const updateAdministrator = onCall(async (request) => {
+  const requesterAdminUid = request.auth?.uid;
+  if (!requesterAdminUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated");
+  }
+
+  const adminUidInput = request.data?.adminUid;
+  if (typeof adminUidInput !== "string" || adminUidInput.trim().length === 0) {
+    throw new HttpsError("invalid-argument", "A valid adminUid is required");
+  }
+
+  const rolesInput = request.data?.roles;
+  if (!Array.isArray(rolesInput)) {
+    throw new HttpsError("invalid-argument", "Roles must be provided as an array");
+  }
+  const sanitizedRoles = sanitizeRoles(
+    rolesInput as AdministratorRoleDefinition[]
+  );
+  if (sanitizedRoles.length === 0) {
+    throw new HttpsError(
+      "invalid-argument",
+      "A non-empty roles array is required"
+    );
+  }
+
+  const auth = getAuth();
+  const requesterRecord = await auth.getUser(requesterAdminUid);
+  const customClaims: any = requesterRecord.customClaims || {};
+  const useNewPermissions = customClaims.useNewPermissions === true;
+
+  if (!useNewPermissions) {
+    throw new HttpsError(
+      "permission-denied",
+      "New permission system must be enabled to update administrators with roles"
+    );
+  }
+
+  await ensurePermissionsLoaded();
+  const requestingUser = buildPermissionsUserFromAuthRecord(requesterRecord);
+  const targetAdminUid = adminUidInput.trim();
+  const context = await loadAdministratorContext(targetAdminUid);
+
+  if (sanitizedRoles.length > 0) {
+    const allowedUpdateSites: string[] = [];
+    const permissionsService = getPermissionService();
+    for (const role of sanitizedRoles) {
+      const allowed = permissionsService.canPerformSiteAction(
+        requestingUser,
+        role.siteId,
+        RESOURCES.ADMINS,
+        ACTIONS.UPDATE,
+        role.role as (typeof ADMIN_SUB_RESOURCES)[keyof typeof ADMIN_SUB_RESOURCES]
+      );
+      if (allowed) {
+        allowedUpdateSites.push(role.siteId);
+      }
+    }
+
+    if (allowedUpdateSites.length !== sanitizedRoles.length) {
+      const denied = sanitizedRoles.filter(
+        (role) => !allowedUpdateSites.includes(role.siteId)
+      );
+      throw new HttpsError(
+        "permission-denied",
+        `You do not have permission to update administrators in sites: ${denied.join(
+          ", "
+        )}`
+      );
+    }
+  }
+
+  return await updateAdministratorRoles({
+    context,
+    updatedRoles: sanitizedRoles,
+  });
+});
+
+const removeAdministratorFromSite = onCall(async (request) => {
+  const requesterAdminUid = request.auth?.uid;
+  if (!requesterAdminUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated");
+  }
+
+  const adminUidInput = request.data?.adminUid;
+  if (typeof adminUidInput !== "string" || adminUidInput.trim().length === 0) {
+    throw new HttpsError("invalid-argument", "A valid adminUid is required");
+  }
+
+  const siteIdInput = request.data?.siteId;
+  if (typeof siteIdInput !== "string" || siteIdInput.trim().length === 0) {
+    throw new HttpsError("invalid-argument", "A valid siteId is required");
+  }
+
+  const auth = getAuth();
+  const requesterRecord = await auth.getUser(requesterAdminUid);
+  const customClaims: any = requesterRecord.customClaims || {};
+  const useNewPermissions = customClaims.useNewPermissions === true;
+
+  if (!useNewPermissions) {
+    throw new HttpsError(
+      "permission-denied",
+      "New permission system must be enabled to remove administrators from sites"
+    );
+  }
+
+  await ensurePermissionsLoaded();
+  const requestingUser = buildPermissionsUserFromAuthRecord(requesterRecord);
+  const targetAdminUid = adminUidInput.trim();
+  const targetSiteId = siteIdInput.trim();
+  const context = await loadAdministratorContext(targetAdminUid);
+
+  const permissionsService = getPermissionService();
+  const allowedDeleteSites = permissionsService.canPerformSiteAction(
+    requestingUser,
+    targetSiteId,
+    RESOURCES.ADMINS,
+    ACTIONS.DELETE,
+    "admin"
+  );
+
+  if (!allowedDeleteSites) {
+    throw new HttpsError(
+      "permission-denied",
+      `You do not have permission to remove administrators from site ${targetSiteId}`
+    );
+  }
+  
+
+  return await removeAdministratorRoles({
+    context,
+    siteId: targetSiteId,
   });
 });
 

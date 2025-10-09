@@ -271,52 +271,6 @@ export const getSubGroupsFromGroup = async (
   return subgroups;
 };
 
-/**
- * Get subgroups from a specified family .
- *
- * @param {string} familyId - The ID of the family
- * @param {Transaction} transaction - The transaction with which to read DB documents
- * @param {boolean} includeArchived - Whether to include archived orgs. Defaults to false.
- * @returns {Promise<string[]>} An array of subgroup IDs from the specified class
- */
-export const getSubGroupsFromFamily = async (
-  familyId: string,
-  transaction: Transaction,
-  includeArchived = false
-) => {
-  const db = getFirestore();
-  const familyRef = db.collection("families").doc(familyId);
-  const familyDoc = await transaction.get(familyRef);
-  let subgroups: string[] = [];
-  if (familyDoc.exists) {
-    // If group document exists, get existing subgroups if they exist
-    subgroups = familyDoc.data()!.subGroups || [];
-  } else {
-    // No group with that ID exists.
-    throw new HttpsError(
-      "not-found",
-      `The family ${familyId} does not exist in the database.`
-    );
-  }
-
-  // Query for any group with this groupID as the parentOrgId.
-  // Add each one to the list of subgroups.
-  const groupsCollection = db.collection("groups");
-
-  const groupQueryComponents = [Filter.where("familyId", "==", familyId)];
-
-  if (!includeArchived) {
-    groupQueryComponents.push(Filter.where("archived", "==", false));
-  }
-
-  const query = groupsCollection.where(Filter.and(...groupQueryComponents));
-  const querySnapshot = await transaction.get(query);
-  querySnapshot.forEach((documentSnapshot) => {
-    subgroups = _union(subgroups, [documentSnapshot.id]);
-  });
-
-  return subgroups;
-};
 
 /**
  * Get subgroups from a specified class.
@@ -464,13 +418,6 @@ export const getExhaustiveOrgs = async ({
     );
   }
 
-  for (const _family of _get(exhaustiveOrgs, "families", [])) {
-    exhaustiveOrgs.groups = _union(
-      exhaustiveOrgs.groups,
-      await getSubGroupsFromFamily(_family, transaction, includeArchived)
-    );
-  }
-
   return exhaustiveOrgs;
 };
 
@@ -525,13 +472,9 @@ export const getReadOrgs = async (
     const groupRef = db.collection("groups").doc(_group);
     const groupDoc = await transaction.get(groupRef);
     if (groupDoc.exists) {
-      const familyId = groupDoc.data()!.familyId;
       const parentOrgId = groupDoc.data()!.parentOrgId;
       const parentOrgType = groupDoc.data()!.parentOrgType;
 
-      if (familyId) {
-        readOrgs.families = _union(readOrgs.families ?? [], [familyId]);
-      }
       if (parentOrgType && parentOrgId) {
         readOrgs[pluralizeFirestoreCollection(parentOrgType)] = _union(
           readOrgs[pluralizeFirestoreCollection(parentOrgType)],
@@ -681,7 +624,6 @@ export function chunkOrgs(orgs: IOrgsList, chunkSize: number): IOrgsList[] {
     schools: 0,
     classes: 0,
     groups: 0,
-    families: 0,
   };
 
   const chunks: IOrgsList[] = [];
@@ -772,7 +714,7 @@ export const unenrollOrg = async ({
             })
           : { administrations: [] };
 
-        const { districtId, schoolId, familyId, parentOrgId, parentOrgType } =
+        const { districtId, schoolId, parentOrgId, parentOrgType } =
           orgData;
         const districtIdExists = districtId
           ? await doesDocExist(
@@ -783,12 +725,6 @@ export const unenrollOrg = async ({
         const schoolIdExists = schoolId
           ? await doesDocExist(
               db.collection("schools").doc(schoolId),
-              transaction
-            )
-          : false;
-        const familyIdExists = familyId
-          ? await doesDocExist(
-              db.collection("families").doc(familyId),
               transaction
             )
           : false;
@@ -882,20 +818,6 @@ export const unenrollOrg = async ({
 
             transaction.set(
               parentOrgDocRef,
-              {
-                subGroups: FieldValue.arrayRemove(orgId),
-                archivedSubGroups: FieldValue.arrayUnion(orgId),
-              },
-              { merge: true }
-            );
-          }
-
-          if (orgData.familyId && familyIdExists) {
-            const familyDocRef = db
-              .collection("families")
-              .doc(orgData.familyId);
-            transaction.set(
-              familyDocRef,
               {
                 subGroups: FieldValue.arrayRemove(orgId),
                 archivedSubGroups: FieldValue.arrayUnion(orgId),
