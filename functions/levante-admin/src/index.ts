@@ -27,9 +27,11 @@ import { _createUsers } from "./users/create-users.js";
 import {
   _createAdministratorWithRoles,
   sanitizeRoles,
+} from "./users/create-administrator.js";
+import {
   _updateAdministratorWithRoles,
   _removeAdministratorFromSite,
-} from "./users/create-administrator.js";
+} from "./users/update-administrator.js";
 import type { AdministratorRoleDefinition } from "./users/create-administrator.js";
 import { createSoftDeleteCloudFunction } from "./utils/soft-delete.js";
 import {
@@ -276,12 +278,36 @@ export const updateAdministrator = onCall(async (request) => {
   if (!Array.isArray(rolesInput)) {
     throw new HttpsError("invalid-argument", "Roles must be provided as an array");
   }
-  const roles = rolesInput as AdministratorRoleDefinition[];
+  const sanitizedRoles = sanitizeRoles(
+    rolesInput as AdministratorRoleDefinition[]
+  );
+  if (sanitizedRoles.length === 0) {
+    throw new HttpsError(
+      "invalid-argument",
+      "A non-empty roles array is required"
+    );
+  }
+
+  const auth = getAuth();
+  const requesterRecord = await auth.getUser(requesterAdminUid);
+  const customClaims: any = requesterRecord.customClaims || {};
+  const useNewPermissions = customClaims.useNewPermissions === true;
+
+  if (!useNewPermissions) {
+    throw new HttpsError(
+      "permission-denied",
+      "New permission system must be enabled to update administrators with roles"
+    );
+  }
+
+  await ensurePermissionsLoaded();
+  const requestingUser = buildPermissionsUserFromAuthRecord(requesterRecord);
 
   return await _updateAdministratorWithRoles({
     adminUid: adminUidInput.trim(),
-    roles,
+    roles: sanitizedRoles,
     requesterAdminUid,
+    requestingUser,
   });
 });
 
@@ -301,10 +327,26 @@ export const removeAdministratorFromSite = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "A valid siteId is required");
   }
 
+  const auth = getAuth();
+  const requesterRecord = await auth.getUser(requesterAdminUid);
+  const customClaims: any = requesterRecord.customClaims || {};
+  const useNewPermissions = customClaims.useNewPermissions === true;
+
+  if (!useNewPermissions) {
+    throw new HttpsError(
+      "permission-denied",
+      "New permission system must be enabled to remove administrators from sites"
+    );
+  }
+
+  await ensurePermissionsLoaded();
+  const requestingUser = buildPermissionsUserFromAuthRecord(requesterRecord);
+
   return await _removeAdministratorFromSite({
     adminUid: adminUidInput.trim(),
     siteId: siteIdInput.trim(),
     requesterAdminUid,
+    requestingUser,
   });
 });
 
