@@ -6,7 +6,6 @@ export const ORG_NAMES = [
   "schools",
   "classes",
   "groups",
-  "families",
 ];
 
 /**
@@ -25,8 +24,6 @@ export interface IEducationalOrgsList {
  * An interface representing the different types of organizations.
  */
 export interface IOrgsList extends IEducationalOrgsList {
-  /* An array of family IDs. */
-  families?: string[];
   /* An array of group IDs. */
   groups?: string[];
 }
@@ -171,8 +168,6 @@ export interface StudentDataInput extends FamilyStudentDataInput {
     classes?: string[];
     /* The ID of the group, if applicable. */
     groups?: string[];
-    /* The ID of the family, if applicable. */
-    families?: string[];
   };
 }
 
@@ -211,25 +206,9 @@ export interface FamilyStudentDataInput {
   studentData: {
     /* The date of birth of the student. */
     dob: string;
-    /* The English language learner status of the student. */
-    ell_status?: string;
-    /* The free/reduced lunch status of the student. */
-    frl_status?: string;
-    /* The gender of the student. */
-    gender?: string;
     /* The grade level of the student. */
     grade: string;
-    /* An array of the student's home languages. */
-    home_language?: string[];
-    /* The IEP status of the student. */
-    iep_status?: string;
-    /* An array of the student's races. */
-    race?: string[];
-    /* The Hispanic/Latino ethnicity of the student. */
-    hispanic_ethnicity?: string;
   };
-  /* An interface representing additional student data from external data sources. */
-  externalData?: { [key: string]: unknown };
 }
 
 /**
@@ -265,8 +244,6 @@ export interface IUserData {
   classes: IOrgsMap;
   /* An interface representing the groups that the user is associated with. */
   groups: IOrgsMap;
-  /* An interface representing the families that the user is associated with. */
-  families: IOrgsMap;
   /* The participant ID, a unique ID with a prefix that is human readable */
   assessmentPid?: string;
   /* A boolean indicating whether the student should be created with test data. */
@@ -275,8 +252,6 @@ export interface IUserData {
   userType?: string;
   /* An interface representing the student's personal information. */
   studentData: { [key: string]: unknown };
-  /* An interface representing additional student data from external data sources. */
-  externalData?: { [key: string]: unknown };
   /* The birth month of the student. */
   birthMonth: number;
   /* The birth year of the student. */
@@ -294,8 +269,6 @@ export interface IParentData {
     /* The last name of the parent. */
     last: string;
   };
-  /* An interface representing the families that the parent is associated with. */
-  families?: IOrgsMap;
   /* An interface representing the groups that the parent is associated with. */
   groups?: IOrgsMap;
   /* A boolean indicating whether the parent should be created with test data. */
@@ -312,8 +285,6 @@ export interface IAdminClaims {
   schools?: string[];
   /* The IDs of the classes the user is an administrator for. */
   classes?: string[];
-  /* The IDs of the families the user is an administrator for. */
-  families?: string[];
   /* The IDs of the groups the user is an administrator for. */
   groups?: string[];
 }
@@ -392,8 +363,6 @@ export interface GroupData extends BaseOrgData {
   parentOrgType: string;
   /* The ID of the parent organization that the group is part of. */
   parentOrgId: string;
-  /* The ID of the family that the group is part of. */
-  familyId?: string;
 }
 
 export interface FamilyData extends BaseOrgData {}

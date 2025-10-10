@@ -29,7 +29,6 @@ interface IAdministrationDoc {
   normalizedName: string;
   createdBy: string;
   groups: string[];
-  families: string[];
   classes: string[];
   schools: string[];
   districts: string[];
@@ -124,7 +123,6 @@ export const upsertAdministrationHandler = async (
       schools: [],
       classes: [],
       groups: [],
-      families: [],
     },
     tags = [],
     administrationId,
@@ -203,7 +201,6 @@ export const upsertAdministrationHandler = async (
           normalizedName,
           // createdBy should not be updated
           groups: orgs.groups ?? [],
-          families: orgs.families ?? [],
           classes: orgs.classes ?? [],
           schools: orgs.schools ?? [],
           districts: orgs.districts ?? [],
@@ -222,7 +219,6 @@ export const upsertAdministrationHandler = async (
             schools: orgs.schools ?? [],
             classes: orgs.classes ?? [],
             groups: orgs.groups ?? [],
-            families: orgs.families ?? [],
           },
           minimalOrgs: {
             // Re-enabled
@@ -230,7 +226,6 @@ export const upsertAdministrationHandler = async (
             schools: orgs.schools ?? [],
             classes: orgs.classes ?? [],
             groups: orgs.groups ?? [],
-            families: orgs.families ?? [],
           },
           updatedAt: FieldValue.serverTimestamp() as Timestamp,
         };
@@ -253,7 +248,6 @@ export const upsertAdministrationHandler = async (
           normalizedName,
           createdBy: callerAdminUid,
           groups: orgs.groups ?? [],
-          families: orgs.families ?? [],
           classes: orgs.classes ?? [],
           schools: orgs.schools ?? [],
           districts: orgs.districts ?? [],

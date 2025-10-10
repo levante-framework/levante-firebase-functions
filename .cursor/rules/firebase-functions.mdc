@@ -71,3 +71,4 @@ TODO: Add testing, Firestore rules files, and Firestore indexes files.
 ### Miscellaneous
 * Use comments only when necessary. Do not add redundant comments. For example, if a function is called getUserClaims, do not add a comment saying "this gets the user's claims".
 * Do not modify existing comments unless a code change requires it. 
+* Do not add extra defensive checks (Ex. var === typeof "object")

@@ -70,7 +70,6 @@ Districts
 ### Soft Delete Functions
 - `softDeleteUser`: Mark user as deleted without removing data
 - `softDeleteUserAssignment`: Soft delete user assignments
-- `softDeleteUserExternalData`: Soft delete external user data
 
 ## Development Commands
 
@@ -81,23 +80,11 @@ npm install
 # Build TypeScript
 npm run build
 
-# Watch mode for development
-npm run build:watch
-
 # Format code
 npm run format
 
 # Lint check
 npm run lint
-
-# Deploy to development
-npm run deploy:dev
-
-# Deploy to production
-npm run deploy:prod
-
-# Start local emulators
-npm run serve
 
 # View function logs
 npm run logs
@@ -135,6 +122,3 @@ The project uses TypeScript for type safety. Ensure all code passes:
 - TypeScript compilation (`npm run build`)
 - Prettier formatting (`npm run lint`)
 
-## License
-
-Stanford Academic Software License for LEVANTE
