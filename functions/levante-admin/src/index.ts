@@ -973,7 +973,6 @@ export const deleteAdministration = onCall(async (request) => {
 
       const userClaims = userClaimsDoc.data();
       const isSuperAdmin = userClaims?.claims?.super_admin === true;
-
       if (!isSuperAdmin) {
         logger.error("User is not a super admin.", { requestingUid });
         throw new HttpsError(
