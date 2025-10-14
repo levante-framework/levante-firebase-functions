@@ -59,6 +59,7 @@ import { _upsertOrg } from "./upsert-org.js";
 import type { OrgData } from "./upsert-org.js";
 import { syncOnRunDocUpdateEventHandler } from "./runs/index.js";
 import { upsertAdministrationHandler } from "./upsertAdministration.js";
+import { ORG_COLLECTION_TO_SUBRESOURCE } from "./utils/constants.js";
 
 // initialize 'default' app on Google cloud platform
 admin.initializeApp({
@@ -72,12 +73,6 @@ ensurePermissionsLoaded().catch((error) =>
 
 setGlobalOptions({ timeoutSeconds: 540 });
 
-const ORG_COLLECTION_TO_SUBRESOURCE = {
-  districts: "sites",
-  schools: "schools",
-  classes: "classes",
-  groups: "cohorts",
-} as const;
 
 // TODO: Remove this function and wrapper in firekit
 export const setUidClaims = onCall(async (request) => {
