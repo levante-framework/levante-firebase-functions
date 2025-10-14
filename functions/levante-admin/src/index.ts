@@ -72,6 +72,14 @@ ensurePermissionsLoaded().catch((error) =>
 
 setGlobalOptions({ timeoutSeconds: 540 });
 
+const ORG_COLLECTION_TO_SUBRESOURCE = {
+  districts: "sites",
+  schools: "schools",
+  classes: "classes",
+  groups: "cohorts",
+} as const;
+
+// TODO: Remove this function and wrapper in firekit
 export const setUidClaims = onCall(async (request) => {
   const adminUid = request.auth!.uid;
 
@@ -89,38 +97,9 @@ export const setUidClaims = onCall(async (request) => {
   });
 });
 
-export const appendToAdminClaims = onCall(async (request) => {
-  const input = {
-    requesterUid: request.auth!.uid,
-    targetUid: request.data.targetUid,
-    districtId: request.data.districtId,
-    schoolId: request.data.schoolId,
-    classId: request.data.classId,
-    familyId: request.data.familyId,
-    groupId: request.data.groupId,
-    action: "append" as const,
-  };
-
-  return await appendOrRemoveAdminOrgs(input);
-});
-
-export const removeFromAdminClaims = onCall(async (request) => {
-  const input = {
-    requesterUid: request.auth!.uid,
-    targetUid: request.data.targetUid,
-    districtId: request.data.districtId,
-    schoolId: request.data.schoolId,
-    classId: request.data.classId,
-    familyId: request.data.familyId,
-    groupId: request.data.groupId,
-    action: "remove" as const,
-  };
-
-  return await appendOrRemoveAdminOrgs(input);
-});
 
 // Not using this. Can be refactored or removed
-export const updateUserRecord = onCall(async (request) => {
+const updateUserRecord = onCall(async (request) => {
   const adminUid = request.data.uid;
   const userRecord = request.data.userRecord;
   const { password: newPassword, email: newEmail } = userRecord;
@@ -460,13 +439,10 @@ export const syncAssignmentUpdated = onDocumentUpdated(
 );
 
 export const softDeleteUser = createSoftDeleteCloudFunction(["users"]);
+
 export const softDeleteUserAssignment = createSoftDeleteCloudFunction([
   "users",
   "assignments",
-]);
-export const softDeleteUserExternalData = createSoftDeleteCloudFunction([
-  "users",
-  "externalData",
 ]);
 
 export const createUsers = onCall(
@@ -594,6 +570,46 @@ export const linkUsers = onCall(async (request) => {
 export const getAdministrations = onCall(async (request) => {
   const adminUid = request.auth!.uid;
 
+  try {
+    const auth = getAuth();
+    const userRecord = await auth.getUser(adminUid);
+    const customClaims: any = userRecord.customClaims || {};
+    const useNewPermissions = customClaims.useNewPermissions === true;
+
+    if (useNewPermissions) {
+      await ensurePermissionsLoaded();
+      const user = buildPermissionsUserFromAuthRecord(userRecord);
+
+      const siteId: string = request.data.siteId
+
+      if (!siteId) {
+        throw new HttpsError(
+          "invalid-argument",
+          "A siteId (or districtId) is required to retrieve administrations"
+        );
+      }
+
+      const hasAccess =
+        filterSitesByPermission(user, [siteId], {
+          resource: RESOURCES.ASSIGNMENTS,
+          action: ACTIONS.READ,
+        }).length > 0;
+
+      if (!hasAccess) {
+        throw new HttpsError(
+          "permission-denied",
+          `You do not have permission to read administrations in site ${siteId}`
+        );
+      }
+    }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError(
+      "internal",
+      (err as Error)?.message || "Permission check failed"
+    );
+  }
+
   const idsOnly = request.data.idsOnly ?? true;
 
   const restrictToOpenAdministrations =
@@ -601,17 +617,9 @@ export const getAdministrations = onCall(async (request) => {
 
   const testData = request.data.testData ?? null;
 
-  const roarUid = await getRoarUid({
-    adminUid,
-    fallBackToAdminUid: true,
-  });
-
-  if (!roarUid) {
-    throw new HttpsError("unauthenticated", "User must be authenticated");
-  }
 
   const administrations = await getAdministrationsForAdministrator({
-    administratorRoarUid: roarUid,
+    administratorRoarUid: adminUid,
     restrictToOpenAdministrations,
     testData,
     idsOnly,
@@ -686,6 +694,77 @@ export const upsertOrg = onCall(async (request) => {
   }
 
   try {
+    const auth = getAuth();
+    const userRecord = await auth.getUser(requestingUid);
+    const customClaims: any = userRecord.customClaims || {};
+    const useNewPermissions = customClaims.useNewPermissions === true;
+
+    if (useNewPermissions) {
+      await ensurePermissionsLoaded();
+      const user = buildPermissionsUserFromAuthRecord(userRecord);
+
+      const orgType = orgData.type as keyof typeof ORG_COLLECTION_TO_SUBRESOURCE;
+      const subResource = ORG_COLLECTION_TO_SUBRESOURCE[orgType];
+
+      if (!subResource) {
+        logger.error("Unsupported organization type for permission check", {
+          orgType,
+        });
+        throw new HttpsError(
+          "invalid-argument",
+          `Unsupported organization type: ${orgType}`
+        );
+      }
+
+      const orgId = typeof orgData.id === "string" ? orgData.id : undefined;
+      const rawSiteId =
+        (orgData.districtId as string | undefined) ||
+        (orgData.siteId as string | undefined);
+      const siteId = typeof rawSiteId === "string" ? rawSiteId.trim() : undefined;
+
+      if (!siteId) {
+        logger.error("Missing site identifier for org upsert", {
+          requestingUid,
+          orgType,
+        });
+        throw new HttpsError(
+          "invalid-argument",
+          "A siteId (e.g. districtId) is required to upsert organizations"
+        );
+      }
+
+      const action = orgId ? ACTIONS.UPDATE : ACTIONS.CREATE;
+      const allowed =
+        filterSitesByPermission(user, [siteId], {
+          resource: RESOURCES.GROUPS,
+          action,
+          subResource,
+        }).length > 0;
+
+      if (!allowed) {
+        logger.error("Permission denied for org upsert", {
+          requestingUid,
+          orgType,
+          subResource,
+          orgId,
+          siteId,
+          action,
+        });
+        throw new HttpsError(
+          "permission-denied",
+          `You do not have permission to ${action} ${orgType} in site ${siteId}`
+        );
+      }
+    }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError(
+      "internal",
+      (err as Error)?.message || "Permission check failed"
+    );
+  }
+
+  try {
     const orgId = await _upsertOrg(requestingUid, orgData);
     logger.info("Organization successfully upserted.", {
       requestingUid,
@@ -728,6 +807,91 @@ export const deleteOrgFunction = onCall(async (request) => {
   }
 
   try {
+    const auth = getAuth();
+    const userRecord = await auth.getUser(requestingUid);
+    const customClaims: any = userRecord.customClaims || {};
+    const useNewPermissions = customClaims.useNewPermissions === true;
+
+    if (useNewPermissions) {
+      await ensurePermissionsLoaded();
+      const user = buildPermissionsUserFromAuthRecord(userRecord);
+
+      const subResource = orgsCollection;
+
+      if (!subResource) {
+        logger.error("Unsupported organization collection for delete", {
+          orgsCollection,
+        });
+        throw new HttpsError(
+          "invalid-argument",
+          `Unsupported organization type: ${orgsCollection}`
+        );
+      }
+
+      const siteId = request.data.siteId;
+
+      if (!siteId) {
+        logger.error("Missing site identifier for org delete", {
+          requestingUid,
+          orgsCollection,
+          orgId,
+        });
+        throw new HttpsError(
+          "invalid-argument",
+          "A siteId (e.g. districtId) is required to delete organizations"
+        );
+      }
+
+      const allowed =
+        filterSitesByPermission(user, [siteId], {
+          resource: RESOURCES.GROUPS,
+          action: ACTIONS.DELETE,
+          subResource,
+        }).length > 0;
+
+      if (!allowed) {
+        logger.error("Permission denied for org delete", {
+          requestingUid,
+          orgsCollection,
+          subResource,
+          orgId,
+          siteId,
+        });
+        throw new HttpsError(
+          "permission-denied",
+          `You do not have permission to delete ${orgsCollection} in site ${siteId}`
+        );
+      }
+    } else {
+      const db = getFirestore();
+      const userClaimsRef = db.collection("userClaims").doc(requestingUid);
+      const userClaimsDoc = await userClaimsRef.get();
+
+      if (!userClaimsDoc.exists) {
+        logger.error("User claims not found.", { requestingUid });
+        throw new HttpsError("permission-denied", "User permissions not found.");
+      }
+
+      const userClaims = userClaimsDoc.data();
+      const isSuperAdmin = userClaims?.claims?.super_admin === true;
+
+      if (!isSuperAdmin) {
+        logger.error("User is not a super admin.", { requestingUid });
+        throw new HttpsError(
+          "permission-denied",
+          "You must be a super admin to delete an organization."
+        );
+      }
+    }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError(
+      "internal",
+      (err as Error)?.message || "Permission check failed"
+    );
+  }
+
+  try {
     await deleteOrg(orgsCollection, orgId, recursive);
     logger.info("Organization successfully deleted.", {
       requestingUid,
@@ -757,27 +921,75 @@ export const deleteAdministration = onCall(async (request) => {
   }
 
   try {
-    // Check if user is a super admin
-    const db = getFirestore();
-    const userClaimsRef = db.collection("userClaims").doc(requestingUid);
-    const userClaimsDoc = await userClaimsRef.get();
+    const auth = getAuth();
+    const userRecord = await auth.getUser(requestingUid);
+    const customClaims: any = userRecord.customClaims || {};
+    const useNewPermissions = customClaims.useNewPermissions === true;
 
-    if (!userClaimsDoc.exists) {
-      logger.error("User claims not found.", { requestingUid });
-      throw new HttpsError("permission-denied", "User permissions not found.");
+    if (useNewPermissions) {
+      await ensurePermissionsLoaded();
+      const user = buildPermissionsUserFromAuthRecord(userRecord);
+
+      const siteId = request.data.siteId;
+
+      if (!siteId) {
+        logger.error("Missing site identifier for administration delete", {
+          requestingUid,
+          administrationId,
+        });
+        throw new HttpsError(
+          "invalid-argument",
+          "A siteId (or districtId) is required to delete administrations"
+        );
+      }
+
+      const allowed =
+        filterSitesByPermission(user, [siteId], {
+          resource: RESOURCES.ASSIGNMENTS,
+          action: ACTIONS.DELETE,
+        }).length > 0;
+
+      if (!allowed) {
+        logger.error("Permission denied for administration delete", {
+          requestingUid,
+          administrationId,
+          siteId,
+        });
+        throw new HttpsError(
+          "permission-denied",
+          `You do not have permission to delete administrations in site ${siteId}`
+        );
+      }
+      
+    } else {
+      const db = getFirestore();
+      const userClaimsRef = db.collection("userClaims").doc(requestingUid);
+      const userClaimsDoc = await userClaimsRef.get();
+
+      if (!userClaimsDoc.exists) {
+        logger.error("User claims not found.", { requestingUid });
+        throw new HttpsError("permission-denied", "User permissions not found.");
+      }
+
+      const userClaims = userClaimsDoc.data();
+      const isSuperAdmin = userClaims?.claims?.super_admin === true;
+      if (!isSuperAdmin) {
+        logger.error("User is not a super admin.", { requestingUid });
+        throw new HttpsError(
+          "permission-denied",
+          "You must be a super admin to delete an administration."
+        );
+      }
     }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError(
+      "internal",
+      (err as Error)?.message || "Permission check failed"
+    );
+  }
 
-    const userClaims = userClaimsDoc.data();
-    const isSuperAdmin = userClaims?.claims?.super_admin === true;
-
-    if (!isSuperAdmin) {
-      logger.error("User is not a super admin.", { requestingUid });
-      throw new HttpsError(
-        "permission-denied",
-        "You must be a super admin to delete an administration."
-      );
-    }
-
+  try {
     await _deleteAdministration(administrationId);
     logger.info("Administration successfully deleted.", {
       requestingUid,
