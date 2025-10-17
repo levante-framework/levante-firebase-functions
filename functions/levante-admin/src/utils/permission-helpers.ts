@@ -1,4 +1,4 @@
-import { getFirestore } from "firebase-admin/firestore";
+import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getAuth, UserRecord } from "firebase-admin/auth";
 import {
   ACTIONS,
@@ -7,11 +7,54 @@ import {
   PermissionService,
   type User as PermUser,
   type PermissionCheck,
+  type LoggingModeConfig,
+  type PermEventSink,
 } from "@levante-framework/permissions-core";
+import {
+  PERMISSION_LOGGING_MODE,
+  FIRESTORE_PERMISSIONS_DOCUMENT,
+  FIRESTORE_PERMISSIONS_LOGS_COLLECTION,
+  FIRESTORE_SYSTEM_COLLECTION,
+} from "./constants.js";
+
+export const createPermissionsFirestoreSink = (
+  loggingConfig: LoggingModeConfig
+): PermEventSink => {
+  const db = getFirestore();
+  const logsCollection = db
+    .collection(FIRESTORE_SYSTEM_COLLECTION)
+    .doc(FIRESTORE_PERMISSIONS_DOCUMENT)
+    .collection(FIRESTORE_PERMISSIONS_LOGS_COLLECTION);
+
+  return {
+    isEnabled: () => loggingConfig.mode !== "off",
+    emit: (event) => {
+      setImmediate(async () => {
+        try {
+          await logsCollection.add({
+            ...event,
+            expireAt: Timestamp.fromMillis(
+              Date.now() + 1000 * 60 * 60 * 24 * 90 // 90 days from now. TTL is not turned on yet.
+            ),
+          });
+        } catch (error) {
+          console.warn("Failed to write permission log event", error);
+        }
+      });
+    },
+  };
+};
 
 // Singleton permission service shared across functions
 const cache = new CacheService(86_400_000); // 24 hours TTL
-const service = new PermissionService(cache);
+const loggingConfig: LoggingModeConfig = {
+  mode: PERMISSION_LOGGING_MODE,
+};
+const service = new PermissionService(
+  cache,
+  loggingConfig,
+  createPermissionsFirestoreSink(loggingConfig)
+);
 let loadingPromise: Promise<void> | null = null;
 
 export const ensurePermissionsLoaded = async () => {
