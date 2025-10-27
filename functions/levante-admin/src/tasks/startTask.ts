@@ -242,15 +242,18 @@ export const startTask = onCall(async (request): Promise<StartTaskResult> => {
       };
     });
 
+    logger.info(uid, "started task", {
+      administrationId,
+      taskId
+    });
+
     return result;
   } catch (error) {
-    logger.error("Failed to start task", {
-      error,
-      administrationId: request.data?.administrationId,
-      taskId: request.data?.taskId,
-      targetUid: request.data?.targetUid,
-      callerUid: request.auth?.uid,
-    });
+    logger.error(
+      request.auth?.uid,
+      "failed to start task",
+      { error, administrationId: request.data?.administrationId, taskId: request.data?.taskId }
+    );
 
     if (error instanceof HttpsError) {
       throw error;
