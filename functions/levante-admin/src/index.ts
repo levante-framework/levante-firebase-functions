@@ -4,7 +4,11 @@ import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { logger, setGlobalOptions } from "firebase-functions/v2";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
-import { ACTIONS, RESOURCES, ADMIN_SUB_RESOURCES } from "@levante-framework/permissions-core";
+import {
+  ACTIONS,
+  RESOURCES,
+  ADMIN_SUB_RESOURCES,
+} from "@levante-framework/permissions-core";
 import {
   ensurePermissionsLoaded,
   buildPermissionsUserFromAuthRecord,
@@ -92,7 +96,6 @@ export const setUidClaims = onCall(async (request) => {
   });
 });
 
-
 // Not using this. Can be refactored or removed
 const updateUserRecord = onCall(async (request) => {
   const adminUid = request.data.uid;
@@ -174,18 +177,13 @@ export const createAdministratorAccount = onCall(async (request) => {
   });
 });
 
-const createAdministrator = onCall(async (request) => {
+export const createAdministrator = onCall(async (request) => {
   const requesterAdminUid = request.auth?.uid;
   if (!requesterAdminUid) {
     throw new HttpsError("unauthenticated", "User must be authenticated");
   }
 
-  const {
-    email,
-    name,
-    roles,
-    isTestData = false,
-  } = request.data ?? {};
+  const { email, name, roles, isTestData = false } = request.data ?? {};
 
   const auth = getAuth();
   const requesterRecord = await auth.getUser(requesterAdminUid);
@@ -209,9 +207,17 @@ const createAdministrator = onCall(async (request) => {
 
   await ensurePermissionsLoaded();
   const requestingUser = buildPermissionsUserFromAuthRecord(requesterRecord);
-  
+
   const permissionsService = getPermissionService();
-  const allowedSites = sanitizedRoles.filter((role) => permissionsService.canPerformSiteAction(requestingUser, role.siteId, RESOURCES.ADMINS, ACTIONS.CREATE, role.role as (typeof ADMIN_SUB_RESOURCES)[keyof typeof ADMIN_SUB_RESOURCES]));
+  const allowedSites = sanitizedRoles.filter((role) =>
+    permissionsService.canPerformSiteAction(
+      requestingUser,
+      role.siteId,
+      RESOURCES.ADMINS,
+      ACTIONS.CREATE,
+      role.role as (typeof ADMIN_SUB_RESOURCES)[keyof typeof ADMIN_SUB_RESOURCES]
+    )
+  );
 
   if (allowedSites.length === 0) {
     logger.error(
@@ -236,7 +242,7 @@ const createAdministrator = onCall(async (request) => {
   });
 });
 
-const updateAdministrator = onCall(async (request) => {
+export const updateAdministrator = onCall(async (request) => {
   const requesterAdminUid = request.auth?.uid;
   if (!requesterAdminUid) {
     throw new HttpsError("unauthenticated", "User must be authenticated");
@@ -249,7 +255,10 @@ const updateAdministrator = onCall(async (request) => {
 
   const rolesInput = request.data?.roles;
   if (!Array.isArray(rolesInput)) {
-    throw new HttpsError("invalid-argument", "Roles must be provided as an array");
+    throw new HttpsError(
+      "invalid-argument",
+      "Roles must be provided as an array"
+    );
   }
   const sanitizedRoles = sanitizeRoles(
     rolesInput as AdministratorRoleDefinition[]
@@ -313,7 +322,7 @@ const updateAdministrator = onCall(async (request) => {
   });
 });
 
-const removeAdministratorFromSite = onCall(async (request) => {
+export const removeAdministratorFromSite = onCall(async (request) => {
   const requesterAdminUid = request.auth?.uid;
   if (!requesterAdminUid) {
     throw new HttpsError("unauthenticated", "User must be authenticated");
@@ -362,7 +371,6 @@ const removeAdministratorFromSite = onCall(async (request) => {
       `You do not have permission to remove administrators from site ${targetSiteId}`
     );
   }
-  
 
   return await removeAdministratorRoles({
     context,
@@ -575,7 +583,7 @@ export const getAdministrations = onCall(async (request) => {
       await ensurePermissionsLoaded();
       const user = buildPermissionsUserFromAuthRecord(userRecord);
 
-      const siteId: string = request.data.siteId
+      const siteId: string = request.data.siteId;
 
       if (!siteId) {
         throw new HttpsError(
@@ -611,7 +619,6 @@ export const getAdministrations = onCall(async (request) => {
     request.data.restrictToOpenAdministrations ?? false;
 
   const testData = request.data.testData ?? null;
-
 
   const administrations = await getAdministrationsForAdministrator({
     administratorRoarUid: adminUid,
@@ -698,7 +705,8 @@ export const upsertOrg = onCall(async (request) => {
       await ensurePermissionsLoaded();
       const user = buildPermissionsUserFromAuthRecord(userRecord);
 
-      const orgType = orgData.type as keyof typeof ORG_COLLECTION_TO_SUBRESOURCE;
+      const orgType =
+        orgData.type as keyof typeof ORG_COLLECTION_TO_SUBRESOURCE;
       const subResource = ORG_COLLECTION_TO_SUBRESOURCE[orgType];
 
       if (!subResource) {
@@ -715,7 +723,8 @@ export const upsertOrg = onCall(async (request) => {
       const rawSiteId =
         (orgData.districtId as string | undefined) ||
         (orgData.siteId as string | undefined);
-      const siteId = typeof rawSiteId === "string" ? rawSiteId.trim() : undefined;
+      const siteId =
+        typeof rawSiteId === "string" ? rawSiteId.trim() : undefined;
 
       if (!siteId) {
         logger.error("Missing site identifier for org upsert", {
@@ -864,7 +873,10 @@ export const deleteOrgFunction = onCall(async (request) => {
 
       if (!userClaimsDoc.exists) {
         logger.error("User claims not found.", { requestingUid });
-        throw new HttpsError("permission-denied", "User permissions not found.");
+        throw new HttpsError(
+          "permission-denied",
+          "User permissions not found."
+        );
       }
 
       const userClaims = userClaimsDoc.data();
@@ -955,7 +967,6 @@ export const deleteAdministration = onCall(async (request) => {
           `You do not have permission to delete administrations in site ${siteId}`
         );
       }
-      
     } else {
       const db = getFirestore();
       const userClaimsRef = db.collection("userClaims").doc(requestingUid);
@@ -963,7 +974,10 @@ export const deleteAdministration = onCall(async (request) => {
 
       if (!userClaimsDoc.exists) {
         logger.error("User claims not found.", { requestingUid });
-        throw new HttpsError("permission-denied", "User permissions not found.");
+        throw new HttpsError(
+          "permission-denied",
+          "User permissions not found."
+        );
       }
 
       const userClaims = userClaimsDoc.data();

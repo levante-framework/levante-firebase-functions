@@ -60,7 +60,6 @@ export const loadAdministratorContext = async (
   };
 };
 
-
 export const updateAdministratorRoles = async ({
   context,
   updatedRoles,
@@ -72,95 +71,93 @@ export const updateAdministratorRoles = async ({
   const db = getFirestore();
 
   const sanitizedRoles = await db.runTransaction(async (transaction) => {
-      const adminDoc = await transaction.get(context.adminUserDocRef);
-      if (!adminDoc.exists) {
+    const adminDoc = await transaction.get(context.adminUserDocRef);
+    if (!adminDoc.exists) {
+      throw new HttpsError(
+        "not-found",
+        "Administrator user document not found"
+      );
+    }
+
+    const adminDocData = adminDoc.data() as Record<string, unknown>;
+    const currentRoles = sanitizeRoles(
+      Array.isArray(adminDoc.data()?.roles)
+        ? (adminDoc.data()!.roles as AdministratorRoleDefinition[])
+        : []
+    );
+
+    const siteIdsToUpdate = new Set<string>();
+    const mergedRolesMap = new Map<string, AdministratorRoleDefinition>();
+    for (const role of currentRoles) {
+      mergedRolesMap.set(role.siteId, role);
+    }
+    for (const incomingRole of updatedRoles) {
+      mergedRolesMap.set(incomingRole.siteId, { ...incomingRole });
+      siteIdsToUpdate.add(incomingRole.siteId);
+    }
+
+    const mergedRoles = sanitizeRoles(Array.from(mergedRolesMap.values()));
+
+    const now = FieldValue.serverTimestamp();
+    transaction.update(context.adminUserDocRef, {
+      roles: mergedRoles,
+      updatedAt: now,
+    });
+
+    for (const siteId of siteIdsToUpdate) {
+      const role = mergedRolesMap.get(siteId);
+      if (!role) {
+        continue;
+      }
+
+      const districtDocRef = db.collection("districts").doc(siteId);
+      const districtSnapshot = await transaction.get(districtDocRef);
+
+      if (!districtSnapshot.exists) {
         throw new HttpsError(
           "not-found",
-          "Administrator user document not found"
+          `District document ${siteId} not found`
         );
       }
 
-      const adminDocData = adminDoc.data() as Record<string, unknown>;
-      const currentRoles = sanitizeRoles(
-        Array.isArray(adminDoc.data()?.roles)
-          ? (adminDoc.data()!.roles as AdministratorRoleDefinition[])
-          : []
+      const administrators = Array.isArray(
+        districtSnapshot.data()?.administrators
+      )
+        ? (districtSnapshot.data()!.administrators as Array<
+            Record<string, unknown>
+          >)
+        : [];
+
+      const existingEntry = administrators.find(
+        (entry) =>
+          entry?.adminUid === context.adminUid && entry?.siteId === siteId
       );
 
-      const siteIdsToUpdate = new Set<string>();
-      const mergedRolesMap = new Map<string, AdministratorRoleDefinition>();
-      for (const role of currentRoles) {
-        mergedRolesMap.set(role.siteId, role);
-      }
-      for (const incomingRole of updatedRoles) {
-        mergedRolesMap.set(incomingRole.siteId, { ...incomingRole });
-        siteIdsToUpdate.add(incomingRole.siteId);
-      }
+      const otherAdministrators = administrators.filter(
+        (entry) =>
+          entry?.adminUid !== context.adminUid || entry.siteId !== siteId
+      );
 
-      const mergedRoles = sanitizeRoles(Array.from(mergedRolesMap.values()));
+      const updatedAdministrators = [
+        ...otherAdministrators,
+        {
+          ...existingEntry,
+          adminUid: context.adminUid,
+          siteId,
+          role: role.role,
+          status: ADMINISTRATOR_STATUS.ACTIVE,
+          name: context.targetRecord.displayName,
+        },
+      ];
 
-      const now = FieldValue.serverTimestamp();
-      transaction.update(context.adminUserDocRef, {
-        roles: mergedRoles,
+      transaction.update(districtDocRef, {
+        administrators: updatedAdministrators,
         updatedAt: now,
       });
-
-      for (const siteId of siteIdsToUpdate) {
-        const role = mergedRolesMap.get(siteId);
-        if (!role) {
-          continue;
-        }
-
-        const districtDocRef = db.collection("districts").doc(siteId);
-        const districtSnapshot = await transaction.get(districtDocRef);
-
-        if (!districtSnapshot.exists) {
-          throw new HttpsError(
-            "not-found",
-            `District document ${siteId} not found`
-          );
-        }
-
-        const administrators = Array.isArray(
-          districtSnapshot.data()?.administrators
-        )
-          ? (districtSnapshot.data()!.administrators as Array<
-              Record<string, unknown>
-            >)
-          : [];
-
-        const existingEntry = administrators.find(
-          (entry) =>
-            entry?.adminUid === context.adminUid &&
-            (entry?.siteId === siteId)
-        );
-
-        const otherAdministrators = administrators.filter(
-          (entry) =>
-            entry?.adminUid !== context.adminUid ||(entry.siteId !== siteId)
-        );
-
-        const updatedAdministrators = [
-          ...otherAdministrators,
-          {
-            ...existingEntry,
-            adminUid: context.adminUid,
-            siteId,
-            role: role.role,
-            status: ADMINISTRATOR_STATUS.ACTIVE,
-            name: context.targetRecord.displayName
-          },
-        ];
-
-        transaction.update(districtDocRef, {
-          administrators: updatedAdministrators,
-          updatedAt: now,
-        });
-      }
-
-      return mergedRoles;
     }
-  );
+
+    return mergedRoles;
+  });
 
   const existingClaims: Record<string, unknown> =
     (context.targetRecord.customClaims as Record<string, unknown>) ?? {};
@@ -193,7 +190,10 @@ export const removeAdministratorRoles = async ({
   const { remainingRoles } = await db.runTransaction(async (transaction) => {
     const adminDoc = await transaction.get(context.adminUserDocRef);
     if (!adminDoc.exists) {
-      throw new HttpsError("not-found", "Administrator user document not found");
+      throw new HttpsError(
+        "not-found",
+        "Administrator user document not found"
+      );
     }
 
     const adminDocData = adminDoc.data() as Record<string, unknown>;
@@ -217,19 +217,21 @@ export const removeAdministratorRoles = async ({
     const districtSnapshot = await transaction.get(districtDocRef);
 
     if (!districtSnapshot.exists) {
-      throw new HttpsError("not-found", `District document ${siteId} not found`);
+      throw new HttpsError(
+        "not-found",
+        `District document ${siteId} not found`
+      );
     }
 
     const administrators = districtSnapshot.data()?.administrators ?? [];
 
     const existingEntry = administrators.find(
       (entry) =>
-        entry?.adminUid === context.adminUid && (entry?.siteId === siteId)
+        entry?.adminUid === context.adminUid && entry?.siteId === siteId
     );
 
     const otherAdministrators = administrators.filter(
-      (entry) =>
-        entry?.adminUid !== context.adminUid || (entry.siteId !== siteId)
+      (entry) => entry?.adminUid !== context.adminUid || entry.siteId !== siteId
     );
 
     const updatedAdministrators = existingEntry

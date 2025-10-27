@@ -271,7 +271,6 @@ export const getSubGroupsFromGroup = async (
   return subgroups;
 };
 
-
 /**
  * Get subgroups from a specified class.
  *
@@ -714,8 +713,7 @@ export const unenrollOrg = async ({
             })
           : { administrations: [] };
 
-        const { districtId, schoolId, parentOrgId, parentOrgType } =
-          orgData;
+        const { districtId, schoolId, parentOrgId, parentOrgType } = orgData;
         const districtIdExists = districtId
           ? await doesDocExist(
               db.collection("districts").doc(districtId),
