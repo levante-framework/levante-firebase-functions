@@ -38,7 +38,9 @@ const buildGroupStructure = (groupIds?: string[]) => {
   }
 
   const now = new Date();
-  const dates = Object.fromEntries(groupIds.map((groupId) => [groupId, { from: now }]));
+  const dates = Object.fromEntries(
+    groupIds.map((groupId) => [groupId, { from: now }])
+  );
 
   return {
     current: groupIds,
@@ -46,7 +48,6 @@ const buildGroupStructure = (groupIds?: string[]) => {
     dates,
   };
 };
-
 
 export const sanitizeRoles = (roles: AdministratorRoleDefinition[]) => {
   if (!Array.isArray(roles)) {
@@ -61,7 +62,10 @@ export const sanitizeRoles = (roles: AdministratorRoleDefinition[]) => {
       siteName: String(role.siteName ?? "").trim(),
     }))
     .filter(
-      (role) => role.siteId.length > 0 && role.role.length > 0 && role.siteName.length > 0
+      (role) =>
+        role.siteId.length > 0 &&
+        role.role.length > 0 &&
+        role.siteName.length > 0
     );
 
   return _uniqBy(cleaned, (role) => `${role.siteId}::${role.role}`);
@@ -105,7 +109,6 @@ export const _createAdministratorWithRoles = async ({
     password: uuidv4(),
   });
   adminUid = createdUser.uid;
-  
 
   logger.debug("Creating administrator with roles", {
     requesterAdminUid,
@@ -120,7 +123,6 @@ export const _createAdministratorWithRoles = async ({
   };
 
   await auth.setCustomUserClaims(adminUid, newClaims);
-
 
   const adminDocData: Record<string, unknown> = {
     userType: "admin",
@@ -144,7 +146,12 @@ export const _createAdministratorWithRoles = async ({
   for (const role of sanitizedRoles) {
     const districtDocRef = db.collection("districts").doc(role.siteId);
     await districtDocRef.update({
-      administrators: FieldValue.arrayUnion({adminUid, name, status: ADMINISTRATOR_STATUS.ACTIVE, role: role.role}),
+      administrators: FieldValue.arrayUnion({
+        adminUid,
+        name,
+        status: ADMINISTRATOR_STATUS.ACTIVE,
+        role: role.role,
+      }),
       updatedAt: FieldValue.serverTimestamp(),
     });
   }

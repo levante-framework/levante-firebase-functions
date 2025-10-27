@@ -1,12 +1,7 @@
 import type { DocumentReference, FieldPath } from "firebase-admin/firestore";
 import type { Condition } from "./administrations/conditions.js";
 
-export const ORG_NAMES = [
-  "districts",
-  "schools",
-  "classes",
-  "groups",
-];
+export const ORG_NAMES = ["districts", "schools", "classes", "groups"];
 
 /**
  * An interface representing the different types of educational organizations.
