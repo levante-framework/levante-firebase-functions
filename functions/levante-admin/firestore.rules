@@ -135,6 +135,24 @@ service cloud.firestore {
           ).size() > 0;
     }
 
+    function hasAdminPermission(permissionResource, action, targetSites) {
+        return shouldUseNewPermissions()
+          ? (
+              getTargetUserSites().size() > 0
+              && hasSitePermissionForSiteIds(
+                   targetSites,
+                   permissionResource,
+                   action
+                 )
+            )
+          : isAdminForAnyOrgType({
+              'districts': resource.data.get(['districts', 'current'], []),
+              'schools' : resource.data.get(['schools',  'current'], []),
+              'classes' : resource.data.get(['classes',  'current'], []),
+              'groups'  : resource.data.get(['groups',   'current'], [])
+            });
+    }
+
     // New: Check if user is super_admin or site_admin
     function isSuperAdminOrAdminNew() {
       return hasRole('super_admin') || hasRole('site_admin');
@@ -196,27 +214,9 @@ service cloud.firestore {
         return resource.data.get(['districts', 'current'], []);
       }
 
-      function hasAdminPermission(resource, action) {
-        if (shouldUseNewPermissions()) {
-          let roleEntries = getTargetUserSites();
-          if (roleEntries.size() > 0) {
-            return roleEntries.where(roleEntry,
-              hasSitePermissionForSiteIds([roleEntry.siteId], resource, action)
-            ).size() > 0;
-          }
-        }
-
-        return isAdminForAnyOrgType({
-          'districts': resource.data.get(['districts', 'current'], []),
-          'schools': resource.data.get(['schools', 'current'], []),
-          'classes': resource.data.get(['classes', 'current'], []),
-          'groups': resource.data.get(['groups', 'current'], [])
-        });
-      }
-
       // Unified read permission check
       function canReadUser() {
-          return (myData() || hasAdminPermission('users', 'read') || isParentOfUser());
+          return (myData() || hasAdminPermission('users', 'read', getTargetUserSites()) || isParentOfUser());
       }
 
       allow read: if canReadUser();
@@ -229,7 +229,7 @@ service cloud.firestore {
       // Assignments
       match /assignments/{administrationId} {
         function canReadAssignment() {
-          return isAuthed() && (myData() || hasAdminPermission('assignments', 'read'));
+          return isAuthed() && (myData() || hasAdminPermission('assignments', 'read', getTargetUserSites()));
         }
 
         allow read: if canReadAssignment();
@@ -246,7 +246,7 @@ service cloud.firestore {
         }
 
         function canReadRun() {
-          return isAuthed() && (myData() || hasAdminPermission('users', 'read'));
+          return isAuthed() && (myData() || hasAdminPermission('users', 'read', getTargetUserSites()));
         }
 
         allow read: if canReadRun();
@@ -255,7 +255,7 @@ service cloud.firestore {
 
         match /trials/{trialId} {
           function canReadTrial() {
-            return myData() || hasAdminPermission('users', 'read')
+            return myData() || hasAdminPermission('users', 'read', getTargetUserSites());
           }
 
           allow read: if canReadTrial();
@@ -268,13 +268,13 @@ service cloud.firestore {
     // ============ ADMINISTRATIONS ============
     match /administrations/{administrationId} {
       function canReadAdministration() {
-        return isAuthed() && hasAdminPermission('assignments', 'read')
+        return isAuthed() && hasAdminPermission('assignments', 'read', resoure.data.siteId);
       }
 
       allow read: if canReadAdministration();
 
       match /stats/completion {
-        allow read: if isAuthed() && hasAdminPermission('assignments', 'read')
+        allow read: if isAuthed() && hasAdminPermission('assignments', 'read', resoure.data.siteId);
       }
     }
 
