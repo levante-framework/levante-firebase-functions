@@ -20,17 +20,16 @@ import {
 export const createPermissionsFirestoreSink = (
   loggingConfig: LoggingModeConfig
 ): PermEventSink => {
-  const db = getFirestore();
-  const logsCollection = db
-    .collection(FIRESTORE_SYSTEM_COLLECTION)
-    .doc(FIRESTORE_PERMISSIONS_DOCUMENT)
-    .collection(FIRESTORE_PERMISSIONS_LOGS_COLLECTION);
-
   return {
     isEnabled: () => loggingConfig.mode !== "off",
     emit: (event) => {
       setImmediate(async () => {
         try {
+          const db = getFirestore();
+          const logsCollection = db
+            .collection(FIRESTORE_SYSTEM_COLLECTION)
+            .doc(FIRESTORE_PERMISSIONS_DOCUMENT)
+            .collection(FIRESTORE_PERMISSIONS_LOGS_COLLECTION);
           await logsCollection.add({
             ...event,
             expireAt: Timestamp.fromMillis(
