@@ -22,7 +22,8 @@
     "add-user-roles": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/add-user-roles.ts",
     "add-use-new-permissions": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/add-use-new-permissions-to-user-claims.ts",
     "add-roles-to-custom-claims": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/add-roles-to-custom-claims.ts",
-    "add-site-name-to-roles": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/add-site-name-to-roles.ts"
+    "add-site-name-to-roles": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/add-site-name-to-roles.ts",
+    "get-user-custom-claims": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/get-user-custom-claims.ts"
   },
   "author": "Adam Richie-Halford <richiehalford@gmail.com> (https://richiehalford.org/)",
   "engines": {
