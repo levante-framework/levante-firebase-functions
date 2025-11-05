@@ -62,6 +62,7 @@ export interface Administration {
   readOrgs: OrgRefMap;
   schools: string[]; // Document IDs from `schools` collection
   sequential: boolean;
+  siteId: string;
   tags: string[];
   testData: boolean;
 }

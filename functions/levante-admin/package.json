@@ -22,7 +22,7 @@
     "node": "20"
   },
   "license": "Stanford Academic Software License for LEVANTE",
-  "main": "lib/index.js",
+  "main": "lib/src/index.js",
   "dependencies": {
     "@bdelab/roar-utils": "^1.1.0",
     "@firebase/logger": "^0.4.4",

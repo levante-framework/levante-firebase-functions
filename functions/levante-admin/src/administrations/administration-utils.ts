@@ -34,6 +34,8 @@ import {
   summarizeIdListForLog,
   summarizeOrgsForLog,
 } from "../utils/logging.js";
+import { getAuth } from "firebase-admin/auth";
+import { HttpsError } from "firebase-functions/v1/https";
 
 /**
  * Retrieve all administrations associated with the provided orgs.
@@ -47,6 +49,7 @@ import {
  * @returns {string[]} An array of all administrations associated with the provided orgs.
  */
 export const getAdministrationsFromOrgs = async ({
+  adminUid,
   orgs,
   transaction,
   restrictToOpenAdministrations = true,
@@ -55,6 +58,7 @@ export const getAdministrationsFromOrgs = async ({
   useReadOrgs = false,
   verbose = false,
 }: {
+  adminUid?: string;
   orgs: IOrgsList;
   transaction: Transaction;
   restrictToOpenAdministrations?: boolean;
@@ -62,66 +66,125 @@ export const getAdministrationsFromOrgs = async ({
   testData?: null | boolean;
   useReadOrgs?: boolean;
   verbose?: boolean;
-}) => {
+}): Promise<{
+  administrations: string[];
+  administrationData: { [id: string]: IAdministration };
+}> => {
   const db = getFirestore();
   let administrations: string[] = [];
   const administrationData: { [id: string]: IAdministration } = {};
 
-  // Because ``in`` queries are limited to 10 comparisons each time,
-  // we chuck the orgs array into chunks of 10.
-  for (const orgChunk of chunkOrgs(orgs, 10)) {
-    const orgIds = _flatten(Object.values(orgChunk));
 
-    const filterComponents = [Filter.where("orgId", "in", orgIds)];
+  let useNewPermissions = false;
+  let customClaims: any = {};
 
-    if (restrictToOpenAdministrations) {
-      filterComponents.push(Filter.where("dateClosed", ">", new Date()));
-    }
+  if (adminUid) {
+    const auth = getAuth();
+    const userRecord = await auth.getUser(adminUid);
+    customClaims = userRecord.customClaims || {};
+  }
+  useNewPermissions = customClaims.useNewPermissions;
+  const siteIds = Object.keys(customClaims?.siteNames || {});
 
-    if (testData !== null) {
-      filterComponents.push(Filter.where("testData", "==", testData));
-    }
+  if (useNewPermissions) {
+    if (siteIds.length > 0) {
+      const queryLimit = 500;
+      const openAdministrationsCutoff = restrictToOpenAdministrations
+        ? new Date()
+        : null;
 
-    // Limiting the number of results to ``queryLimit``.
-    const queryLimit = 500;
-    const collectionName = useReadOrgs ? "readOrgs" : "assignedOrgs";
+      for (let i = 0; i < siteIds.length; i += 10) {
+        const siteIdChunk = siteIds.slice(i, i + 10);
 
-    const firstQuery = db
-      .collectionGroup(collectionName)
-      .where(Filter.and(...filterComponents))
-      .select("administrationId")
-      .limit(queryLimit);
+        if (siteIdChunk.length === 0) {
+          continue;
+        }
 
-    let querySnapshot = await transaction.get(firstQuery);
+        const filterComponents = [Filter.where("siteId", "in", siteIdChunk)];
 
-    for (const documentSnapshot of querySnapshot.docs) {
-      const administrationId = documentSnapshot.data()?.administrationId;
-      if (administrationId) {
-        administrations = _union(administrations, [administrationId]);
+        if (openAdministrationsCutoff) {
+          filterComponents.push(
+            Filter.where("dateClosed", ">", openAdministrationsCutoff)
+          );
+        }
 
-        if (!idsOnly) {
-          if (!(administrationId in administrationData)) {
-            const administrationDocRef = db
-              .collection("administrations")
-              .doc(administrationId);
-            const administrationDocData = await transaction
-              .get(administrationDocRef)
-              .then((docSnap) => docSnap.data() as IAdministration);
+        if (testData !== null) {
+          filterComponents.push(Filter.where("testData", "==", testData));
+        }
+
+        let administrationQuery: Query = db
+          .collection("administrations")
+          .where(Filter.and(...filterComponents))
+          .limit(queryLimit);
+
+        let querySnapshot = await transaction.get(administrationQuery);
+
+        for (const documentSnapshot of querySnapshot.docs) {
+          const administrationId = documentSnapshot.id;
+          administrations = _union(administrations, [administrationId]);
+
+          if (!idsOnly) {
+            const administrationDocData = documentSnapshot.data() as
+              | IAdministration
+              | undefined;
             if (administrationDocData) {
               administrationData[administrationId] = administrationDocData;
             }
           }
         }
+
+        let numDocs = querySnapshot.docs.length;
+
+        while (numDocs === queryLimit) {
+          const lastVisible = querySnapshot.docs[numDocs - 1];
+          const nextQuery = administrationQuery.startAfter(lastVisible);
+          querySnapshot = await transaction.get(nextQuery);
+
+          for (const documentSnapshot of querySnapshot.docs) {
+            const administrationId = documentSnapshot.id;
+            administrations = _union(administrations, [administrationId]);
+
+            if (!idsOnly) {
+              const administrationDocData = documentSnapshot.data() as
+                | IAdministration
+                | undefined;
+              if (administrationDocData) {
+                administrationData[administrationId] = administrationDocData;
+              }
+            }
+          }
+
+          numDocs = querySnapshot.docs.length;
+        }
       }
     }
+  } else {
+    // Because ``in`` queries are limited to 10 comparisons each time,
+  // we chuck the orgs array into chunks of 10.
+    for (const orgChunk of chunkOrgs(orgs, 10)) {
+      const orgIds = _flatten(Object.values(orgChunk));
 
-    let numDocs = querySnapshot.docs.length;
+      const filterComponents = [Filter.where("orgId", "in", orgIds)];
 
-    // If the query did not exhaust the results, continue paging.
-    while (numDocs === queryLimit) {
-      const lastVisible = querySnapshot.docs[numDocs - 1];
-      const nextQuery = firstQuery.startAfter(lastVisible);
-      querySnapshot = await transaction.get(nextQuery);
+      if (restrictToOpenAdministrations) {
+        filterComponents.push(Filter.where("dateClosed", ">", new Date()));
+      }
+
+      if (testData !== null) {
+        filterComponents.push(Filter.where("testData", "==", testData));
+      }
+
+      // Limiting the number of results to ``queryLimit``.
+      const queryLimit = 500;
+      const collectionName = useReadOrgs ? "readOrgs" : "assignedOrgs";
+
+      const legacyQuery = db
+        .collectionGroup(collectionName)
+        .where(Filter.and(...filterComponents))
+        .select("administrationId")
+        .limit(queryLimit);
+    
+      let querySnapshot = await transaction.get(legacyQuery);
 
       for (const documentSnapshot of querySnapshot.docs) {
         const administrationId = documentSnapshot.data()?.administrationId;
@@ -143,7 +206,37 @@ export const getAdministrationsFromOrgs = async ({
           }
         }
       }
-      numDocs = querySnapshot.docs.length;
+
+      let numDocs = querySnapshot.docs.length;
+
+      // If the query did not exhaust the results, continue paging.
+      while (numDocs === queryLimit) {
+        const lastVisible = querySnapshot.docs[numDocs - 1];
+        const nextQuery = legacyQuery.startAfter(lastVisible);
+        querySnapshot = await transaction.get(nextQuery);
+
+        for (const documentSnapshot of querySnapshot.docs) {
+          const administrationId = documentSnapshot.data()?.administrationId;
+          if (administrationId) {
+            administrations = _union(administrations, [administrationId]);
+
+            if (!idsOnly) {
+              if (!(administrationId in administrationData)) {
+                const administrationDocRef = db
+                  .collection("administrations")
+                  .doc(administrationId);
+                const administrationDocData = await transaction
+                  .get(administrationDocRef)
+                  .then((docSnap) => docSnap.data() as IAdministration);
+                if (administrationDocData) {
+                  administrationData[administrationId] = administrationDocData;
+                }
+              }
+            }
+          }
+        }
+        numDocs = querySnapshot.docs.length;
+      }
     }
   }
 
@@ -397,13 +490,13 @@ export const standardizeAdministrationOrgs = async ({
 };
 
 export const getAdministrationsForAdministrator = async ({
-  administratorRoarUid,
+  adminUid,
   restrictToOpenAdministrations = false,
   testData = null,
   idsOnly = false,
   verbose = false,
 }: {
-  administratorRoarUid: string;
+  adminUid: string;
   restrictToOpenAdministrations?: boolean;
   testData?: null | boolean;
   idsOnly?: boolean;
@@ -415,20 +508,20 @@ export const getAdministrationsForAdministrator = async ({
     const roarUidFieldPath = new FieldPath("claims", "roarUid");
     const userClaimsQuery = db
       .collection("userClaims")
-      .where(roarUidFieldPath, "==", administratorRoarUid);
+      .where(roarUidFieldPath, "==", adminUid);
 
     const { adminOrgs, super_admin } = await transaction
       .get(userClaimsQuery)
       .then((snapshot) => {
         if (snapshot.empty) {
           throw new Error(
-            `No user claims found for the Roar UID ${administratorRoarUid}`
+            `No user claims found for the Roar UID ${adminUid}`
           );
         }
 
         if (snapshot.docs.length > 1) {
           throw new Error(
-            `Multiple user claims found for the same Roar UID ${administratorRoarUid}`
+            `Multiple user claims found for the same Roar UID ${adminUid}`
           );
         }
 
@@ -437,7 +530,7 @@ export const getAdministrationsForAdministrator = async ({
 
     if (super_admin) {
       logger.debug(
-        `Requesting administrator ${administratorRoarUid} is a super admin. Returning all administrations`
+        `Requesting administrator ${adminUid} is a super admin. Returning all administrations`
       );
 
       const administrationsCollection = db.collection("administrations");
@@ -468,7 +561,7 @@ export const getAdministrationsForAdministrator = async ({
           }));
         });
 
-      logger.debug(`Found administrations for ${administratorRoarUid}`, {
+      logger.debug(`Found administrations for ${adminUid}`, {
         administrationSummary: summarizeAdministrationsForLog(administrations),
       });
 
@@ -481,13 +574,9 @@ export const getAdministrationsForAdministrator = async ({
 
     if (verbose) {
       logger.debug(
-        `Requesting administrator ${administratorRoarUid} has adminOrgs. Returning matching administrations`,
+        `Requesting administrator ${adminUid} has adminOrgs. Returning matching administrations`,
         { adminOrgSummary: summarizeOrgsForLog(adminOrgs) }
       );
-    }
-
-    if (!adminOrgs) {
-      return [];
     }
 
     const { administrations, administrationData } =
@@ -498,10 +587,11 @@ export const getAdministrationsForAdministrator = async ({
         idsOnly,
         testData: testData,
         useReadOrgs: true,
+        adminUid,
       });
 
     if (verbose) {
-      logger.debug(`Found administrations for ${administratorRoarUid}`, {
+      logger.debug(`Found administrations for ${adminUid}`, {
         administrationSummary: summarizeAdministrationsForLog(administrations),
       });
     }
@@ -516,7 +606,7 @@ export const getAdministrationsForAdministrator = async ({
     }));
 
     if (verbose) {
-      logger.debug(`Returning administrations for ${administratorRoarUid}`, {
+      logger.debug(`Returning administrations for ${adminUid}`, {
         administrationSummary: summarizeAdministrationsForLog(result),
       });
     }

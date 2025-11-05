@@ -573,46 +573,6 @@ export const linkUsers = onCall(async (request) => {
 export const getAdministrations = onCall(async (request) => {
   const adminUid = request.auth!.uid;
 
-  try {
-    const auth = getAuth();
-    const userRecord = await auth.getUser(adminUid);
-    const customClaims: any = userRecord.customClaims || {};
-    const useNewPermissions = customClaims.useNewPermissions === true;
-
-    if (useNewPermissions) {
-      await ensurePermissionsLoaded();
-      const user = buildPermissionsUserFromAuthRecord(userRecord);
-
-      const siteId: string = request.data.siteId;
-
-      if (!siteId) {
-        throw new HttpsError(
-          "invalid-argument",
-          "A siteId (or districtId) is required to retrieve administrations"
-        );
-      }
-
-      const hasAccess =
-        filterSitesByPermission(user, [siteId], {
-          resource: RESOURCES.ASSIGNMENTS,
-          action: ACTIONS.READ,
-        }).length > 0;
-
-      if (!hasAccess) {
-        throw new HttpsError(
-          "permission-denied",
-          `You do not have permission to read administrations in site ${siteId}`
-        );
-      }
-    }
-  } catch (err) {
-    if (err instanceof HttpsError) throw err;
-    throw new HttpsError(
-      "internal",
-      (err as Error)?.message || "Permission check failed"
-    );
-  }
-
   const idsOnly = request.data.idsOnly ?? true;
 
   const restrictToOpenAdministrations =
@@ -621,7 +581,7 @@ export const getAdministrations = onCall(async (request) => {
   const testData = request.data.testData ?? null;
 
   const administrations = await getAdministrationsForAdministrator({
-    administratorRoarUid: adminUid,
+    adminUid,
     restrictToOpenAdministrations,
     testData,
     idsOnly,
