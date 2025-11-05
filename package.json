@@ -8,6 +8,7 @@
   ],
   "scripts": {
     "build": "npm run build --workspaces",
+    "build:watch": "npm run build:watch --workspaces",
     "format": "npm run format --workspaces",
     "lint": "npm run lint --workspaces",
     "prepare": "husky install || true",
