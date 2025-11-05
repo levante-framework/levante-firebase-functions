@@ -6,8 +6,25 @@ import {
 } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
-import type { IAssessment, IOrgsList } from "./interfaces.js"; // Assuming necessary types/helpers are in common
 import type { Class, Group, School } from "../firestore-schema.js";
+import type { IAssessment, IOrgsList, IAdministration } from "./interfaces.js"; // Assuming necessary types/helpers are in common
+import { ORG_NAMES } from "./interfaces.js";
+import { standardizeAdministrationOrgs } from "./administrations/administration-utils.js";
+import { updateAssignmentsForOrgChunkHandler } from "./assignments/sync-assignments.js";
+import _reduce from "lodash-es/reduce.js";
+import _pick from "lodash-es/pick.js";
+import _difference from "lodash-es/difference.js";
+import _fromPairs from "lodash-es/fromPairs.js";
+import _map from "lodash-es/map.js";
+import {
+  chunkOrgs,
+  getOnlyExistingOrgs,
+  getExhaustiveOrgs,
+  getUsersFromOrgs,
+} from "./orgs/org-utils.js";
+import { removeOrgsFromAssignments } from "./assignments/assignment-utils.js";
+import _chunk from "lodash-es/chunk.js";
+import { MAX_TRANSACTIONS } from "./utils/utils.js";
 
 interface UpsertAdministrationData {
   name: string;
@@ -49,6 +66,149 @@ interface IAdministrationDoc {
   updatedAt: Timestamp;
   creatorName: string;
 }
+
+const syncNewAdministrationAssignments = async (
+  administrationId: string,
+  administrationDocRef: DocumentReference,
+  currData: IAdministration
+) => {
+  const { minimalOrgs } = await standardizeAdministrationOrgs({
+    administrationId,
+    administrationDocRef,
+    currData,
+    copyToSubCollections: true,
+    forceCopy: true,
+  });
+
+  const orgChunks = chunkOrgs(minimalOrgs, 100);
+  const maxChunksToProcessSync = 3;
+
+  for (let i = 0; i < Math.min(orgChunks.length, maxChunksToProcessSync); i++) {
+    const orgChunk = orgChunks[i];
+    await updateAssignmentsForOrgChunkHandler({
+      administrationId,
+      administrationData: currData,
+      orgChunk,
+      mode: "add",
+    });
+  }
+
+  if (orgChunks.length > maxChunksToProcessSync) {
+    logger.info(
+      `Processed first ${maxChunksToProcessSync} org chunks synchronously. Remaining chunks will be processed by background trigger.`,
+      {
+        administrationId,
+        totalChunks: orgChunks.length,
+        processedChunks: maxChunksToProcessSync,
+      }
+    );
+  }
+};
+
+const syncModifiedAdministrationAssignments = async (
+  administrationId: string,
+  administrationDocRef: DocumentReference,
+  prevData: IAdministration,
+  currData: IAdministration
+) => {
+  const db = getFirestore();
+  const prevOrgs: IOrgsList = _pick(prevData, ORG_NAMES);
+  const currOrgs: IOrgsList = _pick(currData, ORG_NAMES);
+
+  const removedOrgs = _fromPairs(
+    _map(Object.entries(currOrgs), ([key, value]) => [
+      key,
+      _difference(prevOrgs[key], value),
+    ])
+  ) as IOrgsList;
+
+  const numRemovedOrgs = _reduce(
+    removedOrgs,
+    (sum, value) => (value ? sum + value.length : sum),
+    0
+  );
+
+  if (numRemovedOrgs > 0) {
+    let remainingUsersToRemove: string[] = [];
+    let removedExhaustiveOrgs: IOrgsList = {};
+
+    await db.runTransaction(async (transaction) => {
+      const removedExistingOrgs = await getOnlyExistingOrgs(
+        removedOrgs,
+        transaction
+      );
+      removedExhaustiveOrgs = await getExhaustiveOrgs({
+        orgs: removedExistingOrgs,
+        transaction,
+        includeArchived: true,
+      });
+      const usersToRemove = await getUsersFromOrgs({
+        orgs: removedExhaustiveOrgs,
+        transaction,
+        includeArchived: true,
+      });
+
+      if (usersToRemove.length !== 0) {
+        if (usersToRemove.length <= MAX_TRANSACTIONS) {
+          return removeOrgsFromAssignments(
+            usersToRemove,
+            [administrationId],
+            removedExhaustiveOrgs,
+            transaction
+          );
+        } else {
+          remainingUsersToRemove = usersToRemove;
+          return Promise.resolve(usersToRemove.length);
+        }
+      } else {
+        return Promise.resolve(0);
+      }
+    });
+
+    for (const _userChunk of _chunk(remainingUsersToRemove, MAX_TRANSACTIONS)) {
+      await db.runTransaction(async (transaction) => {
+        return removeOrgsFromAssignments(
+          _userChunk,
+          [administrationId],
+          removedExhaustiveOrgs,
+          transaction
+        );
+      });
+    }
+  }
+
+  const { minimalOrgs } = await standardizeAdministrationOrgs({
+    administrationId,
+    administrationDocRef,
+    currData,
+    copyToSubCollections: true,
+    forceCopy: true,
+  });
+
+  const orgChunks = chunkOrgs(minimalOrgs, 100);
+  const maxChunksToProcessSync = 3;
+
+  for (let i = 0; i < Math.min(orgChunks.length, maxChunksToProcessSync); i++) {
+    const orgChunk = orgChunks[i];
+    await updateAssignmentsForOrgChunkHandler({
+      administrationId,
+      administrationData: currData,
+      orgChunk,
+      mode: "update",
+    });
+  }
+
+  if (orgChunks.length > maxChunksToProcessSync) {
+    logger.info(
+      `Processed first ${maxChunksToProcessSync} org chunks synchronously. Remaining chunks will be processed by background trigger.`,
+      {
+        administrationId,
+        totalChunks: orgChunks.length,
+        processedChunks: maxChunksToProcessSync,
+      }
+    );
+  }
+};
 
 export const upsertAdministrationHandler = async (
   callerAdminUid: string,
@@ -180,12 +340,22 @@ export const upsertAdministrationHandler = async (
 
   // 5. Firestore Transaction
   try {
+    let prevData: IAdministration | undefined;
+
+    if (administrationId) {
+      const prevDoc = await db
+        .collection("administrations")
+        .doc(administrationId)
+        .get();
+      if (prevDoc.exists) {
+        prevData = prevDoc.data() as IAdministration;
+      }
+    }
+
     const newAdministrationId = await db.runTransaction(async (transaction) => {
       let administrationDocRef: DocumentReference;
-      let operationType: string; // To log 'create' or 'update'
 
       if (administrationId) {
-        operationType = "update";
         administrationDocRef = db
           .collection("administrations")
           .doc(administrationId);
@@ -239,7 +409,6 @@ export const upsertAdministrationHandler = async (
         transaction.update(administrationDocRef, updateData); // Switched from set with merge to update
       } else {
         // --- Create Path ---
-        operationType = "create";
         administrationDocRef = db.collection("administrations").doc();
 
         // --- Read 1 (Create Path) --- Check if user doc exists BEFORE any writes
@@ -363,8 +532,9 @@ export const upsertAdministrationHandler = async (
           );
         }
       }
-      logger.info(`Successfully prepared administration ${operationType}`, {
+      logger.info("Successfully prepared administration", {
         administrationId: administrationDocRef.id,
+        operationType: administrationId ? "update" : "create",
       });
       return administrationDocRef.id; // Return the ID
     }); // End Transaction
@@ -372,6 +542,55 @@ export const upsertAdministrationHandler = async (
     logger.info("Finished administration upsert transaction", {
       administrationId: newAdministrationId,
     });
+
+    // Sync assignments synchronously for immediate visibility
+    try {
+      const administrationDocRef = db
+        .collection("administrations")
+        .doc(newAdministrationId);
+      const administrationDoc = await administrationDocRef.get();
+
+      if (!administrationDoc.exists) {
+        logger.warn(
+          `Administration ${newAdministrationId} not found after creation. Skipping sync.`
+        );
+        return { status: "ok", administrationId: newAdministrationId };
+      }
+
+      const administrationData = administrationDoc.data() as IAdministration;
+      const isNewAdministration = !administrationId;
+
+      if (isNewAdministration) {
+        await syncNewAdministrationAssignments(
+          newAdministrationId,
+          administrationDocRef,
+          administrationData
+        );
+      } else if (prevData) {
+        await syncModifiedAdministrationAssignments(
+          newAdministrationId,
+          administrationDocRef,
+          prevData,
+          administrationData
+        );
+      } else {
+        await syncNewAdministrationAssignments(
+          newAdministrationId,
+          administrationDocRef,
+          administrationData
+        );
+      }
+
+      logger.info("Finished synchronous assignment sync", {
+        administrationId: newAdministrationId,
+      });
+    } catch (syncError: any) {
+      logger.error("Error during synchronous assignment sync", {
+        error: syncError,
+        administrationId: newAdministrationId,
+      });
+    }
+
     return { status: "ok", administrationId: newAdministrationId };
   } catch (error: any) {
     logger.error("Error during administration upsert", { error });
