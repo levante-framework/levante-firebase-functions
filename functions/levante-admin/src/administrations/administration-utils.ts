@@ -84,10 +84,6 @@ export const getAdministrationsFromOrgs = async ({
     customClaims = userRecord.customClaims || {};
   }
   useNewPermissions = customClaims.useNewPermissions;
-
-  // logger.info("useNewPermissions: ", useNewPermissions);
-  // logger.info("useNewPermissions type: ", typeof useNewPermissions);
-  // logger.info("customClaims.siteNames: ", Object.keys(customClaims?.siteNames || {}));
   const siteIds = Object.keys(customClaims?.siteNames || {});
 
   if (useNewPermissions) {
@@ -593,9 +589,6 @@ export const getAdministrationsForAdministrator = async ({
         useReadOrgs: true,
         adminUid,
       });
-
-    logger.info("administrations: ", administrations);
-    logger.info("administrationData: ", administrationData);
 
     if (verbose) {
       logger.debug(`Found administrations for ${adminUid}`, {

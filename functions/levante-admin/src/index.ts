@@ -572,7 +572,6 @@ export const linkUsers = onCall(async (request) => {
 
 export const getAdministrations = onCall(async (request) => {
   const adminUid = request.auth!.uid;
-  logger.info("request: ", request.data);
 
   const idsOnly = request.data.idsOnly ?? true;
 
