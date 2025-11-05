@@ -1,6 +1,27 @@
-const admin = require('firebase-admin');
 const { getAuth } = require('firebase-admin/auth');
 
+function buildRoleStructure(roleNames, districts = []) {
+  const uniqueRoles = Array.from(new Set((roleNames || []).filter(Boolean)));
+  const siteRoles = {};
+  const siteNames = {};
+
+  if (Array.isArray(districts)) {
+    for (const district of districts) {
+      if (!district || !district.id) {
+        continue;
+      }
+
+      siteRoles[district.id] = uniqueRoles.length > 0 ? [...uniqueRoles] : [];
+      siteNames[district.id] = district.name || district.id;
+    }
+  }
+
+  return {
+    rolesSet: uniqueRoles,
+    siteRoles,
+    siteNames
+  };
+}
 async function createUserClaims(adminApp, users, organizations) {
   const auth = getAuth(adminApp);
   const db = adminApp.firestore();
@@ -28,7 +49,10 @@ async function createUserClaims(adminApp, users, organizations) {
         },
         super_admin: false,
         admin: false,
-        useNewPermissions: false
+        useNewPermissions: true,
+        rolesSet: [],
+        siteRoles: {},
+        siteNames: {}
       };
       
       // Set claims based on user type
@@ -52,9 +76,35 @@ async function createUserClaims(adminApp, users, organizations) {
         claims.admin = true;
         
       }
+
+      let rolesStructure = { rolesSet: [], siteRoles: {}, siteNames: {} };
+      if (userKey === 'superAdmin') {
+        rolesStructure = buildRoleStructure([
+          'super_admin',
+        ], organizations.districts);
+      } else if (userKey === 'siteAdmin') {
+        rolesStructure = buildRoleStructure([
+          'site_admin',
+        ], organizations.districts);
+      } else if (userKey === 'admin') {
+        rolesStructure = buildRoleStructure([
+          'admin',
+        ], organizations.districts);
+      } else if (userKey === 'researchAssistant') {
+        rolesStructure = buildRoleStructure([
+          'research_assistant',
+        ], organizations.districts);
+      } else {
+        rolesStructure = buildRoleStructure([
+          'participant',
+        ], organizations.districts);
+      }
+
+      claims.rolesSet = rolesStructure.rolesSet;
+      claims.siteRoles = rolesStructure.siteRoles;
+      claims.siteNames = rolesStructure.siteNames;
       
-      // Add assessment and other UIDs
-      claims.assessmentUid = user.uid;
+      // Add other UIDs
       claims.adminUid = user.uid;
       claims.roarUid = user.uid;
       
@@ -81,8 +131,9 @@ async function createUserClaims(adminApp, users, organizations) {
           admin: claims.admin,
           super_admin: claims.super_admin,
           adminUid: user.uid,
-          assessmentUid: user.uid,
-          roarUid: user.uid
+          roarUid: user.uid,
+          useNewPermissions: claims.useNewPermissions,
+          ...rolesStructure
         };
 
         await auth.setCustomUserClaims(user.uid, authClaims);

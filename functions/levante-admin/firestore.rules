@@ -1,356 +1,297 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // ============ CORE AUTH FUNCTIONS ============
-    // Basic authentication check
-    function isAuthed() {
-      return request.auth != null;
-    }
 
-    // Get the user ID from the auth token
-    function getUid() {
-      return request.auth.uid;
-    }
+    // ============ CORE AUTH ============
+    function isAuthed() { return request.auth != null; }
+    function getUid()   { return request.auth.uid; }
 
-    // Check if user should use new permission system
     function shouldUseNewPermissions() {
-      return isAuthed() &&
-             request.auth.token.get('useNewPermissions', false) == true;
+      return isAuthed() && request.auth.token.get('useNewPermissions', false) == true;
     }
 
-    // ============ LEGACY SYSTEM (from userClaims document) ============
-    // Fetch user claims from the userClaims collection
+    // ============ LEGACY (unchanged logic) ============
     function getUserClaims() {
-      return get(/databases/$(database)/documents/userClaims/$(request.auth.uid)).data.get("claims", {});
+      return get(/databases/$(database)/documents/userClaims/$(getUid())).data.get("claims", {});
     }
 
-    // Legacy: Check if user is a super_admin or admin
     function isSuperAdminOrAdminLegacy() {
       let claims = getUserClaims();
       return claims.get("super_admin", false) || claims.get("admin", false);
     }
 
-    // Legacy: Get admin orgs from userClaims
-    function getAdminOrgs() {
-      return getUserClaims().get('adminOrgs', {});
-    }
+    function getAdminOrgs() { return getUserClaims().get('adminOrgs', {}); }
 
-    // Legacy: Check if user is admin for specific org IDs
     function isAdminForOrgType(orgType, orgIds) {
+      // orgIds is a list; adminOrgs[orgType] is a list; we can check intersection via hasAny
       return orgIds.size() > 0 && getAdminOrgs().get(orgType, []).hasAny(orgIds);
     }
 
-    // Legacy: Check if user is admin for any organization
     function isAdminForAnyOrgType(orgData) {
-      return isAdminForOrgType('districts', orgData.get('districts', []))
-        || isAdminForOrgType('schools', orgData.get('schools', []))
-        || isAdminForOrgType('classes', orgData.get('classes', []))
-        || isAdminForOrgType('groups', orgData.get('groups', []))
+      return isAdminForOrgType('districts', orgData.get('districts', [])) ||
+             isAdminForOrgType('schools',   orgData.get('schools',   [])) ||
+             isAdminForOrgType('classes',   orgData.get('classes',   [])) ||
+             isAdminForOrgType('groups',    orgData.get('groups',    []));
     }
 
-    // ============ NEW PERMISSION SYSTEM (from auth token) ============
-    // Get user's roles from auth token
-    function getUserRolesFromAuth() {
-      return request.auth.token.get('roles', []);
+    // ============ NEW PERMISSION SYSTEM ============
+
+    match /system/permissions {
+      allow read: if isAuthed()
     }
 
-    // Get the system permissions document
+    // Permissions registry (unchanged)
     function getSystemPermissions() {
       return get(/databases/$(database)/documents/system/permissions).data.get('permissions', {});
     }
 
     function roleHasAction(roleName, resource, action) {
-      let permissions = getSystemPermissions();
-      let rolePerms = permissions.get(roleName, {});
-      let resourcePerms = rolePerms.get(resource, []);
-      return resourcePerms.hasAny([action]);
+      let p = getSystemPermissions();
+      return p.get(roleName, {}).get(resource, []).hasAny([action]);
     }
 
     function roleHasGroupAction(roleName, groupType, action) {
-      let permissions = getSystemPermissions();
-      let rolePerms = permissions.get(roleName, {});
-      let groupsPerms = rolePerms.get('groups', {});
-      let groupTypePerms = groupsPerms.get(groupType, []);
-      return groupTypePerms.hasAny([action]);
+      let p = getSystemPermissions();
+      return p.get(roleName, {}).get('groups', {}).get(groupType, []).hasAny([action]);
     }
 
     function roleHasAdminAction(roleName, adminRole, action) {
-      let permissions = getSystemPermissions();
-      let rolePerms = permissions.get(roleName, {});
-      let adminsPerms = rolePerms.get('admins', {});
-      let adminRolePerms = adminsPerms.get(adminRole, []);
-      return adminRolePerms.hasAny([action]);
+      let p = getSystemPermissions();
+      return p.get(roleName, {}).get('admins', {}).get(adminRole, []).hasAny([action]);
     }
 
-    // New: Check if user has a specific role (roles stored as objects)
+    // Flat role presence (e.g., super_admin)
     function hasRole(role) {
-      return getUserRolesFromAuth().where(roleEntry, roleEntry.role == role).size() > 0;
+      return request.auth.token.get('rolesSet', []).hasAny([role]);
     }
 
+    // Site-scoped role presence. Note: "site" == "district".
     function hasRoleForSite(role, siteId) {
-      return getUserRolesFromAuth()
-        .where(roleEntry, roleEntry.role == role && roleEntry.siteId == siteId)
-        .size() > 0;
+      return request.auth.token
+        .get('siteRoles', {})
+        .get(siteId, [])
+        .hasAny([role]);
     }
 
-    // New: Get the highest role for a user
+    // Highest role (purely for non-site-scoped lookups)
     function getHighestRole() {
-      let roles = getUserRolesFromAuth();
-      return roles.size() == 0 ? 'participant' :
-             hasRole('super_admin') ? 'super_admin' :
-             hasRole('site_admin') ? 'site_admin' :
-             hasRole('admin') ? 'admin' :
-             hasRole('research_assistant') ? 'research_assistant' : 'participant';
+      // Order matters: strongest first
+      return hasRole('super_admin')         ? 'super_admin' :
+             hasRole('site_admin')          ? 'site_admin' :
+             hasRole('admin')               ? 'admin' :
+             hasRole('research_assistant')  ? 'research_assistant' : 'participant';
     }
 
-    // New: Check if user has permission for a specific action
     function hasPermission(resource, action) {
       return roleHasAction(getHighestRole(), resource, action);
     }
 
+    // ----- Site-scoped permission helpers (no where/loops) -----
+    // Returns true if the user has (roleAllows(resource, action) ∧ role present for ANY of the provided siteIds).
+    // We achieve "ANY" by building a boolean over up to a bounded number of IDs.
+    //
+    // IMPORTANT: Firestore rules don't let us loop unknown-length arrays.
+    // Enforce a sane max N for siteIds you pass in (e.g., queries should constrain to 1 siteId or a very small set).
+    // Below we support up to 10 siteIds; raise or lower to taste, but keep bounded.
+    function _anySiteWithRole(role, siteIds) {
+      // expand up to 10 elements safely
+      let s0  = siteIds.size() > 0  && hasRoleForSite(role, siteIds[0]);
+      let s1  = siteIds.size() > 1  && hasRoleForSite(role, siteIds[1]);
+      let s2  = siteIds.size() > 2  && hasRoleForSite(role, siteIds[2]);
+      let s3  = siteIds.size() > 3  && hasRoleForSite(role, siteIds[3]);
+      let s4  = siteIds.size() > 4  && hasRoleForSite(role, siteIds[4]);
+      let s5  = siteIds.size() > 5  && hasRoleForSite(role, siteIds[5]);
+      let s6  = siteIds.size() > 6  && hasRoleForSite(role, siteIds[6]);
+      let s7  = siteIds.size() > 7  && hasRoleForSite(role, siteIds[7]);
+      let s8  = siteIds.size() > 8  && hasRoleForSite(role, siteIds[8]);
+      let s9  = siteIds.size() > 9  && hasRoleForSite(role, siteIds[9]);
+      return s0 || s1 || s2 || s3 || s4 || s5 || s6 || s7 || s8 || s9;
+    }
+
     function hasSitePermissionForSiteIds(siteIds, resource, action) {
-      return hasRole('super_admin')
-        || siteIds.where(siteId,
-            (roleHasAction('site_admin', resource, action) && hasRoleForSite('site_admin', siteId))
-            || (roleHasAction('admin', resource, action) && hasRoleForSite('admin', siteId))
-            || (roleHasAction('research_assistant', resource, action) && hasRoleForSite('research_assistant', siteId))
-          ).size() > 0;
+      return hasRole('super_admin') ||
+             (roleHasAction('site_admin',          resource, action) && _anySiteWithRole('site_admin',         siteIds)) ||
+             (roleHasAction('admin',               resource, action) && _anySiteWithRole('admin',              siteIds)) ||
+             (roleHasAction('research_assistant',  resource, action) && _anySiteWithRole('research_assistant', siteIds));
     }
 
     function hasSiteGroupPermissionForSiteIds(siteIds, groupType, action) {
-      return hasRole('super_admin')
-        || siteIds.where(siteId,
-            (roleHasGroupAction('site_admin', groupType, action) && hasRoleForSite('site_admin', siteId))
-            || (roleHasGroupAction('admin', groupType, action) && hasRoleForSite('admin', siteId))
-            || (roleHasGroupAction('research_assistant', groupType, action) && hasRoleForSite('research_assistant', siteId))
-          ).size() > 0;
+      return hasRole('super_admin') ||
+             (roleHasGroupAction('site_admin', groupType, action) && _anySiteWithRole('site_admin', siteIds)) ||
+             (roleHasGroupAction('admin', groupType, action) && _anySiteWithRole('admin', siteIds)) ||
+             (roleHasGroupAction('research_assistant', groupType, action) && _anySiteWithRole('research_assistant', siteIds));
     }
 
     function hasSiteAdminPermissionForSiteIds(siteIds, adminRole, action) {
-      return hasRole('super_admin')
-        || siteIds.where(siteId,
-            (roleHasAdminAction('site_admin', adminRole, action) && hasRoleForSite('site_admin', siteId))
-            || (roleHasAdminAction('admin', adminRole, action) && hasRoleForSite('admin', siteId))
-            || (roleHasAdminAction('research_assistant', adminRole, action) && hasRoleForSite('research_assistant', siteId))
-          ).size() > 0;
+      return hasRole('super_admin') ||
+             (roleHasAdminAction('site_admin',         adminRole, action) && _anySiteWithRole('site_admin',         siteIds)) ||
+             (roleHasAdminAction('admin',              adminRole, action) && _anySiteWithRole('admin',              siteIds)) ||
+             (roleHasAdminAction('research_assistant', adminRole, action) && _anySiteWithRole('research_assistant', siteIds));
     }
 
+    // Unified “am I an admin for these sites?” with legacy fallback
     function hasAdminPermission(permissionResource, action, targetSites) {
-        return shouldUseNewPermissions()
-          ? (
-              getTargetUserSites().size() > 0
-              && hasSitePermissionForSiteIds(
-                   targetSites,
-                   permissionResource,
-                   action
-                 )
-            )
-          : isAdminForAnyOrgType({
-              'districts': resource.data.get(['districts', 'current'], []),
-              'schools' : resource.data.get(['schools',  'current'], []),
-              'classes' : resource.data.get(['classes',  'current'], []),
-              'groups'  : resource.data.get(['groups',   'current'], [])
-            });
+      return shouldUseNewPermissions()
+        ? (targetSites.size() > 0 && hasSitePermissionForSiteIds(targetSites, permissionResource, action))
+        : isAdminForAnyOrgType({
+            'districts': resource.data.get(['districts', 'current'], []),
+            'schools'  : resource.data.get(['schools',   'current'], []),
+            'classes'  : resource.data.get(['classes',   'current'], []),
+            'groups'   : resource.data.get(['groups',    'current'], [])
+          });
     }
 
-    // New: Check if user is super_admin or site_admin
-    function isSuperAdminOrAdminNew() {
-      return hasRole('super_admin') || hasRole('site_admin');
-    }
+    function isSuperAdminOrAdminNew() { return hasRole('super_admin') || hasRole('site_admin'); }
 
-    // ============ UNIFIED PERMISSION CHECK ============
-    // Main function that routes to new or legacy system based on flag
     function isSuperAdminOrAdmin() {
-      return shouldUseNewPermissions() ?
-        isSuperAdminOrAdminNew() :
-        isSuperAdminOrAdminLegacy();
+      return shouldUseNewPermissions() ? isSuperAdminOrAdminNew() : isSuperAdminOrAdminLegacy();
     }
 
-    // Super admins and admins (for now) can access everything
-    match /{document=**} {
-      allow read, write: if isSuperAdminOrAdmin();
-    }
+    // Super admins + admins: blanket
+    // match /{document=**} {
+      // allow read, write: if isSuperAdminOrAdmin();
+    // }
 
-    // ============ KEY VALIDATION FUNCTIONS ============
-    function keysNotUpdated(keys) {
-      return !request.resource.data.diff(resource.data).affectedKeys().hasAny(keys);
-    }
+    // ============ KEY VALIDATION HELPERS (unchanged) ============
+    function keysNotUpdated(keys) { return !request.resource.data.diff(resource.data).affectedKeys().hasAny(keys); }
+    function onlyTheseKeysUpdated(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
 
-    function onlyTheseKeysUpdated(keys) {
-      return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys);
-    }
-
-    // ============ USER CLAIMS ============
     match /userClaims/{uid} {
-      allow read: if isAuthed() && uid == request.auth.uid;
+      function myData() { return uid == getUid(); }
+      allow read: if isAuthed() && myData()
     }
 
-    // ============ SYSTEM PERMISSIONS ============
-    match /system/permissions {
-      allow read: if isAuthed();
-    }
-
-    // ============ LEGAL DOCS ============
-    match /legal/{form} {
-      allow read: if isAuthed();
-    }
-
-    // ============ USERS COLLECTION ============
+    // ============ USERS ============
     match /users/{uid} {
-      function myData() {
-        return uid == request.auth.uid;
-      }
+      function myData() { return uid == getUid(); }
 
+      // required for parent survey
       function isParentOfUser() {
-        let parentUser = get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
-        return parentUser.userType == 'parent' && resource.data.parentIds.hasAny([request.auth.uid]);
+        let parentUser = get(/databases/$(database)/documents/users/$(getUid())).data;
+        return parentUser.userType == 'parent' && resource.data.parentIds.hasAny([getUid()]);
       }
 
-      function targetUserRoles() {
-        return resource.data.get('roles', []);
-      }
-
+      // TARGET USER SITES (aka districts)
       function getTargetUserSites() {
-        return resource.data.get(['districts', 'current'], []);
+        return resource.data.get(['districts', 'current'], []); // districts == sites
       }
 
-      // Unified read permission check
       function canReadUser() {
-          return (myData() || hasAdminPermission('users', 'read', getTargetUserSites()) || isParentOfUser());
+        return myData() || isParentOfUser() || hasAdminPermission('users', 'read', getTargetUserSites());
       }
 
-      allow read: if canReadUser();
+      allow list: if isAuthed() && (getHighestRole() != 'participant')
+      allow read: if isAuthed() && canReadUser();
 
-      // Survey responses
-      match /surveyResponses/{responseId} {
-        allow read, write: if myData();
-      }
+      match /surveyResponses/{responseId} { allow read, write: if isAuthed() && myData(); }
 
-      // Assignments
-      match /assignments/{administrationId} {
-        function canReadAssignment() {
-          return isAuthed() && (myData() || hasAdminPermission('assignments', 'read', getTargetUserSites()));
-        }
-
-        allow read: if canReadAssignment();
-      }
-
-      // Runs
       match /runs/{runId} {
-        function runAssigningSiteIds() {
-          return resource.data.get('assigningOrgs', {}).get('districts', []);
-        }
-
-        function runReadSiteIds() {
-          return resource.data.get('readOrgs', {}).get('districts', []);
-        }
-
+        // For runs we keep the user-centric check
         function canReadRun() {
           return isAuthed() && (myData() || hasAdminPermission('users', 'read', getTargetUserSites()));
         }
-
-        allow read: if canReadRun();
-        allow create: if myData();
-        allow update: if myData();
+        allow read: if isAuthed() && canReadRun();
+        allow create: if isAuthed() && myData();
+        allow update: if isAuthed() && myData();
 
         match /trials/{trialId} {
-          function canReadTrial() {
-            return myData() || hasAdminPermission('users', 'read', getTargetUserSites());
-          }
-
-          allow read: if canReadTrial();
-          allow write: if myData();
+          function canReadTrial() { return isAuthed() && (myData() || hasAdminPermission('users', 'read', getTargetUserSites())); }
+          allow read: if isAuthed() && canReadTrial();
+          allow write: if isAuthed() && myData();
         }
       }
     }
 
+    // Collection-group queries are evaluated at the top level and cannot be nested under their parent documents
+    match /{parentPath=**}/assignments/{administrationId} {
+      function myData() {
+        return parentPath == ('users/' + getUid());
+      }
+
+      function getTargetSites() {
+        return get(/databases/$(database)/documents/$(parentPath)).data.get(['districts', 'current'], []);
+      }
+
+      function canReadAssignment() {
+        return isAuthed() && (myData() || hasAdminPermission('assignments', 'read', getTargetSites()));
+      }
+
+      allow list: if isAuthed() && (getHighestRole() != 'participant');
+      allow read: if isAuthed() && canReadAssignment();
+    }
 
     // ============ ADMINISTRATIONS ============
     match /administrations/{administrationId} {
       function canReadAdministration() {
-        return isAuthed() && hasAdminPermission('assignments', 'read', resoure.data.siteId);
+        return shouldUseNewPermissions() ? hasAdminPermission('assignments', 'read', [resource.data.siteId]) : isSuperAdminOrAdminLegacy();
       }
+      allow read: if isAuthed() && canReadAdministration();
 
-      allow read: if canReadAdministration();
+      match /stats/{document=**} {
+        function getAssignmentSiteId() {
+          return get(/databases/$(database)/documents/administrations/$(administrationId)).data.siteId
+        }
 
-      match /stats/completion {
-        allow read: if isAuthed() && hasAdminPermission('assignments', 'read', resoure.data.siteId);
+        allow read: if isAuthed() && hasAdminPermission('assignments', 'read', [getAssignmentSiteId()]);
       }
     }
 
-    // ============ ORG COLLECTIONS (Legacy) ============
-    function getUserOrgs(orgType) {
-      return get(/databases/$(database)/documents/users/$(getUid())).data.get([orgType, 'current'], []);
-    }
-
+    // ============ GROUPS ============
     // Districts (Sites)
     match /districts/{districtId} {
       function canReadDistrict() {
-        return shouldUseNewPermissions() ?
-          hasSiteGroupPermissionForSiteIds([districtId], 'sites', 'read') :
-          isAdminForOrgType('districts', [districtId]);
+        
+        // districtId is the siteId
+        return shouldUseNewPermissions() ? hasSiteGroupPermissionForSiteIds([districtId], 'sites', 'read') : isAdminForOrgType('districts', [districtId]);
       }
 
-      allow read: if canReadDistrict();
+      // Allowing list is necessary for multiple document queries. 
+      allow list: if isAuthed() && (getHighestRole() != 'participant')
+      allow read: if isAuthed() && canReadDistrict();
     }
 
     // Schools
     match /schools/{schoolId} {
-      function canReadSchool() {        
-        return shouldUseNewPermissions() ?
-          hasSiteGroupPermissionForSiteIds([resource.data.get('districtId', 'nullId')], 'schools', 'read') :
-          (isAdminForOrgType('districts', [resource.data.get('districtId', 'nullId')]) || isAdminForOrgType('schools', [schoolId]));
+      function canReadSchool() {
+        let siteId = resource.data.get('districtId', 'nullId'); // parent site
+        return shouldUseNewPermissions()
+          ? hasSiteGroupPermissionForSiteIds([siteId], 'schools', 'read')
+          : (isAdminForOrgType('districts', [siteId]) || isAdminForOrgType('schools', [schoolId]));
       }
-
-      allow read: if canReadSchool();
+      allow list: if isAuthed() && (getHighestRole() != 'participant')
+      allow read: if isAuthed() && canReadSchool();
     }
 
     // Classes
     match /classes/{classId} {
       function canReadClass() {
-        let legacyCheck = isAdminForOrgType('classes', [classId])
-          || isAdminForOrgType('schools', [resource.data.get('schoolId', 'nullId')])
-          || isAdminForOrgType('districts', [resource.data.get('districtId', 'nullId')]);
-        
-        return shouldUseNewPermissions() ?
-          (hasSiteGroupPermissionForSiteIds([resource.data.get('districtId', 'nullId')], 'classes', 'read')) :
-          legacyCheck;
-      }
+        let siteId   = resource.data.get('districtId', 'nullId');
+        let schoolId = resource.data.get('schoolId',  'nullId');
 
-      allow read: if canReadClass();
+        let legacyCheck = isAdminForOrgType('classes', [classId]) ||
+                          isAdminForOrgType('schools', [schoolId]) ||
+                          isAdminForOrgType('districts', [siteId]);
+
+        return shouldUseNewPermissions()
+          ? hasSiteGroupPermissionForSiteIds([siteId], 'classes', 'read')
+          : legacyCheck;
+      }
+      allow list: if isAuthed() && (getHighestRole() != 'participant')
+      allow read: if isAuthed() && canReadClass();
     }
 
-    // Groups (Cohorts)
+    // Cohorts
     match /groups/{groupId} {
       function canReadGroup() {
+        // parentOrgId for groups should be the parent site (district)
+        let siteId = resource.data.get('parentOrgId', 'nullId');
         let legacyCheck = isAdminForOrgType('groups', [groupId]);
-
-        return shouldUseNewPermissions() ?
-          hasSiteGroupPermissionForSiteIds([resource.data.get('parentOrgId', 'nullId')], 'cohorts', 'read') :
-          legacyCheck;
+        return shouldUseNewPermissions()
+          ? hasSiteGroupPermissionForSiteIds([siteId], 'cohorts', 'read')
+          : legacyCheck;
       }
-
-      allow read: if canReadGroup();
-    }
-
-    // ============ GUESTS ============
-    match /guests/{guestUid} {
-      function isGuest() {
-        return isAuthed() && request.auth.uid == guestUid;
-      }
-
-      allow read: if isGuest();
-      allow create: if isGuest() && request.resource.data.get('userType', 'nullType') == 'guest';
-      allow update: if isGuest() && keysNotUpdated(['userType']);
-      allow delete: if false;
-
-      match /runs/{runId} {
-        allow create, update: if isGuest();
-
-        match /trials/{trialId} {
-          allow create, update: if isGuest();
-        }
-      }
+      allow list: if isAuthed() && (getHighestRole() != 'participant')
+      allow read: if isAuthed() && canReadGroup();
     }
 
     // ============ TASKS ============
@@ -366,33 +307,28 @@ service cloud.firestore {
       }
 
       function canReadTask() {
-        return shouldUseNewPermissions() ?
-          (isAuthed() && hasPermission('tasks', 'read')) :
-          isAuthed();
+        return shouldUseNewPermissions()
+          ? (isAuthed() && hasPermission('tasks', 'read'))
+          : isAuthed();
       }
 
       function canCreateTask() {
         let baseCheck = isAuthed() && !request.resource.data.keys().hasAny(['registered']);
-
-        return shouldUseNewPermissions() ?
-          (baseCheck && hasPermission('tasks', 'create')) :
-          baseCheck;
+        return shouldUseNewPermissions() ? (baseCheck && hasPermission('tasks', 'create')) : baseCheck;
       }
 
       function canUpdateTaskWithPermission() {
-        return shouldUseNewPermissions() ?
-          (canUpdateTask() && hasPermission('tasks', 'update')) :
-          canUpdateTask();
+        return shouldUseNewPermissions() ? (canUpdateTask() && hasPermission('tasks', 'update')) : canUpdateTask();
       }
 
-      allow read: if canReadTask();
-      allow create: if canCreateTask();
-      allow update: if canUpdateTaskWithPermission();
+      allow read:   if isAuthed() && canReadTask();
+      allow create: if isAuthed() && canCreateTask();
+      allow update: if isAuthed() && canUpdateTaskWithPermission();
 
       match /variants/{variantId} {
-        allow read: if canReadTask();
-        allow create: if canCreateTask();
-        allow update: if canUpdateTaskWithPermission();
+        allow read:   if isAuthed() && canReadTask();
+        allow create: if isAuthed() && canCreateTask();
+        allow update: if isAuthed() && canUpdateTaskWithPermission();
       }
     }
   }

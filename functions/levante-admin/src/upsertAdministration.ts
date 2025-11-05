@@ -7,6 +7,7 @@ import {
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import type { IAssessment, IOrgsList } from "./interfaces.js"; // Assuming necessary types/helpers are in common
+import type { Class, Group, School } from "../firestore-schema.js";
 
 interface UpsertAdministrationData {
   name: string;
@@ -40,6 +41,7 @@ interface IAdministrationDoc {
   tags: string[];
   legal?: { [key: string]: unknown };
   testData: boolean;
+  siteId: string;
   readOrgs?: IOrgsList;
   minimalOrgs?: IOrgsList;
   createdAt: Timestamp;
@@ -241,6 +243,80 @@ export const upsertAdministrationHandler = async (
         const userDocRef = db.collection("users").doc(callerAdminUid);
         const userDoc = await transaction.get(userDocRef);
 
+        let siteId = orgs.districts?.[0];
+
+        if (!siteId) {
+          const groupId = orgs.groups?.[0];
+          const classId = orgs.classes?.[0];
+          const schoolId = orgs.schools?.[0];
+
+          if (groupId) {
+            const groupDocRef = db.collection("groups").doc(groupId);
+            const groupDoc = await transaction.get(groupDocRef);
+            if (!groupDoc.exists) {
+              throw new HttpsError(
+                "invalid-argument",
+                `Group ${groupId} not found while resolving siteId.`
+              );
+            }
+
+            const groupData = groupDoc.data() as Group | undefined;
+            if (!groupData?.parentOrgId) {
+              throw new HttpsError(
+                "invalid-argument",
+                `Group ${groupId} is missing a parentOrgId.`
+              );
+            }
+
+            siteId = groupData.parentOrgId;
+          } else if (classId) {
+            const classDocRef = db.collection("classes").doc(classId);
+            const classDoc = await transaction.get(classDocRef);
+            if (!classDoc.exists) {
+              throw new HttpsError(
+                "invalid-argument",
+                `Class ${classId} not found while resolving siteId.`
+              );
+            }
+
+            const classData = classDoc.data() as Class | undefined;
+            if (!classData?.districtId) {
+              throw new HttpsError(
+                "invalid-argument",
+                `Class ${classId} is missing a districtId.`
+              );
+            }
+
+            siteId = classData.districtId;
+          } else if (schoolId) {
+            const schoolDocRef = db.collection("schools").doc(schoolId);
+            const schoolDoc = await transaction.get(schoolDocRef);
+            if (!schoolDoc.exists) {
+              throw new HttpsError(
+                "invalid-argument",
+                `School ${schoolId} not found while resolving siteId.`
+              );
+            }
+
+            const schoolData = schoolDoc.data() as School | undefined;
+            if (!schoolData?.districtId) {
+              throw new HttpsError(
+                "invalid-argument",
+                `School ${schoolId} is missing a districtId.`
+              );
+            }
+
+            siteId = schoolData.districtId;
+          }
+        }
+
+        if (!siteId) {
+          throw new HttpsError(
+            "invalid-argument",
+            "Unable to determine siteId. Provide a district or an organization associated with a district."
+          );
+        }
+
         // Prepare Administration Data for creation
         const administrationData: IAdministrationDoc = {
           name,
@@ -261,6 +337,7 @@ export const upsertAdministrationHandler = async (
           testData: isTestData ?? false,
           readOrgs: orgs,
           minimalOrgs: orgs,
+          siteId,
           createdAt: FieldValue.serverTimestamp() as Timestamp,
           updatedAt: FieldValue.serverTimestamp() as Timestamp,
         };

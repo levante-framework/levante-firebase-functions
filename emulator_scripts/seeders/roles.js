@@ -8,6 +8,10 @@ async function updateUserRoles(adminApp, users, organizations) {
   
   // Extract district IDs from the organizations for easy reference
   const districtIds = organizations.districts.map(d => d.id);
+  const districtNamesById = organizations.districts.reduce((acc, district) => {
+    acc[district.id] = district.name || district.id;
+    return acc;
+  }, {});
   
   for (const [userKey, user] of Object.entries(users)) {
     try {
@@ -20,6 +24,7 @@ async function updateUserRoles(adminApp, users, organizations) {
           // Super admin gets special "any" siteId
           roles.push({
             siteId: "any",
+            siteName: "Any",
             role: "super_admin"
           });
           console.log(`      - Added super_admin role with siteId: any`);
@@ -29,6 +34,7 @@ async function updateUserRoles(adminApp, users, organizations) {
           for (const districtId of districtIds) {
             roles.push({
               siteId: districtId,
+              siteName: districtNamesById[districtId],
               role: "admin"
             });
             console.log(`      - Added admin role with siteId: ${districtId}`);
@@ -40,6 +46,7 @@ async function updateUserRoles(adminApp, users, organizations) {
         for (const districtId of districtIds) {
           roles.push({
             siteId: districtId,
+            siteName: districtNamesById[districtId],
             role: "participant"
           });
           console.log(`      - Added participant role with siteId: ${districtId}`);
