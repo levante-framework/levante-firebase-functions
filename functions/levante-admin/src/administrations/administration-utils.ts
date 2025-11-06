@@ -74,7 +74,6 @@ export const getAdministrationsFromOrgs = async ({
   let administrations: string[] = [];
   const administrationData: { [id: string]: IAdministration } = {};
 
-
   let useNewPermissions = false;
   let customClaims: any = {};
 
@@ -160,7 +159,7 @@ export const getAdministrationsFromOrgs = async ({
     }
   } else {
     // Because ``in`` queries are limited to 10 comparisons each time,
-  // we chuck the orgs array into chunks of 10.
+    // we chuck the orgs array into chunks of 10.
     for (const orgChunk of chunkOrgs(orgs, 10)) {
       const orgIds = _flatten(Object.values(orgChunk));
 
@@ -183,7 +182,7 @@ export const getAdministrationsFromOrgs = async ({
         .where(Filter.and(...filterComponents))
         .select("administrationId")
         .limit(queryLimit);
-    
+
       let querySnapshot = await transaction.get(legacyQuery);
 
       for (const documentSnapshot of querySnapshot.docs) {
@@ -514,9 +513,7 @@ export const getAdministrationsForAdministrator = async ({
       .get(userClaimsQuery)
       .then((snapshot) => {
         if (snapshot.empty) {
-          throw new Error(
-            `No user claims found for the Roar UID ${adminUid}`
-          );
+          throw new Error(`No user claims found for the Roar UID ${adminUid}`);
         }
 
         if (snapshot.docs.length > 1) {

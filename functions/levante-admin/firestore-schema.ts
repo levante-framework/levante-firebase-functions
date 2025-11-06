@@ -49,6 +49,7 @@ export interface Administration {
   assessments: Assessment[];
   classes: string[]; // Document IDs from `classes` collection
   createdBy: string; // User UID
+  creatorName: string;
   dateClosed: Timestamp;
   dateCreated: Timestamp;
   dateOpened: Timestamp;

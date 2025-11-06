@@ -108,20 +108,17 @@ export const completeTask = onCall(async (request) => {
 
     logger.info(userId, "completed task", {
       administrationId,
-      taskId
+      taskId,
     });
 
     return { success: true, message: "Task completed successfully" };
   } catch (error) {
-    logger.error(
-        request.auth?.uid,
-        "failed to complete task"
-      ),
+    logger.error(request.auth?.uid, "failed to complete task"),
       {
         error,
         administrationId: request.data?.administrationId,
         taskId: request.data?.taskId,
-      }
+      };
 
     if (error instanceof HttpsError) {
       throw error;

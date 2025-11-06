@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import * as admin from "firebase-admin/app";
+import { deleteApp } from "firebase-admin/app";
 import { getFirestore } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import yargs from "yargs";
@@ -15,6 +16,7 @@ interface Args {
   outputFile: string;
   userId: string;
   claimsFile?: string;
+  overwrite: boolean;
 }
 
 const argv = yargs(hideBin(process.argv))
@@ -53,6 +55,13 @@ const argv = yargs(hideBin(process.argv))
       alias: "c",
       description: "Path to a JSON file with new custom claims to add",
       type: "string",
+    },
+    overwrite: {
+      alias: "w",
+      description:
+        "When set, overwrite existing custom claim values for matching keys",
+      type: "boolean",
+      default: false,
     },
   })
   .help("help")
@@ -97,13 +106,18 @@ type ScriptResults = {
   dryRun: boolean;
   existingClaims: Record<string, unknown> | null;
   addedClaims: Record<string, unknown>;
+  overwrittenClaims: Record<
+    string,
+    {
+      previous: unknown;
+      new: unknown;
+    }
+  >;
   skippedClaims: string[];
 };
 
 function readClaimsFile(filePath: string): Record<string, unknown> {
-  const resolvedPath = isAbsolute(filePath)
-    ? filePath
-    : resolve(process.cwd(), filePath);
+  const resolvedPath = isAbsolute(filePath) ? filePath : resolve(process.cwd(), filePath);
 
   if (!fs.existsSync(resolvedPath)) {
     console.error(`Claims file not found: ${resolvedPath}`);
@@ -143,6 +157,9 @@ ${JSON.stringify(results.existingClaims ?? {}, null, 2)}
 Added Claims:
 ${JSON.stringify(results.addedClaims, null, 2)}
 
+Overwritten Claims:
+${JSON.stringify(results.overwrittenClaims, null, 2)}
+
 Skipped Claims:
 ${JSON.stringify(results.skippedClaims, null, 2)}
 `;
@@ -159,6 +176,7 @@ async function main() {
     console.log(`Dry run mode: ${dryRun ? "ON" : "OFF"}`);
     console.log(`Batch size: ${argv.batchSize}`);
     console.log(`User ID: ${argv.userId}`);
+    console.log(`Overwrite existing claims: ${argv.overwrite ? "ON" : "OFF"}`);
 
     console.log("Initializing Firebase connection...");
     const app = await initializeApp();
@@ -174,27 +192,43 @@ async function main() {
     console.log("Current custom claims:");
     console.log(existingClaims);
 
+    const hasExistingStoredClaims = Object.keys(existingClaims).length > 0;
+    const normalizedExistingClaims = hasExistingStoredClaims ? existingClaims : null;
+
     const results: ScriptResults = {
       userId: argv.userId,
       environment: argv.environment,
       dryRun,
-      existingClaims: existingClaims && Object.keys(existingClaims).length > 0 ? existingClaims : null,
+      existingClaims: normalizedExistingClaims,
       addedClaims: {},
+      overwrittenClaims: {},
       skippedClaims: [],
     };
 
     if (!argv.claimsFile) {
       console.log("\nNo claims file provided. Exiting after displaying current claims.");
       writeResultsToFile(results, argv.outputFile);
-      await app.delete();
+      await deleteApp(app);
       return;
     }
 
     const newClaims = readClaimsFile(argv.claimsFile);
     const claimsToAdd: Record<string, unknown> = {};
+    const claimsToOverwrite: Record<string, unknown> = {};
+    const overwrittenClaimsDetails: Record<
+      string,
+      {
+        previous: unknown;
+        new: unknown;
+      }
+    > = {};
     const skippedClaims: string[] = [];
 
     const entries = Object.entries(newClaims);
+    const stringifyClaimValue = (input: unknown) => {
+      const json = JSON.stringify(input);
+      return json === undefined ? "undefined" : json;
+    };
     const progressBar = new cliProgress.SingleBar({
       format: "Processing [{bar}] {percentage}% | ETA: {eta}s | {value}/{total}",
       barCompleteChar: "#",
@@ -204,34 +238,51 @@ async function main() {
     progressBar.start(entries.length, 0);
 
     for (const [key, value] of entries) {
+      const nextValueString = stringifyClaimValue(value);
       if (key in existingClaims) {
-        skippedClaims.push(key);
+        if (argv.overwrite) {
+          const previousValue = existingClaims[key];
+          const previousValueString = stringifyClaimValue(previousValue);
+          claimsToOverwrite[key] = value;
+          overwrittenClaimsDetails[key] = {
+            previous: previousValue,
+            new: value,
+          };
+          const overwritePrefix = dryRun ? "DRY RUN - would overwrite" : "Overwriting";
+          console.log(
+            `${overwritePrefix} claim '${key}' from ${previousValueString} to ${nextValueString}`,
+          );
+        } else {
+          skippedClaims.push(key);
+        }
       } else {
         claimsToAdd[key] = value;
-        console.log(
-          dryRun
-            ? `DRY RUN - would add claim '${key}' with value ${JSON.stringify(value)}`
-            : `Adding claim '${key}' with value ${JSON.stringify(value)}`,
-        );
+        const addPrefix = dryRun ? "DRY RUN - would add" : "Adding";
+        console.log(`${addPrefix} claim '${key}' with value ${nextValueString}`);
       }
       progressBar.increment();
     }
 
     progressBar.stop();
 
-    if (Object.keys(claimsToAdd).length === 0) {
-      console.log("\nNo new claims to add. Existing claims already contain provided keys.");
+    const hasNewClaims = Object.keys(claimsToAdd).length > 0;
+    const hasOverwrites = Object.keys(claimsToOverwrite).length > 0;
+
+    if (!hasNewClaims && !hasOverwrites) {
+      console.log(
+        "\nNo claims to add or overwrite. Existing claims already contain provided keys.",
+      );
       if (skippedClaims.length > 0) {
         console.log(`Skipped keys: ${skippedClaims.join(", ")}`);
       }
       results.skippedClaims = skippedClaims;
       writeResultsToFile(results, argv.outputFile);
-      await app.delete();
+      await deleteApp(app);
       return;
     }
 
     if (!dryRun) {
-      const updatedClaims = { ...existingClaims, ...claimsToAdd };
+      const updatedClaims = { ...existingClaims, ...claimsToAdd, ...claimsToOverwrite };
       await auth.setCustomUserClaims(argv.userId, updatedClaims);
       console.log("\n✅ Custom claims updated successfully.");
       console.log("Updated custom claims:");
@@ -242,11 +293,12 @@ async function main() {
     }
 
     results.addedClaims = claimsToAdd;
+    results.overwrittenClaims = overwrittenClaimsDetails;
     results.skippedClaims = skippedClaims;
 
     writeResultsToFile(results, argv.outputFile);
 
-    await app.delete();
+    await deleteApp(app);
   } catch (error) {
     console.error("Fatal error during execution:", error);
     process.exit(1);
