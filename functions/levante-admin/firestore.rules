@@ -202,6 +202,27 @@ service cloud.firestore {
       allow read: if isAuthed() && canReadAssignment();
     }
 
+    // ============ GUESTS ============
+    match /guests/{guestUid} {
+      function canWriteGuests() {
+        return isAuthed() && (getUid() == guestUid);
+      }
+
+      allow read: if canWriteGuests();
+      allow create: if canWriteGuests();
+      allow update: if canWriteGuests();
+
+      match /runs/{runId} {
+        allow create: if canWriteGuests();
+        allow update: if canWriteGuests();
+          
+        match /trials/{trialId} {
+          allow create: if canWriteGuests();
+          allow update: if canWriteGuests();
+        }
+      }
+    }
+
     // ============ ADMINISTRATIONS ============
     match /administrations/{administrationId} {
       function getAdminDocCreatorId() {
