@@ -77,7 +77,6 @@ ensurePermissionsLoaded().catch((error) =>
 
 setGlobalOptions({ timeoutSeconds: 540 });
 
-
 // TODO: Remove this function and wrapper in firekit
 export const setUidClaims = onCall(async (request) => {
   const adminUid = request.auth!.uid;

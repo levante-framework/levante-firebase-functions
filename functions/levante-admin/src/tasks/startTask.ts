@@ -244,16 +244,16 @@ export const startTask = onCall(async (request): Promise<StartTaskResult> => {
 
     logger.info(uid, "started task", {
       administrationId,
-      taskId
+      taskId,
     });
 
     return result;
   } catch (error) {
-    logger.error(
-      request.auth?.uid,
-      "failed to start task",
-      { error, administrationId: request.data?.administrationId, taskId: request.data?.taskId }
-    );
+    logger.error(request.auth?.uid, "failed to start task", {
+      error,
+      administrationId: request.data?.administrationId,
+      taskId: request.data?.taskId,
+    });
 
     if (error instanceof HttpsError) {
       throw error;

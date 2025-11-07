@@ -22,6 +22,7 @@ interface UpsertAdministrationData {
   administrationId?: string; // For updating existing
   isTestData?: boolean;
   legal?: { [key: string]: unknown };
+  creatorName: string;
 }
 
 interface IAdministrationDoc {
@@ -46,6 +47,7 @@ interface IAdministrationDoc {
   minimalOrgs?: IOrgsList;
   createdAt: Timestamp;
   updatedAt: Timestamp;
+  creatorName: string;
 }
 
 export const upsertAdministrationHandler = async (
@@ -130,6 +132,7 @@ export const upsertAdministrationHandler = async (
     administrationId,
     isTestData = false,
     legal,
+    creatorName,
   } = data as UpsertAdministrationData;
 
   // Debug logging for date values
@@ -323,6 +326,7 @@ export const upsertAdministrationHandler = async (
           publicName: publicName ?? name,
           normalizedName,
           createdBy: callerAdminUid,
+          creatorName: creatorName,
           groups: orgs.groups ?? [],
           classes: orgs.classes ?? [],
           schools: orgs.schools ?? [],

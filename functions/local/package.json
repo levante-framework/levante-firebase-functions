@@ -15,6 +15,7 @@
     "update-user-district-claims": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/update-user-district-claims.ts",
     "denormalize-administrations": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/denormalize-administrations.ts",
     "add-archived": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/add-archived.ts",
+    "add-creator-name-to-administrations": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/add-creator-name-to-administrations.ts",
     "update-assignment-variants": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/update-assignment-variants.ts",
     "merge-users": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/merge-users.ts",
     "add-timestamps": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/add-timestamps.ts",

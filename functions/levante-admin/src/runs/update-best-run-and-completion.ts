@@ -149,7 +149,9 @@ export const updateBestRunAndCompletion = async ({
           });
         }
 
-        logger.info(`Updated best run to ${bestRun} in assignment ${assignmentId} for task ${taskId}`);
+        logger.info(
+          `Updated best run to ${bestRun} in assignment ${assignmentId} for task ${taskId}`
+        );
 
         return {
           bestRunId: bestRun,

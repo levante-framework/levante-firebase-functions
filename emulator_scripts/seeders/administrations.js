@@ -128,6 +128,7 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
         assessments: assessments,
         classes: testOrgs.classes,
         createdBy: users.admin.uid,
+        creatorName: users.admin.displayName,
         dateClosed: admin.firestore.Timestamp.fromDate(closeDate),
         dateCreated: admin.firestore.FieldValue.serverTimestamp(),
         dateOpened: admin.firestore.Timestamp.fromDate(now),

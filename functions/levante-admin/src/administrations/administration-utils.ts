@@ -74,7 +74,6 @@ export const getAdministrationsFromOrgs = async ({
   let administrations: string[] = [];
   const administrationData: { [id: string]: IAdministration } = {};
 
-
   let useNewPermissions = false;
   let customClaims: any = {};
 
@@ -160,7 +159,7 @@ export const getAdministrationsFromOrgs = async ({
     }
   } else {
     // Because ``in`` queries are limited to 10 comparisons each time,
-  // we chuck the orgs array into chunks of 10.
+    // we chuck the orgs array into chunks of 10.
     for (const orgChunk of chunkOrgs(orgs, 10)) {
       const orgIds = _flatten(Object.values(orgChunk));
 
@@ -183,7 +182,7 @@ export const getAdministrationsFromOrgs = async ({
         .where(Filter.and(...filterComponents))
         .select("administrationId")
         .limit(queryLimit);
-    
+
       let querySnapshot = await transaction.get(legacyQuery);
 
       for (const documentSnapshot of querySnapshot.docs) {
@@ -255,16 +254,16 @@ export const getAdministrationsFromOrgs = async ({
 /**
  * Processes the removal of orgs for a specific user.
  *
- * @param {string} roarUid - The unique identifier for the user.
+ * @param {string} uid - The unique identifier for the user.
  * @param {IOrgsList} removedOrgs - An object containing the different org types and their corresponding org IDs that have been removed.
  * @returns {Promise<void>} A Promise that resolves when the process is completed.
  */
 export const processUserRemovedOrgs = async (
-  roarUid: string,
+  uid: string,
   removedOrgs: IOrgsList
 ) => {
   logger.debug("Detected removed orgs", {
-    roarUid,
+    uid,
     removedOrgSummary: summarizeOrgsForLog(removedOrgs),
   });
   const db = getFirestore();
@@ -282,7 +281,7 @@ export const processUserRemovedOrgs = async (
     });
 
     await removeOrgsFromAssignments(
-      [roarUid],
+      [uid],
       administrations,
       removedExhaustiveOrgs,
       transaction
@@ -505,23 +504,21 @@ export const getAdministrationsForAdministrator = async ({
   const db = getFirestore();
 
   return db.runTransaction(async (transaction) => {
-    const roarUidFieldPath = new FieldPath("claims", "roarUid");
+    const uidFieldPath = new FieldPath("claims", "adminUid");
     const userClaimsQuery = db
       .collection("userClaims")
-      .where(roarUidFieldPath, "==", adminUid);
+      .where(uidFieldPath, "==", adminUid);
 
     const { adminOrgs, super_admin } = await transaction
       .get(userClaimsQuery)
       .then((snapshot) => {
         if (snapshot.empty) {
-          throw new Error(
-            `No user claims found for the Roar UID ${adminUid}`
-          );
+          throw new Error(`No user claims found for the UID ${adminUid}`);
         }
 
         if (snapshot.docs.length > 1) {
           throw new Error(
-            `Multiple user claims found for the same Roar UID ${adminUid}`
+            `Multiple user claims found for the same UID ${adminUid}`
           );
         }
 
