@@ -91,8 +91,7 @@ export const ensurePermissionsLoaded = async () => {
 export const getPermissionService = () => service;
 
 const transformClaimsToRoles = (customClaims: unknown): PermUser["roles"] => {
-  const { siteRoles = {}, siteNames = {} } = (customClaims ??
-    {}) as {
+  const { siteRoles = {}, siteNames = {} } = (customClaims ?? {}) as {
     siteRoles?: Record<string, string[]>;
     siteNames?: Record<string, string>;
   };

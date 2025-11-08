@@ -29,10 +29,7 @@ import {
 import { createAdminUser } from "./users/admin-user.js";
 import { updateUserRecordHandler } from "./users/edit-users.js";
 import { _createUsers } from "./users/create-users.js";
-import {
-  _createAdministratorWithRoles,
-  sanitizeRoles,
-} from "./users/create-administrator.js";
+import { _createAdministratorWithRoles } from "./users/create-administrator.js";
 import {
   loadAdministratorContext,
   removeAdministratorRoles,
@@ -64,6 +61,7 @@ import type { OrgData } from "./upsert-org.js";
 import { syncOnRunDocUpdateEventHandler } from "./runs/index.js";
 import { upsertAdministrationHandler } from "./upsertAdministration.js";
 import { ORG_COLLECTION_TO_SUBRESOURCE } from "./utils/constants.js";
+import { sanitizeRoles } from "./utils/role-helpers.js";
 
 // initialize 'default' app on Google cloud platform
 admin.initializeApp({

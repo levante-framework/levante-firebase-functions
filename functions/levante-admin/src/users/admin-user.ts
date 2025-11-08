@@ -11,6 +11,10 @@ import {
   validateAdminStatus,
 } from "./set-custom-claims.js";
 import { ROLES } from "../utils/constants.js";
+import {
+  buildRoleClaimsStructure,
+  type RoleDefinition,
+} from "../utils/role-helpers.js";
 
 /**
  * Creates an admin user in both the admin and assessment Firebase projects.
@@ -108,11 +112,6 @@ export const createAdminUser = async ({
           .createUser(await getUserInfo(true))
           .then(async (userRecord) => {
             // Temporary, admin creation will be refactored to handle all admin role types.
-            const roles = (adminOrgs.districts ?? []).map((districtId) => ({
-              siteId: districtId,
-              role: ROLES.ADMIN,
-            }));
-            await auth.setCustomUserClaims(userRecord.uid, { roles });
             return userRecord.uid;
           });
       } else {
@@ -136,16 +135,6 @@ export const createAdminUser = async ({
   //         +--------------------------------------------------------+
 
   logger.debug(`Setting up custom claims in admin project`);
-
-  // Pretty sure we don't use custom claims anywhere so this can be removed. Keeping for now.
-  // await setUidClaimsHandler({
-  //   roarUid,
-  //   adminUid,
-  //   auth: auth,
-  //   db: db,
-  //   targetAuthUid: targetAuthUids.admin,
-  //   isTestData,
-  // });
 
   await appendOrRemoveAdminOrgs({
     requesterUid: requesterUid,
@@ -227,11 +216,25 @@ export const createAdminUser = async ({
       }
     }
   }
-  const rolesWithNames = districtIds.map((districtId) => ({
+  const rolesWithNames: RoleDefinition[] = districtIds.map((districtId) => ({
     siteId: districtId,
     role: ROLES.ADMIN,
     siteName: idToName.get(districtId) ?? "",
   }));
+
+  const { siteRoles, siteNames, rolesSet } =
+    buildRoleClaimsStructure(rolesWithNames);
+
+  const newClaims = {
+    siteRoles,
+    siteNames,
+    rolesSet,
+    useNewPermissions: false,
+    adminUid,
+    roarUid,
+  };
+
+  await auth.setCustomUserClaims(adminUid, newClaims);
 
   const orgListToMap = (orgs?: string[]) => {
     if (orgs === undefined) {

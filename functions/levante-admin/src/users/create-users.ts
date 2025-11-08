@@ -13,6 +13,11 @@ import { logger } from "firebase-functions/v2";
 import bcrypt from "bcrypt";
 import { isEmulated } from "../utils/utils.js";
 import { ROLES } from "../utils/constants.js";
+import {
+  buildRoleClaimsStructure,
+  type RoleClaimsStructure,
+  type RoleDefinition,
+} from "../utils/role-helpers.js";
 
 interface InputUser {
   userType: string;
@@ -40,6 +45,10 @@ type Claims = {
   roarUid: string;
   adminUid: string;
   assessmentUid: string;
+  useNewPermissions: boolean;
+  rolesSet: string[];
+  siteRoles: Record<string, string[]>;
+  siteNames: Record<string, string>;
 };
 
 interface BaseAuthUserData {
@@ -51,10 +60,7 @@ interface BaseAuthUserData {
   passwordHash?: Buffer;
   password?: string;
   fromCSV: InputUser;
-  customClaims: {
-    claims: Claims;
-    roles: { siteId: string; role: string }[];
-  };
+  customClaims: Claims;
   username?: string;
 }
 
@@ -374,6 +380,8 @@ export const _createUsers = async (
     }
   }
 
+  let roleClaims: RoleClaimsStructure;
+
   // Add relavent data to the auth user object
   for (let i = 0; i < userData.length; i++) {
     const user = userData[i];
@@ -383,7 +391,7 @@ export const _createUsers = async (
     // generate random password
     const stringPassword = generateRandomString();
 
-    const roles: { siteId: string; role: string; siteName: string }[] = [];
+    const roles: RoleDefinition[] = [];
     user.orgIds.districts.forEach((districtId) => {
       roles.push({
         siteId: districtId,
@@ -392,10 +400,16 @@ export const _createUsers = async (
       });
     });
 
+    roleClaims = buildRoleClaimsStructure(roles);
+
     const claims = {
       roarUid: userAdminDocs[i].id,
       adminUid: userAdminDocs[i].id,
       assessmentUid: userAdminDocs[i].id,
+      useNewPermissions: false,
+      rolesSet: roleClaims.rolesSet,
+      siteRoles: roleClaims.siteRoles,
+      siteNames: roleClaims.siteNames,
     };
 
     const authUserData: BaseAuthUserData = {
@@ -405,7 +419,7 @@ export const _createUsers = async (
       emailVerified: false,
       disabled: false,
       fromCSV: user,
-      customClaims: { claims: claims, roles },
+      customClaims: claims,
     };
 
     // Handle password differently for emulator vs production
@@ -421,7 +435,7 @@ export const _createUsers = async (
     logger.debug("Prepared auth user data", {
       uid: authUserData.uid,
       email: authUserData.email,
-      rolesCount: authUserData.customClaims.roles.length,
+      rolesCount: authUserData.customClaims.siteRoles.length,
     });
 
     // TODO: Migrate to using username for login
@@ -436,7 +450,7 @@ export const _createUsers = async (
       adminUserClaimDoc.set({
         claims: {
           ...claims,
-          useNewPermissions: false,
+          useNewPermissions: true,
         },
       })
     );
@@ -480,10 +494,7 @@ export const _createUsers = async (
             });
 
             // Set custom claims after user creation
-            await auth.setCustomUserClaims(
-              userRecord.uid,
-              user.customClaims.claims
-            );
+            await auth.setCustomUserClaims(userRecord.uid, user.customClaims);
 
             results.push({ success: true, uid: userRecord.uid });
           } catch (error: any) {
@@ -655,7 +666,7 @@ export const _createUsers = async (
         createdAt: new Date(),
         updatedAt: new Date(),
         lastUpdated: new Date(), // keeping this until we migrate to updatedAt
-        roles: currentUser.customClaims.roles,
+        roles: roleClaims.roles,
       };
 
       const validUserTypes = ["student", "child", "teacher", "parent"];
