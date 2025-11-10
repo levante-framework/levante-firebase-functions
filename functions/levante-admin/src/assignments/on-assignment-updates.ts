@@ -14,6 +14,7 @@ import type {
   DocumentDeletedEvent,
   DocumentUpdatedEvent,
 } from "../utils/utils.js";
+import type { IAdministration, IOrgsList } from "../interfaces.js";
 
 type Status = "assigned" | "started" | "completed";
 
@@ -115,6 +116,59 @@ const incrementCompletionStatus = async (
       transaction.set(action.docRef, action.data, { merge: true });
     }
   }
+};
+
+/**
+ * Updates administration stats for assignments created for a given org chunk.
+ * This function is called synchronously to ensure stats are updated immediately.
+ *
+ * @param {string} administrationId - The administration ID.
+ * @param {IOrgsList} orgChunk - The org chunk that was processed.
+ * @param {IAdministration} administrationData - The administration data.
+ * @param {number} userCount - The number of users that were assigned (to increment stats by).
+ */
+export const updateAdministrationStatsForOrgChunk = async (
+  administrationId: string,
+  orgChunk: IOrgsList,
+  administrationData: IAdministration,
+  userCount: number
+) => {
+  if (userCount === 0) {
+    return;
+  }
+
+  // Allow negative counts for rollback (decrementing stats)
+  const incrementBy = userCount;
+
+  const db = getFirestore();
+  const completionCollectionRef = db
+    .collection("administrations")
+    .doc(administrationId)
+    .collection("stats");
+
+  const orgList = _reduce(
+    orgChunk,
+    (acc: string[], value: string[]) => {
+      acc.push(...value);
+      return acc;
+    },
+    []
+  );
+  orgList.push("total");
+
+  const taskIds = administrationData.assessments.map((a) => a.taskId);
+
+  await db.runTransaction(async (transaction) => {
+    await incrementCompletionStatus(
+      orgList,
+      "assigned",
+      taskIds,
+      completionCollectionRef,
+      transaction,
+      userCount,
+      true
+    );
+  });
 };
 
 /**

@@ -82,26 +82,94 @@ const syncNewAdministrationAssignments = async (
 
   const orgChunks = chunkOrgs(minimalOrgs, 100);
   const maxChunksToProcessSync = 3;
+  const allCreatedUserIds: string[] = [];
+  const processedChunks: Array<{ orgChunk: IOrgsList; userIds: string[] }> = [];
 
-  for (let i = 0; i < Math.min(orgChunks.length, maxChunksToProcessSync); i++) {
-    const orgChunk = orgChunks[i];
-    await updateAssignmentsForOrgChunkHandler({
-      administrationId,
-      administrationData: currData,
-      orgChunk,
-      mode: "add",
-    });
-  }
-
-  if (orgChunks.length > maxChunksToProcessSync) {
-    logger.info(
-      `Processed first ${maxChunksToProcessSync} org chunks synchronously. Remaining chunks will be processed by background trigger.`,
-      {
+  try {
+    for (
+      let i = 0;
+      i < Math.min(orgChunks.length, maxChunksToProcessSync);
+      i++
+    ) {
+      const orgChunk = orgChunks[i];
+      const result = await updateAssignmentsForOrgChunkHandler({
         administrationId,
-        totalChunks: orgChunks.length,
-        processedChunks: maxChunksToProcessSync,
+        administrationData: currData,
+        orgChunk,
+        mode: "add",
+      });
+
+      if (!result.success) {
+        // If this chunk failed, rollback all previous chunks
+        logger.error(
+          `Assignment creation failed for org chunk ${
+            i + 1
+          }. Rolling back all previous chunks.`,
+          {
+            administrationId,
+            chunkIndex: i,
+            error: result.error,
+            totalChunksProcessed: processedChunks.length,
+          }
+        );
+
+        // Rollback all previously created assignments
+        if (allCreatedUserIds.length > 0) {
+          const { rollbackAssignmentCreation } = await import(
+            "./assignments/assignment-utils.js"
+          );
+          await rollbackAssignmentCreation(allCreatedUserIds, administrationId);
+        }
+
+        throw new Error(
+          `Failed to create assignment for all participants. ${
+            result.error?.message || "Unknown error"
+          }. Please try again.`
+        );
       }
-    );
+
+      // Track successful chunk
+      allCreatedUserIds.push(...result.userIds);
+      processedChunks.push({ orgChunk, userIds: result.userIds });
+    }
+
+    if (orgChunks.length > maxChunksToProcessSync) {
+      logger.info(
+        `Processed first ${maxChunksToProcessSync} org chunks synchronously. Remaining chunks will be processed by background trigger.`,
+        {
+          administrationId,
+          totalChunks: orgChunks.length,
+          processedChunks: maxChunksToProcessSync,
+          totalUsersAssigned: allCreatedUserIds.length,
+        }
+      );
+    }
+
+    logger.info(`Successfully created assignments for all participants`, {
+      administrationId,
+      totalUsersAssigned: allCreatedUserIds.length,
+      chunksProcessed: processedChunks.length,
+    });
+  } catch (error: any) {
+    // If we get here, either a chunk failed or rollback failed
+    // Try to rollback any remaining assignments
+    if (allCreatedUserIds.length > 0) {
+      try {
+        const { rollbackAssignmentCreation } = await import(
+          "./assignments/assignment-utils.js"
+        );
+        await rollbackAssignmentCreation(allCreatedUserIds, administrationId);
+      } catch (rollbackError: any) {
+        logger.error("Error during final rollback", {
+          rollbackError,
+          administrationId,
+          userIds: allCreatedUserIds,
+        });
+      }
+    }
+
+    // Re-throw the error so it can be caught by the handler
+    throw error;
   }
 };
 
