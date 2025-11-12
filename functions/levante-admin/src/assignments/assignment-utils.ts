@@ -121,6 +121,60 @@ export const removeAssignmentFromUsers = async (
 };
 
 /**
+ * Rolls back administration document creation by deleting the administration document
+ * and removing it from the creator's administrationsCreated array.
+ * This is used when assignment creation fails for a new administration to ensure full atomicity.
+ *
+ * @param {string} administrationId - The administration ID to rollback.
+ * @param {string} creatorUid - The UID of the user who created the administration.
+ */
+export const rollbackAdministrationCreation = async (
+  administrationId: string,
+  creatorUid: string
+) => {
+  const db = getFirestore();
+
+  logger.warn(`Rolling back administration document creation`, {
+    administrationId,
+    creatorUid,
+  });
+
+  try {
+    const administrationDocRef = db
+      .collection("administrations")
+      .doc(administrationId);
+
+    const creatorDocRef = db.collection("users").doc(creatorUid);
+
+    await db.runTransaction(async (transaction) => {
+      const adminDoc = await transaction.get(administrationDocRef);
+      const creatorDoc = await transaction.get(creatorDocRef);
+
+      if (adminDoc.exists) {
+        transaction.delete(administrationDocRef);
+      }
+
+      if (creatorDoc.exists) {
+        const fieldPath = new FieldPath("adminData", "administrationsCreated");
+        transaction.update(creatorDocRef, fieldPath, FieldValue.arrayRemove(administrationId));
+      }
+    });
+
+    logger.info(`Successfully rolled back administration document creation`, {
+      administrationId,
+      creatorUid,
+    });
+  } catch (error: any) {
+    logger.error("Error rolling back administration document creation", {
+      error,
+      administrationId,
+      creatorUid,
+    });
+    throw error;
+  }
+};
+
+/**
  * Rolls back assignment creation by deleting assignments and reverting user document updates.
  * This is used when assignment creation fails to ensure atomicity.
  *

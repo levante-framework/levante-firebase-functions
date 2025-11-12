@@ -70,7 +70,9 @@ interface IAdministrationDoc {
 const syncNewAdministrationAssignments = async (
   administrationId: string,
   administrationDocRef: DocumentReference,
-  currData: IAdministration
+  currData: IAdministration,
+  creatorUid?: string,
+  isNewAdministration: boolean = false
 ) => {
   const { minimalOrgs } = await standardizeAdministrationOrgs({
     administrationId,
@@ -121,6 +123,14 @@ const syncNewAdministrationAssignments = async (
           await rollbackAssignmentCreation(allCreatedUserIds, administrationId);
         }
 
+        // If this is a new administration, also rollback the administration document
+        if (isNewAdministration && creatorUid) {
+          const { rollbackAdministrationCreation } = await import(
+            "./assignments/assignment-utils.js"
+          );
+          await rollbackAdministrationCreation(administrationId, creatorUid);
+        }
+
         throw new Error(
           `Failed to create assignment for all participants. ${
             result.error?.message || "Unknown error"
@@ -160,10 +170,26 @@ const syncNewAdministrationAssignments = async (
         );
         await rollbackAssignmentCreation(allCreatedUserIds, administrationId);
       } catch (rollbackError: any) {
-        logger.error("Error during final rollback", {
+        logger.error("Error during final rollback of assignments", {
           rollbackError,
           administrationId,
           userIds: allCreatedUserIds,
+        });
+      }
+    }
+
+    // If this is a new administration, also rollback the administration document
+    if (isNewAdministration && creatorUid) {
+      try {
+        const { rollbackAdministrationCreation } = await import(
+          "./assignments/assignment-utils.js"
+        );
+        await rollbackAdministrationCreation(administrationId, creatorUid);
+      } catch (adminRollbackError: any) {
+        logger.error("Error during final rollback of administration document", {
+          adminRollbackError,
+          administrationId,
+          creatorUid,
         });
       }
     }
@@ -627,12 +653,25 @@ export const upsertAdministrationHandler = async (
 
       const administrationData = administrationDoc.data() as IAdministration;
       const isNewAdministration = !administrationId;
+      const creatorUid = administrationData?.createdBy;
 
       if (isNewAdministration) {
+        if (!creatorUid) {
+          logger.error(
+            `Cannot sync assignments: administration ${newAdministrationId} has no createdBy field`,
+            { administrationId: newAdministrationId }
+          );
+          throw new HttpsError(
+            "internal",
+            "Administration document is missing creator information"
+          );
+        }
         await syncNewAdministrationAssignments(
           newAdministrationId,
           administrationDocRef,
-          administrationData
+          administrationData,
+          creatorUid,
+          true
         );
       } else if (prevData) {
         await syncModifiedAdministrationAssignments(
@@ -642,10 +681,22 @@ export const upsertAdministrationHandler = async (
           administrationData
         );
       } else {
+        if (!creatorUid) {
+          logger.error(
+            `Cannot sync assignments: administration ${newAdministrationId} has no createdBy field`,
+            { administrationId: newAdministrationId }
+          );
+          throw new HttpsError(
+            "internal",
+            "Administration document is missing creator information"
+          );
+        }
         await syncNewAdministrationAssignments(
           newAdministrationId,
           administrationDocRef,
-          administrationData
+          administrationData,
+          creatorUid,
+          true
         );
       }
 
@@ -657,6 +708,14 @@ export const upsertAdministrationHandler = async (
         error: syncError,
         administrationId: newAdministrationId,
       });
+
+      // If this is a new administration and sync failed, the error was already thrown
+      // and should have triggered rollback. Re-throw to prevent the function from
+      // returning successfully when assignments failed to be created.
+      const isNewAdministration = !administrationId;
+      if (isNewAdministration) {
+        throw syncError;
+      }
     }
 
     return { status: "ok", administrationId: newAdministrationId };
