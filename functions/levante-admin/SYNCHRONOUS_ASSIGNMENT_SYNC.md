@@ -54,10 +54,12 @@ const syncNewAdministrationAssignments = async (
 ```
 
 **Process:**
+
 1. Standardizes administration orgs using `standardizeAdministrationOrgs`
 2. Chunks orgs into groups of 100
 3. Processes the first 3 chunks synchronously using `updateAssignmentsForOrgChunkHandler`
-4. Logs if additional chunks will be processed by the background trigger
+4. Tracks all successfully created assignments for rollback if any chunk fails
+5. Logs if additional chunks will be processed by the background trigger
 
 #### `syncModifiedAdministrationAssignments`
 
@@ -73,6 +75,7 @@ const syncModifiedAdministrationAssignments = async (
 ```
 
 **Process:**
+
 1. Calculates removed orgs by comparing previous and current org lists
 2. Removes assignments from users in removed orgs
 3. Standardizes administration orgs
@@ -81,6 +84,7 @@ const syncModifiedAdministrationAssignments = async (
 ### Modified Flow
 
 **Before:**
+
 ```
 upsertAdministration → Transaction → Return
                                       ↓
@@ -88,6 +92,7 @@ upsertAdministration → Transaction → Return
 ```
 
 **After:**
+
 ```
 upsertAdministration → Transaction → Sync Assignments (sync) → Return
                                       ↓
@@ -124,26 +129,89 @@ The implementation processes the first **3 org chunks** synchronously, where eac
 - **Performance**: Keeps response times reasonable
 
 These limits can be adjusted by modifying the `maxChunksToProcessSync` constant in:
+
 - `syncNewAdministrationAssignments`
 - `syncModifiedAdministrationAssignments`
 
-## Error Handling
+## Transactional Guarantees
 
-The synchronous sync is wrapped in a try-catch block that:
+The assignment creation process implements **all-or-nothing semantics** to ensure data integrity:
 
-- Logs errors without failing the main `upsertAdministration` operation
-- Allows the function to return successfully even if sync fails
-- Relies on the background trigger as a fallback for error recovery
+### All-or-Nothing Behavior
 
-This ensures that assignment creation/updates are not blocked by sync errors. Even if the synchronous sync encounters an error, the administration document is still created/updated successfully, and the background trigger will process the assignments asynchronously.
+When creating assignments for participants, the system guarantees that **all participants receive the assignment, or none do**. This prevents partial assignment states where some participants have assignments while others do not.
+
+### Rollback Mechanism
+
+If assignment creation fails for **any** participant in any chunk:
+
+1. **Automatic Rollback**: The system automatically calls `rollbackAssignmentCreation` to revert all assignment-related changes
+2. **Assignment Deletion**: All assignment documents created during the process are deleted
+3. **User Document Reversion**: The administration ID is removed from user documents' `assignments` arrays
+4. **Statistics Reversion**: Any administration statistics that were incremented are decremented
+5. **Administration Document Rollback** (for new administrations only): If this is a new administration, the system also calls `rollbackAdministrationCreation` to:
+   - Delete the administration document from the `administrations` collection
+   - Remove the administration ID from the creator's `adminData.administrationsCreated` array
+6. **Error Propagation**: The error is thrown, causing the entire `upsertAdministration` operation to fail
+
+### Rollback Implementation
+
+The rollback process consists of two functions:
+
+**`rollbackAssignmentCreation`** (in `assignment-utils.ts`):
+
+- Processes rollbacks in batches of up to 500 operations for efficiency
+- Deletes assignment documents from the `users/{userId}/assignments/{administrationId}` subcollection
+- Removes the administration ID from user documents' `assignments.assigned` array
+- Deletes the `assignmentsAssigned.{administrationId}` timestamp field
+- Decrements administration statistics if org chunk and administration data are provided
+
+**`rollbackAdministrationCreation`** (in `assignment-utils.ts`):
+
+- Used only for new administrations when assignment creation fails
+- Deletes the administration document from the `administrations` collection
+- Removes the administration ID from the creator's `adminData.administrationsCreated` array
+- Uses a Firestore transaction to ensure atomicity
+
+### Chunk-Level Rollback
+
+The system tracks all successfully created assignments across chunks:
+
+- Each chunk's successful assignments are tracked in `allCreatedUserIds`
+- If any chunk fails, all previously processed chunks are rolled back
+- This ensures atomicity across the entire synchronous processing phase
+
+### Error Handling
+
+The synchronous sync implements comprehensive error handling:
+
+- **Chunk-Level Errors**: If `updateAssignmentsForOrgChunkHandler` returns `success: false`, all previous chunks are rolled back and an error is thrown
+- **User-Level Errors**: If assignment creation fails for any user within a chunk, that entire chunk is rolled back and an error is thrown
+- **Rollback Errors**: If rollback itself fails, errors are logged but the original error is still propagated
+- **Final Rollback**: A catch block in `syncNewAdministrationAssignments` ensures rollback is attempted even if the error occurs outside the chunk loop
+- **Error Propagation**: Errors thrown from `syncNewAdministrationAssignments` are caught by the try-catch block in `upsertAdministrationHandler`. For new administrations, the error is re-thrown to prevent the function from returning successfully. For updates, the error is logged but not re-thrown, allowing the function to return successfully.
 
 ### Error Recovery
 
-If synchronous sync fails:
-1. The error is logged with full context
-2. The `upsertAdministration` function still returns successfully
-3. The background Firestore trigger will process all assignments
-4. Users may experience a slight delay, but assignments will appear eventually
+If synchronous sync fails for a **new administration**:
+
+1. All created assignments are rolled back automatically via `rollbackAssignmentCreation`
+2. The administration document is deleted via `rollbackAdministrationCreation`
+3. The administration ID is removed from the creator's `adminData.administrationsCreated` array
+4. The error is logged with full context (chunk index, user IDs, administration ID, creator UID)
+5. The error is re-thrown, causing the `upsertAdministration` function to fail
+6. The client receives an error message: "Failed to create assignment for all participants. Please try again."
+7. The entire operation is atomic - either everything succeeds or everything is rolled back
+
+If synchronous sync fails for an **existing administration update**:
+
+1. All created assignments are rolled back automatically via `rollbackAssignmentCreation`
+2. The error is logged but not re-thrown
+3. The `upsertAdministration` function returns successfully (the administration document update remains)
+4. The background Firestore trigger will process assignments asynchronously as a fallback
+5. Users may experience a delay, but assignments will eventually appear via the background trigger
+
+**Note**: For new administrations, the rollback is complete and atomic - both assignments and the administration document are removed. For updates, only assignments are rolled back since the administration document update is considered successful even if assignment sync fails.
 
 ## Performance Considerations
 
@@ -155,6 +223,7 @@ If synchronous sync fails:
 ### Transaction Limits
 
 The implementation respects Firestore transaction limits:
+
 - Maximum of `MAX_TRANSACTIONS` (100) documents per transaction
 - Large user sets are processed in chunks across multiple transactions
 
@@ -178,8 +247,10 @@ Potential enhancements:
 
 ## Related Files
 
-- `functions/levante-admin/src/upsertAdministration.ts` - Main handler with synchronous sync
-- `functions/levante-admin/src/assignments/sync-assignments.ts` - Assignment sync utilities
+- `functions/levante-admin/src/upsertAdministration.ts` - Main handler with synchronous sync and rollback logic
+- `functions/levante-admin/src/assignments/sync-assignments.ts` - Assignment sync utilities with error handling
+- `functions/levante-admin/src/assignments/assignment-utils.ts` - Contains `rollbackAssignmentCreation` and `rollbackAdministrationCreation` functions
+- `functions/levante-admin/src/assignments/on-assignment-updates.ts` - Administration stats management
 - `functions/levante-admin/src/administrations/sync-administrations.ts` - Background sync handlers
 - `functions/levante-admin/src/index.ts` - Firestore trigger definitions
 
@@ -190,4 +261,3 @@ Potential enhancements:
 - The synchronous processing uses the same underlying functions as the background trigger for consistency
 - The helper functions (`syncNewAdministrationAssignments` and `syncModifiedAdministrationAssignments`) are defined as private functions within the `upsertAdministration.ts` file
 - For update operations, the previous administration data is fetched before the transaction to enable proper comparison of org changes
-
