@@ -27,13 +27,6 @@ service cloud.firestore {
       return orgIds.size() > 0 && getAdminOrgs().get(orgType, []).hasAny(orgIds);
     }
 
-    function isAdminForAnyOrgType(orgData) {
-      return isAdminForOrgType('districts', orgData.get('districts', [])) ||
-             isAdminForOrgType('schools',   orgData.get('schools',   [])) ||
-             isAdminForOrgType('classes',   orgData.get('classes',   [])) ||
-             isAdminForOrgType('groups',    orgData.get('groups',    []));
-    }
-
     // ============ NEW PERMISSION SYSTEM ============
 
     match /system/permissions {
@@ -121,12 +114,7 @@ service cloud.firestore {
     function hasAdminPermission(permissionResource, action, targetSites) {
       return shouldUseNewPermissions()
         ? hasSitePermissionForSiteIds(targetSites, permissionResource, action)
-        : isAdminForAnyOrgType({
-            'districts': resource.data.get(['districts', 'current'], []),
-            'schools'  : resource.data.get(['schools',   'current'], []),
-            'classes'  : resource.data.get(['classes',   'current'], []),
-            'groups'   : resource.data.get(['groups',    'current'], [])
-          });
+        : isSuperAdminOrAdminLegacy();
     }
 
     // ============ KEY VALIDATION HELPERS (unchanged) ============
