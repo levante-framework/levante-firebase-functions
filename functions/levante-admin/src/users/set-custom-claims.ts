@@ -20,6 +20,10 @@ import {
   getIdentityProviderDocRef,
   IdentityProviderType,
 } from "./identity-providers.js";
+import {
+  mergeRoleClaimsIntoClaims,
+  type RoleDefinition,
+} from "../utils/role-helpers.js";
 
 /**
  * Retrieve the ROAR UID of a user.
@@ -175,7 +179,7 @@ export const setUidClaimsHandler = async ({
     );
   }
 
-  const currentClaims = user.customClaims || {};
+  const currentClaims = (user.customClaims as Record<string, unknown>) || {};
 
   const _db = db ?? getFirestore();
 
@@ -189,8 +193,20 @@ export const setUidClaimsHandler = async ({
   /* eslint-disable @typescript-eslint/no-unused-vars */
   const { adminOrgs, ...authClaims } = currentClaims;
 
+  const { claims: normalizedClaims, roleClaims } = mergeRoleClaimsIntoClaims(
+    (authClaims as Record<string, unknown>) ?? {}
+  );
+
+  const normalizedClaimsWithPermissions = {
+    ...normalizedClaims,
+    useNewPermissions:
+      typeof normalizedClaims.useNewPermissions === "boolean"
+        ? (normalizedClaims.useNewPermissions as boolean)
+        : roleClaims.roles.length > 0,
+  };
+
   const newClaims = {
-    ...authClaims,
+    ...normalizedClaimsWithPermissions,
     roarUid,
     adminUid,
   };
@@ -396,7 +412,21 @@ export const appendOrRemoveAdminOrgs = async ({
   };
 
   // Get the target user's current custom claims.
-  const { adminOrgs = emptyOrgList, ...otherClaims } = userClaims || {};
+  const { adminOrgs = emptyOrgList, ...otherClaimsRaw } = userClaims || {};
+
+  const merged = mergeRoleClaimsIntoClaims(
+    (otherClaimsRaw as Record<string, unknown>) ?? {}
+  );
+
+  const otherClaims = merged.claims as Record<string, unknown> & {
+    useNewPermissions?: boolean;
+    roles?: RoleDefinition[];
+  };
+
+  if (typeof otherClaims.useNewPermissions !== "boolean") {
+    otherClaims.useNewPermissions =
+      Array.isArray(otherClaims.roles) && otherClaims.roles.length > 0;
+  }
 
   logger.debug(`Editing admin orgs for ${targetUid}`, {
     previousOrgs: adminOrgs,

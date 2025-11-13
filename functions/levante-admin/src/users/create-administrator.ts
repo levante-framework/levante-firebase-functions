@@ -1,17 +1,17 @@
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
-import _uniqBy from "lodash-es/uniqBy.js";
 import { v4 as uuidv4 } from "uuid";
 import type { IOrgsList } from "../interfaces.js";
 import { HttpsError } from "firebase-functions/v2/https";
 import { ADMINISTRATOR_STATUS } from "../utils/constants.js";
+import {
+  buildRoleClaimsStructure,
+  sanitizeRoles,
+  type RoleDefinition,
+} from "../utils/role-helpers.js";
 
-export interface AdministratorRoleDefinition {
-  siteId: string;
-  role: string;
-  siteName: string;
-}
+export type AdministratorRoleDefinition = RoleDefinition;
 
 export interface CreateAdministratorWithRolesInput {
   email: string;
@@ -47,28 +47,6 @@ const buildGroupStructure = (groupIds?: string[]) => {
     all: groupIds,
     dates,
   };
-};
-
-export const sanitizeRoles = (roles: AdministratorRoleDefinition[]) => {
-  if (!Array.isArray(roles)) {
-    return [];
-  }
-
-  const cleaned = roles
-    .filter((role) => role && typeof role === "object")
-    .map((role) => ({
-      siteId: String(role.siteId ?? "").trim(),
-      role: String(role.role ?? "").trim(),
-      siteName: String(role.siteName ?? "").trim(),
-    }))
-    .filter(
-      (role) =>
-        role.siteId.length > 0 &&
-        role.role.length > 0 &&
-        role.siteName.length > 0
-    );
-
-  return _uniqBy(cleaned, (role) => `${role.siteId}::${role.role}`);
 };
 
 export const _createAdministratorWithRoles = async ({
@@ -116,8 +94,10 @@ export const _createAdministratorWithRoles = async ({
     roles: sanitizedRoles,
   });
 
+  const roleClaims = buildRoleClaimsStructure(sanitizedRoles);
+
   const newClaims: Record<string, unknown> = {
-    roles: sanitizedRoles,
+    ...roleClaims,
     useNewPermissions: true,
     adminUid,
   };
@@ -129,7 +109,7 @@ export const _createAdministratorWithRoles = async ({
     archived: false,
     email,
     name,
-    roles: sanitizedRoles,
+    roles: roleClaims.roles,
     createdAt: FieldValue.serverTimestamp(),
     updatedAt: FieldValue.serverTimestamp(),
     testData: isTestData,

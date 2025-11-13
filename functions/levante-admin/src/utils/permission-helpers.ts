@@ -90,11 +90,36 @@ export const ensurePermissionsLoaded = async () => {
 
 export const getPermissionService = () => service;
 
+const transformClaimsToRoles = (customClaims: unknown): PermUser["roles"] => {
+  const { siteRoles = {}, siteNames = {} } = (customClaims ?? {}) as {
+    siteRoles?: Record<string, string[]>;
+    siteNames?: Record<string, string>;
+  };
+
+  const seen = new Set<string>();
+  const roles: Array<{ siteId: string; siteName: string; role: string }> = [];
+
+  for (const [siteId, roleList] of Object.entries(siteRoles)) {
+    for (const role of roleList) {
+      if (!role) continue;
+      const key = `${siteId}:${role}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      roles.push({
+        siteId,
+        siteName: siteNames[siteId] ?? siteId,
+        role,
+      });
+    }
+  }
+
+  return roles as PermUser["roles"];
+};
+
 export const buildPermissionsUserFromAuthRecord = (
   userRecord: UserRecord
 ): PermUser => {
-  const roles = ((userRecord.customClaims as any)?.roles ??
-    []) as PermUser["roles"];
+  const roles = transformClaimsToRoles(userRecord.customClaims);
   return {
     uid: userRecord.uid,
     email: userRecord.email ?? "",

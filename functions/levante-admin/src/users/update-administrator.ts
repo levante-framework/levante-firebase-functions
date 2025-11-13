@@ -7,10 +7,13 @@ import {
 } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 import {
+  buildRoleClaimsStructure,
   sanitizeRoles,
-  type AdministratorRoleDefinition,
-} from "./create-administrator.js";
+  type RoleDefinition,
+} from "../utils/role-helpers.js";
 import { ADMINISTRATOR_STATUS } from "../utils/constants.js";
+
+type AdministratorRoleDefinition = RoleDefinition;
 
 export interface AdministratorContext {
   adminUid: string;
@@ -79,7 +82,6 @@ export const updateAdministratorRoles = async ({
       );
     }
 
-    const adminDocData = adminDoc.data() as Record<string, unknown>;
     const currentRoles = sanitizeRoles(
       Array.isArray(adminDoc.data()?.roles)
         ? (adminDoc.data()!.roles as AdministratorRoleDefinition[])
@@ -161,9 +163,10 @@ export const updateAdministratorRoles = async ({
 
   const existingClaims: Record<string, unknown> =
     (context.targetRecord.customClaims as Record<string, unknown>) ?? {};
+  const roleClaims = buildRoleClaimsStructure(sanitizedRoles);
   const updatedClaims = {
     ...existingClaims,
-    roles: sanitizedRoles,
+    ...roleClaims,
     useNewPermissions: true,
     adminUid: context.adminUid,
   };
@@ -173,7 +176,7 @@ export const updateAdministratorRoles = async ({
   return {
     status: "ok" as const,
     adminUid: context.adminUid,
-    roles: sanitizedRoles,
+    roles: roleClaims.roles,
   };
 };
 
@@ -196,7 +199,6 @@ export const removeAdministratorRoles = async ({
       );
     }
 
-    const adminDocData = adminDoc.data() as Record<string, unknown>;
     const currentRoles = sanitizeRoles(
       Array.isArray(adminDoc.data()?.roles)
         ? (adminDoc.data()!.roles as AdministratorRoleDefinition[])
@@ -258,9 +260,10 @@ export const removeAdministratorRoles = async ({
 
   const existingClaims: Record<string, unknown> =
     (context.targetRecord.customClaims as Record<string, unknown>) ?? {};
+  const roleClaims = buildRoleClaimsStructure(remainingRoles);
   const updatedClaims = {
     ...existingClaims,
-    roles: remainingRoles,
+    ...roleClaims,
     useNewPermissions: true,
     adminUid: context.adminUid,
   };
@@ -270,6 +273,6 @@ export const removeAdministratorRoles = async ({
   return {
     status: "ok" as const,
     adminUid: context.adminUid,
-    roles: remainingRoles,
+    roles: roleClaims.roles,
   };
 };

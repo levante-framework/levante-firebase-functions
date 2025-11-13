@@ -26,6 +26,7 @@
     "update-all-user-custom-claims": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/update-all-user-custom-claims.ts",
     "add-site-name-to-roles": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/add-site-name-to-roles.ts",
     "get-user-custom-claims": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/get-user-custom-claims.ts",
+    "remove-roles-from-custom-claims": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/remove-rules-from-custom-claims.ts",
     "add-site-id-to-administrations": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/add-site-id-to-administrations.ts"
   },
   "author": "Adam Richie-Halford <richiehalford@gmail.com> (https://richiehalford.org/)",
