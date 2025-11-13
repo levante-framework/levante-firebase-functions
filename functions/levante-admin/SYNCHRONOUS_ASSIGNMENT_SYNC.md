@@ -16,19 +16,16 @@ When a user created or edited an assignment via `upsertAdministration`:
 
 ## Solution
 
-The solution implements **synchronous assignment processing** within the `upsertAdministration` handler, ensuring that critical assignment operations complete before the function returns. This provides immediate visibility of assignments while maintaining the background trigger for eventual consistency.
+The solution implements **fully synchronous and atomic assignment processing** within the `upsertAdministration` handler. **All assignment operations are processed synchronously** before the function returns, ensuring immediate visibility of assignments. The system also implements comprehensive atomic rollback - if any participant fails to receive an assignment, the entire operation is rolled back, including the administration document for new administrations.
 
 ## Implementation Details
 
 ### Architecture
 
-The implementation follows a two-tier approach:
+The implementation processes **all org chunks synchronously** within the `upsertAdministration` handler:
 
-1. **Synchronous Processing (Primary)**: Processes the first 3 org chunks (up to ~300 organizations) immediately
-2. **Background Processing (Secondary)**: The existing Firestore trigger continues to handle:
-   - Remaining org chunks for large assignments
-   - Eventual consistency
-   - Edge cases and retries
+1. **Synchronous Processing**: All org chunks are processed synchronously before the function returns
+2. **Background Processing (Redundant)**: The existing Firestore trigger still fires and processes chunks asynchronously, but this is redundant since all chunks are already processed synchronously. The background processing is safe due to idempotent operations but adds unnecessary overhead.
 
 ### Code Structure
 
@@ -49,7 +46,9 @@ Handles synchronous assignment creation for new administrations:
 const syncNewAdministrationAssignments = async (
   administrationId: string,
   administrationDocRef: DocumentReference,
-  currData: IAdministration
+  currData: IAdministration,
+  creatorUid?: string,
+  isNewAdministration: boolean = false
 )
 ```
 
@@ -57,9 +56,11 @@ const syncNewAdministrationAssignments = async (
 
 1. Standardizes administration orgs using `standardizeAdministrationOrgs`
 2. Chunks orgs into groups of 100
-3. Processes the first 3 chunks synchronously using `updateAssignmentsForOrgChunkHandler`
-4. Tracks all successfully created assignments for rollback if any chunk fails
-5. Logs if additional chunks will be processed by the background trigger
+3. Processes **all chunks synchronously** using `updateAssignmentsForOrgChunkHandler`
+4. Tracks all successfully created assignments in `allCreatedUserIds` for rollback if any chunk fails
+5. If any chunk fails, immediately rolls back all previously processed chunks
+6. If this is a new administration and any chunk fails, also rolls back the administration document
+7. Re-throws errors to ensure the function fails if assignment creation fails
 
 #### `syncModifiedAdministrationAssignments`
 
@@ -79,7 +80,8 @@ const syncModifiedAdministrationAssignments = async (
 1. Calculates removed orgs by comparing previous and current org lists
 2. Removes assignments from users in removed orgs
 3. Standardizes administration orgs
-4. Processes the first 3 org chunks synchronously for updates
+4. Processes **all org chunks synchronously** for updates
+5. If any chunk fails, throws an error (errors are caught by the handler and logged but not re-thrown for updates)
 
 ### Modified Flow
 
@@ -94,10 +96,12 @@ upsertAdministration → Transaction → Return
 **After:**
 
 ```
-upsertAdministration → Transaction → Sync Assignments (sync) → Return
+upsertAdministration → Transaction → Sync All Assignments (sync, atomic) → Return
                                       ↓
-                    Firestore Trigger (async) → Process Remaining Chunks
+                    Firestore Trigger (async) → Process All Chunks (redundant, idempotent)
 ```
+
+The synchronous sync is **fully atomic** - if any participant fails to receive an assignment, the entire operation (including the administration document for new administrations) is rolled back before the function returns. All chunks are processed synchronously, so the background trigger is redundant but safe due to idempotent operations.
 
 ### Implementation Details
 
@@ -105,33 +109,29 @@ The synchronous sync happens immediately after the transaction commits:
 
 1. The administration document is fetched from Firestore (to ensure server timestamps are populated)
 2. Based on whether it's a create or update operation, the appropriate sync function is called
-3. The sync function processes org chunks synchronously
-4. The function returns, allowing the client to see the assignment immediately
-5. The background trigger continues processing any remaining chunks asynchronously
+3. The sync function processes **all org chunks synchronously**
+4. The function returns, allowing the client to see all assignments immediately
+5. The background trigger still fires but is redundant since all chunks are already processed
 
 ### Integration with Background Trigger
 
-The background Firestore trigger (`syncAssignmentsOnAdministrationUpdate`) continues to operate:
+The background Firestore trigger (`syncAssignmentsOnAdministrationUpdate`) still fires after document writes, but it is **redundant** since all chunks are already processed synchronously:
 
 - **Idempotent Operations**: All assignment operations are idempotent, so duplicate processing is safe
-- **Large Scale**: For assignments with more than 3 org chunks, the background trigger processes remaining chunks
-- **Resilience**: Provides backup processing if synchronous processing encounters errors
-- **Eventual Consistency**: Ensures all assignments are eventually processed correctly
+- **Redundant Processing**: The background trigger processes all chunks again, which is unnecessary overhead
+- **Future Optimization**: Consider disabling or skipping the background trigger when all chunks have been processed synchronously to reduce unnecessary processing
 
 ## Configuration
 
-### Synchronous Processing Limits
+### Synchronous Processing
 
-The implementation processes the first **3 org chunks** synchronously, where each chunk contains up to **100 organizations**. This balances:
+The implementation processes **all org chunks synchronously**, where each chunk contains up to **100 organizations**. This ensures:
 
-- **Immediate Visibility**: Users see assignments immediately for most common scenarios
-- **Function Timeout**: Prevents Cloud Functions from timing out on very large assignments
-- **Performance**: Keeps response times reasonable
+- **Immediate Visibility**: Users see all assignments immediately, regardless of scale
+- **Complete Atomicity**: All participants receive assignments or none do (for new administrations)
+- **No Partial States**: Eliminates the need for background processing to complete assignments
 
-These limits can be adjusted by modifying the `maxChunksToProcessSync` constant in:
-
-- `syncNewAdministrationAssignments`
-- `syncModifiedAdministrationAssignments`
+**Note**: For very large assignments (hundreds of chunks), this may approach Cloud Functions timeout limits. Monitor function execution times and consider implementing chunk processing limits if timeout issues occur.
 
 ## Transactional Guarantees
 
@@ -217,8 +217,9 @@ If synchronous sync fails for an **existing administration update**:
 
 ### Function Execution Time
 
-- **Small Assignments** (≤3 chunks): Fully processed synchronously
-- **Large Assignments** (>3 chunks): First 3 chunks processed synchronously, remainder processed in background
+- **All Assignments**: All chunks are processed synchronously before the function returns
+- **Execution Time**: Scales linearly with the number of org chunks (each chunk processes up to 100 organizations)
+- **Timeout Considerations**: Cloud Functions have a maximum timeout (typically 540 seconds for 2nd gen). For very large assignments, monitor execution time to ensure it stays within limits
 
 ### Transaction Limits
 
@@ -240,10 +241,10 @@ When testing this functionality:
 
 Potential enhancements:
 
-1. **Configurable Chunk Limits**: Make `maxChunksToProcessSync` configurable via environment variables
-2. **Progress Tracking**: Add metadata to track which chunks have been processed synchronously
-3. **Skip Background Processing**: Optionally skip background trigger for fully-synced assignments
-4. **Metrics**: Track synchronous vs. background processing ratios
+1. **Skip Background Processing**: Disable or skip the background trigger when all chunks have been processed synchronously to reduce unnecessary overhead
+2. **Progress Tracking**: Add metadata to track which chunks have been processed synchronously (useful if we need to reintroduce chunk limits)
+3. **Configurable Chunk Limits**: If timeout issues occur, make chunk processing limits configurable via environment variables
+4. **Metrics**: Track synchronous processing performance and identify any timeout issues
 
 ## Related Files
 
@@ -256,8 +257,13 @@ Potential enhancements:
 
 ## Notes
 
-- The background trigger (`syncAssignmentsOnAdministrationUpdate`) will still fire after document writes
-- Duplicate processing is safe due to idempotent operations
+- The background trigger (`syncAssignmentsOnAdministrationUpdate`) will still fire after document writes, but it is redundant since all chunks are already processed synchronously
+- Duplicate processing is safe due to idempotent operations, but adds unnecessary overhead
 - The synchronous processing uses the same underlying functions as the background trigger for consistency
 - The helper functions (`syncNewAdministrationAssignments` and `syncModifiedAdministrationAssignments`) are defined as private functions within the `upsertAdministration.ts` file
 - For update operations, the previous administration data is fetched before the transaction to enable proper comparison of org changes
+- The rollback mechanism ensures **complete atomicity** - if any participant fails to receive an assignment, the entire operation (including the administration document for new administrations) is rolled back
+- Rollback happens at the chunk level - if any chunk fails, all previously processed chunks are rolled back
+- The `updateAssignmentsForOrgChunkHandler` function also implements its own rollback for failed chunks, providing defense-in-depth
+- Statistics are updated synchronously when adding new assignments (mode: "add") to ensure immediate visibility
+- **All chunks are processed synchronously** - there is no limit on the number of chunks processed, ensuring complete assignment creation before the function returns
