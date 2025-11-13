@@ -6,8 +6,25 @@ import {
 } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
-import type { IAssessment, IOrgsList } from "./interfaces.js"; // Assuming necessary types/helpers are in common
 import type { Class, Group, School } from "../firestore-schema.js";
+import type { IAssessment, IOrgsList, IAdministration } from "./interfaces.js"; // Assuming necessary types/helpers are in common
+import { ORG_NAMES } from "./interfaces.js";
+import { standardizeAdministrationOrgs } from "./administrations/administration-utils.js";
+import { updateAssignmentsForOrgChunkHandler } from "./assignments/sync-assignments.js";
+import _reduce from "lodash-es/reduce.js";
+import _pick from "lodash-es/pick.js";
+import _difference from "lodash-es/difference.js";
+import _fromPairs from "lodash-es/fromPairs.js";
+import _map from "lodash-es/map.js";
+import {
+  chunkOrgs,
+  getOnlyExistingOrgs,
+  getExhaustiveOrgs,
+  getUsersFromOrgs,
+} from "./orgs/org-utils.js";
+import { removeOrgsFromAssignments } from "./assignments/assignment-utils.js";
+import _chunk from "lodash-es/chunk.js";
+import { MAX_TRANSACTIONS } from "./utils/utils.js";
 
 interface UpsertAdministrationData {
   name: string;
@@ -49,6 +66,233 @@ interface IAdministrationDoc {
   updatedAt: Timestamp;
   creatorName: string;
 }
+
+const createAssignments = async (
+  administrationId: string,
+  administrationDocRef: DocumentReference,
+  currData: IAdministration,
+  creatorUid?: string,
+  isNewAdministration: boolean = false
+) => {
+  const { minimalOrgs } = await standardizeAdministrationOrgs({
+    administrationId,
+    administrationDocRef,
+    currData,
+    copyToSubCollections: true,
+    forceCopy: true,
+  });
+
+  const orgChunks = chunkOrgs(minimalOrgs, 100);
+  const allCreatedUserIds: string[] = [];
+  const processedChunks: Array<{ orgChunk: IOrgsList; userIds: string[] }> = [];
+
+  try {
+    for (let i = 0; i < orgChunks.length; i++) {
+      const orgChunk = orgChunks[i];
+      const result = await updateAssignmentsForOrgChunkHandler({
+        administrationId,
+        administrationData: currData,
+        orgChunk,
+        mode: "add",
+      });
+
+      if (!result.success) {
+        // If this chunk failed, rollback all previous chunks
+        logger.error(
+          `Assignment creation failed for org chunk ${
+            i + 1
+          }. Rolling back all previous chunks.`,
+          {
+            administrationId,
+            chunkIndex: i,
+            error: result.error,
+            totalChunksProcessed: processedChunks.length,
+          }
+        );
+
+        // Rollback all previously created assignments
+        if (allCreatedUserIds.length > 0) {
+          const { rollbackAssignmentCreation } = await import(
+            "./assignments/assignment-utils.js"
+          );
+          await rollbackAssignmentCreation(allCreatedUserIds, administrationId);
+        }
+
+        // If this is a new administration, also rollback the administration document
+        if (isNewAdministration && creatorUid) {
+          const { rollbackAdministrationCreation } = await import(
+            "./assignments/assignment-utils.js"
+          );
+          await rollbackAdministrationCreation(administrationId, creatorUid);
+        }
+
+        throw new Error(
+          `Failed to create assignment for all participants. ${
+            result.error?.message || "Unknown error"
+          }. Please try again.`
+        );
+      }
+
+      // Track successful chunk
+      allCreatedUserIds.push(...result.userIds);
+      processedChunks.push({ orgChunk, userIds: result.userIds });
+    }
+
+    logger.info(`Successfully created assignments for all participants`, {
+      administrationId,
+      totalUsersAssigned: allCreatedUserIds.length,
+      chunksProcessed: processedChunks.length,
+      totalChunks: orgChunks.length,
+    });
+  } catch (error: any) {
+    // If we get here, either a chunk failed or rollback failed
+    // Try to rollback any remaining assignments
+    if (allCreatedUserIds.length > 0) {
+      try {
+        const { rollbackAssignmentCreation } = await import(
+          "./assignments/assignment-utils.js"
+        );
+        await rollbackAssignmentCreation(allCreatedUserIds, administrationId);
+      } catch (rollbackError: any) {
+        logger.error("Error during final rollback of assignments", {
+          rollbackError,
+          administrationId,
+          userIds: allCreatedUserIds,
+        });
+      }
+    }
+
+    // If this is a new administration, also rollback the administration document
+    if (isNewAdministration && creatorUid) {
+      try {
+        const { rollbackAdministrationCreation } = await import(
+          "./assignments/assignment-utils.js"
+        );
+        await rollbackAdministrationCreation(administrationId, creatorUid);
+      } catch (adminRollbackError: any) {
+        logger.error("Error during final rollback of administration document", {
+          adminRollbackError,
+          administrationId,
+          creatorUid,
+        });
+      }
+    }
+
+    // Re-throw the error so it can be caught by the handler
+    throw error;
+  }
+};
+
+const updateAssignments = async (
+  administrationId: string,
+  administrationDocRef: DocumentReference,
+  prevData: IAdministration,
+  currData: IAdministration
+) => {
+  const db = getFirestore();
+  const prevOrgs: IOrgsList = _pick(prevData, ORG_NAMES);
+  const currOrgs: IOrgsList = _pick(currData, ORG_NAMES);
+
+  const removedOrgs = _fromPairs(
+    _map(Object.entries(currOrgs), ([key, value]) => [
+      key,
+      _difference(prevOrgs[key], value),
+    ])
+  ) as IOrgsList;
+
+  const numRemovedOrgs = _reduce(
+    removedOrgs,
+    (sum, value) => (value ? sum + value.length : sum),
+    0
+  );
+
+  if (numRemovedOrgs > 0) {
+    let remainingUsersToRemove: string[] = [];
+    let removedExhaustiveOrgs: IOrgsList = {};
+
+    await db.runTransaction(async (transaction) => {
+      const removedExistingOrgs = await getOnlyExistingOrgs(
+        removedOrgs,
+        transaction
+      );
+      removedExhaustiveOrgs = await getExhaustiveOrgs({
+        orgs: removedExistingOrgs,
+        transaction,
+        includeArchived: true,
+      });
+      const usersToRemove = await getUsersFromOrgs({
+        orgs: removedExhaustiveOrgs,
+        transaction,
+        includeArchived: true,
+      });
+
+      if (usersToRemove.length !== 0) {
+        if (usersToRemove.length <= MAX_TRANSACTIONS) {
+          return removeOrgsFromAssignments(
+            usersToRemove,
+            [administrationId],
+            removedExhaustiveOrgs,
+            transaction
+          );
+        } else {
+          remainingUsersToRemove = usersToRemove;
+          return Promise.resolve(usersToRemove.length);
+        }
+      } else {
+        return Promise.resolve(0);
+      }
+    });
+
+    for (const _userChunk of _chunk(remainingUsersToRemove, MAX_TRANSACTIONS)) {
+      await db.runTransaction(async (transaction) => {
+        return removeOrgsFromAssignments(
+          _userChunk,
+          [administrationId],
+          removedExhaustiveOrgs,
+          transaction
+        );
+      });
+    }
+  }
+
+  const { minimalOrgs } = await standardizeAdministrationOrgs({
+    administrationId,
+    administrationDocRef,
+    currData,
+    copyToSubCollections: true,
+    forceCopy: true,
+  });
+
+  const orgChunks = chunkOrgs(minimalOrgs, 100);
+
+  for (let i = 0; i < orgChunks.length; i++) {
+    const orgChunk = orgChunks[i];
+    const result = await updateAssignmentsForOrgChunkHandler({
+      administrationId,
+      administrationData: currData,
+      orgChunk,
+      mode: "update",
+    });
+
+    if (!result.success) {
+      logger.error(`Assignment update failed for org chunk ${i + 1}.`, {
+        administrationId,
+        chunkIndex: i,
+        error: result.error,
+      });
+      throw new Error(
+        `Failed to update assignment for all participants. ${
+          result.error?.message || "Unknown error"
+        }. Please try again.`
+      );
+    }
+  }
+
+  logger.info(`Successfully updated assignments for all participants`, {
+    administrationId,
+    chunksProcessed: orgChunks.length,
+  });
+};
 
 export const upsertAdministrationHandler = async (
   callerAdminUid: string,
@@ -180,12 +424,22 @@ export const upsertAdministrationHandler = async (
 
   // 5. Firestore Transaction
   try {
+    let prevData: IAdministration | undefined;
+
+    if (administrationId) {
+      const prevDoc = await db
+        .collection("administrations")
+        .doc(administrationId)
+        .get();
+      if (prevDoc.exists) {
+        prevData = prevDoc.data() as IAdministration;
+      }
+    }
+
     const newAdministrationId = await db.runTransaction(async (transaction) => {
       let administrationDocRef: DocumentReference;
-      let operationType: string; // To log 'create' or 'update'
 
       if (administrationId) {
-        operationType = "update";
         administrationDocRef = db
           .collection("administrations")
           .doc(administrationId);
@@ -239,7 +493,6 @@ export const upsertAdministrationHandler = async (
         transaction.update(administrationDocRef, updateData); // Switched from set with merge to update
       } else {
         // --- Create Path ---
-        operationType = "create";
         administrationDocRef = db.collection("administrations").doc();
 
         // --- Read 1 (Create Path) --- Check if user doc exists BEFORE any writes
@@ -363,8 +616,9 @@ export const upsertAdministrationHandler = async (
           );
         }
       }
-      logger.info(`Successfully prepared administration ${operationType}`, {
+      logger.info("Successfully prepared administration", {
         administrationId: administrationDocRef.id,
+        operationType: administrationId ? "update" : "create",
       });
       return administrationDocRef.id; // Return the ID
     }); // End Transaction
@@ -372,6 +626,88 @@ export const upsertAdministrationHandler = async (
     logger.info("Finished administration upsert transaction", {
       administrationId: newAdministrationId,
     });
+
+    // Sync assignments synchronously for immediate visibility
+    try {
+      const administrationDocRef = db
+        .collection("administrations")
+        .doc(newAdministrationId);
+      const administrationDoc = await administrationDocRef.get();
+
+      if (!administrationDoc.exists) {
+        logger.warn(
+          `Administration ${newAdministrationId} not found after creation. Skipping sync.`
+        );
+        return { status: "ok", administrationId: newAdministrationId };
+      }
+
+      const administrationData = administrationDoc.data() as IAdministration;
+      const isNewAdministration = !administrationId;
+      const creatorUid = administrationData?.createdBy;
+
+      if (isNewAdministration) {
+        if (!creatorUid) {
+          logger.error(
+            `Cannot sync assignments: administration ${newAdministrationId} has no createdBy field`,
+            { administrationId: newAdministrationId }
+          );
+          throw new HttpsError(
+            "internal",
+            "Administration document is missing creator information"
+          );
+        }
+        await createAssignments(
+          newAdministrationId,
+          administrationDocRef,
+          administrationData,
+          creatorUid,
+          true
+        );
+      } else if (prevData) {
+        await updateAssignments(
+          newAdministrationId,
+          administrationDocRef,
+          prevData,
+          administrationData
+        );
+      } else {
+        if (!creatorUid) {
+          logger.error(
+            `Cannot sync assignments: administration ${newAdministrationId} has no createdBy field`,
+            { administrationId: newAdministrationId }
+          );
+          throw new HttpsError(
+            "internal",
+            "Administration document is missing creator information"
+          );
+        }
+        await createAssignments(
+          newAdministrationId,
+          administrationDocRef,
+          administrationData,
+          creatorUid,
+          true
+        );
+      }
+
+      logger.info("Finished synchronous assignment sync", {
+        administrationId: newAdministrationId,
+      });
+    } catch (syncError: any) {
+      logger.error("Error during synchronous assignment sync", {
+        error: syncError,
+        administrationId: newAdministrationId,
+      });
+
+      // If this is a new administration and sync failed, the error was already thrown
+      // and should have triggered rollback. Re-throw to prevent the function from
+      // returning successfully when assignments failed to be created.
+      const isNewAdministration = !administrationId;
+      if (isNewAdministration) {
+        throw syncError;
+      }
+    }
+
     return { status: "ok", administrationId: newAdministrationId };
   } catch (error: any) {
     logger.error("Error during administration upsert", { error });
