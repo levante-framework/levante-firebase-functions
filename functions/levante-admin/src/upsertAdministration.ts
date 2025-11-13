@@ -67,7 +67,7 @@ interface IAdministrationDoc {
   creatorName: string;
 }
 
-const syncNewAdministrationAssignments = async (
+const createAssignments = async (
   administrationId: string,
   administrationDocRef: DocumentReference,
   currData: IAdministration,
@@ -183,7 +183,7 @@ const syncNewAdministrationAssignments = async (
   }
 };
 
-const syncModifiedAdministrationAssignments = async (
+const updateAssignments = async (
   administrationId: string,
   administrationDocRef: DocumentReference,
   prevData: IAdministration,
@@ -656,7 +656,7 @@ export const upsertAdministrationHandler = async (
             "Administration document is missing creator information"
           );
         }
-        await syncNewAdministrationAssignments(
+        await createAssignments(
           newAdministrationId,
           administrationDocRef,
           administrationData,
@@ -664,7 +664,7 @@ export const upsertAdministrationHandler = async (
           true
         );
       } else if (prevData) {
-        await syncModifiedAdministrationAssignments(
+        await updateAssignments(
           newAdministrationId,
           administrationDocRef,
           prevData,
@@ -681,7 +681,7 @@ export const upsertAdministrationHandler = async (
             "Administration document is missing creator information"
           );
         }
-        await syncNewAdministrationAssignments(
+        await createAssignments(
           newAdministrationId,
           administrationDocRef,
           administrationData,

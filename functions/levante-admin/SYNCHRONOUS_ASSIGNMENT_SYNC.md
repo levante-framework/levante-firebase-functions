@@ -31,19 +31,19 @@ The implementation processes **all org chunks synchronously** within the `upsert
 
 The synchronous sync logic is implemented as two helper functions within `upsertAdministration.ts`:
 
-- `syncNewAdministrationAssignments` - Handles new administration creation
-- `syncModifiedAdministrationAssignments` - Handles administration updates
+- `createAssignments` - Handles new administration creation
+- `updateAssignments` - Handles administration updates
 
 These functions are called directly after the Firestore transaction completes, ensuring assignments are processed before the function returns to the client.
 
 ### Key Functions
 
-#### `syncNewAdministrationAssignments`
+#### `createAssignments`
 
 Handles synchronous assignment creation for new administrations:
 
 ```typescript
-const syncNewAdministrationAssignments = async (
+const createAssignments = async (
   administrationId: string,
   administrationDocRef: DocumentReference,
   currData: IAdministration,
@@ -62,12 +62,12 @@ const syncNewAdministrationAssignments = async (
 6. If this is a new administration and any chunk fails, also rolls back the administration document
 7. Re-throws errors to ensure the function fails if assignment creation fails
 
-#### `syncModifiedAdministrationAssignments`
+#### `updateAssignments`
 
 Handles synchronous assignment updates for modified administrations:
 
 ```typescript
-const syncModifiedAdministrationAssignments = async (
+const updateAssignments = async (
   administrationId: string,
   administrationDocRef: DocumentReference,
   prevData: IAdministration,
@@ -188,8 +188,8 @@ The synchronous sync implements comprehensive error handling:
 - **Chunk-Level Errors**: If `updateAssignmentsForOrgChunkHandler` returns `success: false`, all previous chunks are rolled back and an error is thrown
 - **User-Level Errors**: If assignment creation fails for any user within a chunk, that entire chunk is rolled back and an error is thrown
 - **Rollback Errors**: If rollback itself fails, errors are logged but the original error is still propagated
-- **Final Rollback**: A catch block in `syncNewAdministrationAssignments` ensures rollback is attempted even if the error occurs outside the chunk loop
-- **Error Propagation**: Errors thrown from `syncNewAdministrationAssignments` are caught by the try-catch block in `upsertAdministrationHandler`. For new administrations, the error is re-thrown to prevent the function from returning successfully. For updates, the error is logged but not re-thrown, allowing the function to return successfully.
+- **Final Rollback**: A catch block in `createAssignments` ensures rollback is attempted even if the error occurs outside the chunk loop
+- **Error Propagation**: Errors thrown from `createAssignments` are caught by the try-catch block in `upsertAdministrationHandler`. For new administrations, the error is re-thrown to prevent the function from returning successfully. For updates, the error is logged but not re-thrown, allowing the function to return successfully.
 
 ### Error Recovery
 
@@ -260,7 +260,7 @@ Potential enhancements:
 - The background trigger (`syncAssignmentsOnAdministrationUpdate`) will still fire after document writes, but it is redundant since all chunks are already processed synchronously
 - Duplicate processing is safe due to idempotent operations, but adds unnecessary overhead
 - The synchronous processing uses the same underlying functions as the background trigger for consistency
-- The helper functions (`syncNewAdministrationAssignments` and `syncModifiedAdministrationAssignments`) are defined as private functions within the `upsertAdministration.ts` file
+- The helper functions (`createAssignments` and `updateAssignments`) are defined as private functions within the `upsertAdministration.ts` file
 - For update operations, the previous administration data is fetched before the transaction to enable proper comparison of org changes
 - The rollback mechanism ensures **complete atomicity** - if any participant fails to receive an assignment, the entire operation (including the administration document for new administrations) is rolled back
 - Rollback happens at the chunk level - if any chunk fails, all previously processed chunks are rolled back
