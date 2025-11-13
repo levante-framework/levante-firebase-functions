@@ -83,16 +83,11 @@ const syncNewAdministrationAssignments = async (
   });
 
   const orgChunks = chunkOrgs(minimalOrgs, 100);
-  const maxChunksToProcessSync = 3;
   const allCreatedUserIds: string[] = [];
   const processedChunks: Array<{ orgChunk: IOrgsList; userIds: string[] }> = [];
 
   try {
-    for (
-      let i = 0;
-      i < Math.min(orgChunks.length, maxChunksToProcessSync);
-      i++
-    ) {
+    for (let i = 0; i < orgChunks.length; i++) {
       const orgChunk = orgChunks[i];
       const result = await updateAssignmentsForOrgChunkHandler({
         administrationId,
@@ -143,22 +138,11 @@ const syncNewAdministrationAssignments = async (
       processedChunks.push({ orgChunk, userIds: result.userIds });
     }
 
-    if (orgChunks.length > maxChunksToProcessSync) {
-      logger.info(
-        `Processed first ${maxChunksToProcessSync} org chunks synchronously. Remaining chunks will be processed by background trigger.`,
-        {
-          administrationId,
-          totalChunks: orgChunks.length,
-          processedChunks: maxChunksToProcessSync,
-          totalUsersAssigned: allCreatedUserIds.length,
-        }
-      );
-    }
-
     logger.info(`Successfully created assignments for all participants`, {
       administrationId,
       totalUsersAssigned: allCreatedUserIds.length,
       chunksProcessed: processedChunks.length,
+      totalChunks: orgChunks.length,
     });
   } catch (error: any) {
     // If we get here, either a chunk failed or rollback failed
@@ -280,28 +264,34 @@ const syncModifiedAdministrationAssignments = async (
   });
 
   const orgChunks = chunkOrgs(minimalOrgs, 100);
-  const maxChunksToProcessSync = 3;
 
-  for (let i = 0; i < Math.min(orgChunks.length, maxChunksToProcessSync); i++) {
+  for (let i = 0; i < orgChunks.length; i++) {
     const orgChunk = orgChunks[i];
-    await updateAssignmentsForOrgChunkHandler({
+    const result = await updateAssignmentsForOrgChunkHandler({
       administrationId,
       administrationData: currData,
       orgChunk,
       mode: "update",
     });
+
+    if (!result.success) {
+      logger.error(`Assignment update failed for org chunk ${i + 1}.`, {
+        administrationId,
+        chunkIndex: i,
+        error: result.error,
+      });
+      throw new Error(
+        `Failed to update assignment for all participants. ${
+          result.error?.message || "Unknown error"
+        }. Please try again.`
+      );
+    }
   }
 
-  if (orgChunks.length > maxChunksToProcessSync) {
-    logger.info(
-      `Processed first ${maxChunksToProcessSync} org chunks synchronously. Remaining chunks will be processed by background trigger.`,
-      {
-        administrationId,
-        totalChunks: orgChunks.length,
-        processedChunks: maxChunksToProcessSync,
-      }
-    );
-  }
+  logger.info(`Successfully updated assignments for all participants`, {
+    administrationId,
+    chunksProcessed: orgChunks.length,
+  });
 };
 
 export const upsertAdministrationHandler = async (
