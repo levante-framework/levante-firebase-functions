@@ -34,7 +34,7 @@ export const buildRoleClaimsStructure = (
 ): RoleClaimsStructure => {
   const sanitizedRoles = sanitizeRoles(roles);
 
-  const rolesSet = Array.from(new Set(sanitizedRoles.map((role) => role.role)));
+  const rolesSet = Array.from(new Set(sanitizedRoles.map((role) => role.role))) as string[];
 
   const siteRoles: Record<string, string[]> = {};
   const siteNames: Record<string, string> = {};
