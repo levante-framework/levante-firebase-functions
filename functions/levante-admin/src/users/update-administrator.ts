@@ -100,11 +100,10 @@ export const updateAdministratorRoles = async ({
 
     const mergedRoles = sanitizeRoles(Array.from(mergedRolesMap.values()));
 
-    const now = FieldValue.serverTimestamp();
-    transaction.update(context.adminUserDocRef, {
-      roles: mergedRoles,
-      updatedAt: now,
-    });
+    const districtUpdates: Array<{
+      ref: DocumentReference;
+      administrators: Array<Record<string, unknown>>;
+    }> = [];
 
     for (const siteId of siteIdsToUpdate) {
       const role = mergedRolesMap.get(siteId);
@@ -152,8 +151,21 @@ export const updateAdministratorRoles = async ({
         },
       ];
 
-      transaction.update(districtDocRef, {
+      districtUpdates.push({
+        ref: districtDocRef,
         administrators: updatedAdministrators,
+      });
+    }
+
+    const now = FieldValue.serverTimestamp();
+    transaction.update(context.adminUserDocRef, {
+      roles: mergedRoles,
+      updatedAt: now,
+    });
+
+    for (const { ref, administrators } of districtUpdates) {
+      transaction.update(ref, {
+        administrators,
         updatedAt: now,
       });
     }
@@ -161,12 +173,9 @@ export const updateAdministratorRoles = async ({
     return mergedRoles;
   });
 
-  const existingClaims: Record<string, unknown> =
-    (context.targetRecord.customClaims as Record<string, unknown>) ?? {};
-  const roleClaims = buildRoleClaimsStructure(sanitizedRoles);
+  const updatedRoleClaims = buildRoleClaimsStructure(sanitizedRoles);
   const updatedClaims = {
-    ...existingClaims,
-    ...roleClaims,
+    ...updatedRoleClaims,
     useNewPermissions: true,
     adminUid: context.adminUid,
   };
@@ -176,7 +185,7 @@ export const updateAdministratorRoles = async ({
   return {
     status: "ok" as const,
     adminUid: context.adminUid,
-    roles: roleClaims.roles,
+    roles: updatedRoleClaims.roles,
   };
 };
 
@@ -208,12 +217,6 @@ export const removeAdministratorRoles = async ({
     const remainingRoles = sanitizeRoles(
       currentRoles.filter((role) => role.siteId !== siteId)
     );
-    const now = FieldValue.serverTimestamp();
-
-    transaction.update(context.adminUserDocRef, {
-      roles: remainingRoles,
-      updatedAt: now,
-    });
 
     const districtDocRef = db.collection("districts").doc(siteId);
     const districtSnapshot = await transaction.get(districtDocRef);
@@ -250,6 +253,12 @@ export const removeAdministratorRoles = async ({
         ]
       : otherAdministrators;
 
+    const now = FieldValue.serverTimestamp();
+    transaction.update(context.adminUserDocRef, {
+      roles: remainingRoles,
+      updatedAt: now,
+    });
+
     transaction.update(districtDocRef, {
       administrators: updatedAdministrators,
       updatedAt: now,
@@ -258,12 +267,9 @@ export const removeAdministratorRoles = async ({
     return { remainingRoles };
   });
 
-  const existingClaims: Record<string, unknown> =
-    (context.targetRecord.customClaims as Record<string, unknown>) ?? {};
-  const roleClaims = buildRoleClaimsStructure(remainingRoles);
+  const updatedRoleClaims = buildRoleClaimsStructure(remainingRoles);
   const updatedClaims = {
-    ...existingClaims,
-    ...roleClaims,
+    ...updatedRoleClaims,
     useNewPermissions: true,
     adminUid: context.adminUid,
   };
@@ -273,6 +279,6 @@ export const removeAdministratorRoles = async ({
   return {
     status: "ok" as const,
     adminUid: context.adminUid,
-    roles: roleClaims.roles,
+    roles: updatedRoleClaims.roles,
   };
 };
