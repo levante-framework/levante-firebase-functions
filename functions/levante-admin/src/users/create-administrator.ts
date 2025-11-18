@@ -79,7 +79,7 @@ export const _createAdministratorWithRoles = async ({
 
   const trimmedName = {
     first: name.first.trim(),
-    middle: name.middle.trim(),
+    middle: name.middle?.trim(),
     last: name.last.trim(),
   };
 
@@ -214,7 +214,7 @@ export const _createAdministratorWithRoles = async ({
     await districtDocRef.update({
       administrators: FieldValue.arrayUnion({
         adminUid,
-        name: trimmedName,
+        name: displayName,
         status: ADMINISTRATOR_STATUS.ACTIVE,
         role: role.role,
       }),
