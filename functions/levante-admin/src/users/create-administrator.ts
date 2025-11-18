@@ -101,7 +101,7 @@ export const _createAdministratorWithRoles = async ({
   const auth = getAuth();
   const db = getFirestore();
 
-  const displayName = `${trimmedName.first} ${trimmedName.middle} ${trimmedName.last}`;
+  const displayName = [trimmedName.first, trimmedName.middle, trimmedName.last].filter(Boolean).join(' ');
   logger.info("displayName: ", displayName);
 
   let adminUid: string;
