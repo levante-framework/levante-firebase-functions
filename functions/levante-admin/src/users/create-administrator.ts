@@ -68,13 +68,8 @@ export const _createAdministratorWithRoles = async ({
     throw new HttpsError("invalid-argument", "A valid email is required");
   }
 
-  if (
-    !name.first
-  ) {
-    throw new HttpsError(
-      "invalid-argument",
-      "A valid name is required"
-    );
+  if (!name.first) {
+    throw new HttpsError("invalid-argument", "A valid name is required");
   }
 
   const trimmedName = {
@@ -101,7 +96,9 @@ export const _createAdministratorWithRoles = async ({
   const auth = getAuth();
   const db = getFirestore();
 
-  const displayName = [trimmedName.first, trimmedName.middle, trimmedName.last].filter(Boolean).join(' ');
+  const displayName = [trimmedName.first, trimmedName.middle, trimmedName.last]
+    .filter(Boolean)
+    .join(" ");
   logger.info("displayName: ", displayName);
 
   let adminUid: string;
@@ -175,7 +172,6 @@ export const _createAdministratorWithRoles = async ({
     };
 
     await auth.setCustomUserClaims(adminUid, newClaims);
-
   }
 
   logger.info("roleClaims: ", roleClaims);
@@ -206,6 +202,14 @@ export const _createAdministratorWithRoles = async ({
     }
 
     await adminUserDocRef.set(adminDocData);
+
+    const userClaimsDocRef = db.collection("userClaims").doc(adminUid);
+    await userClaimsDocRef.set({
+      claims: {
+        useNewPermissions: true,
+        adminUid,
+      },
+    });
   }
 
   // update the district docs with new administrator data
