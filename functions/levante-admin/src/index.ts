@@ -448,7 +448,7 @@ export const softDeleteUserAssignment = createSoftDeleteCloudFunction([
 export const createUsers = onCall(
   { memory: "2GiB", timeoutSeconds: 540 },
   async (request) => {
-    const userData = request.data.userData;
+    const userData = request.data.users;
     const requestingUid = request.auth!.uid;
 
     // New permission system gate: ensure caller can create users in the requested site

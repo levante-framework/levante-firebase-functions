@@ -33,48 +33,17 @@ async function createUserClaims(adminApp, users, organizations) {
       console.log(`    Creating claims for ${userKey}...`);
       
       let claims = {
-        adminOrgs: {
-          classes: [],
-          districts: [],
-          families: [],
-          groups: [],
-          schools: []
-        },
-        minimalAdminOrgs: {
-          classes: [],
-          districts: [],
-          families: [],
-          groups: [],
-          schools: []
-        },
         super_admin: false,
         admin: false,
         useNewPermissions: true,
-        rolesSet: [],
-        siteRoles: {},
-        siteNames: {}
       };
       
       // Set claims based on user type
       if (userKey === 'superAdmin') {
         claims.super_admin = true;
         claims.admin = true;
-        // Super admin has access to all organizations
-        claims.adminOrgs.districts = organizations.districts.map(d => d.id);
-        claims.adminOrgs.schools = organizations.schools.map(s => s.id);
-        claims.adminOrgs.classes = organizations.classes.map(c => c.id);
-        claims.adminOrgs.groups = organizations.groups.map(g => g.id);
-        claims.minimalAdminOrgs.districts = organizations.districts.map(d => d.id);
-        claims.minimalAdminOrgs.schools = organizations.schools.map(s => s.id);
-        
-      } else if (userKey === 'admin') {
-        // Regular admin has limited access to specific organizations
-        claims.adminOrgs.districts = organizations.districts.map(d => d.id);
-        claims.adminOrgs.schools = organizations.schools.map(s => s.id);
-        claims.adminOrgs.classes = organizations.classes.map(c => c.id);
-        claims.adminOrgs.groups = organizations.groups.map(g => g.id);
+      } else if (['admin', 'siteAdmin', 'researchAssistant'].includes(userKey)) {
         claims.admin = true;
-        
       }
 
       let rolesStructure = { rolesSet: [], siteRoles: {}, siteNames: {} };
@@ -99,10 +68,6 @@ async function createUserClaims(adminApp, users, organizations) {
           'participant',
         ], organizations.districts);
       }
-
-      claims.rolesSet = rolesStructure.rolesSet;
-      claims.siteRoles = rolesStructure.siteRoles;
-      claims.siteNames = rolesStructure.siteNames;
       
       // Add other UIDs
       claims.adminUid = user.uid;
@@ -126,7 +91,7 @@ async function createUserClaims(adminApp, users, organizations) {
       
       // Also set custom claims in Auth for admin users
       let authClaims = {};
-      if (['superAdmin', 'admin'].includes(userKey)) {
+      if (['superAdmin', 'admin', 'siteAdmin', 'researchAssistant'].includes(userKey)) {
         authClaims = {
           admin: claims.admin,
           super_admin: claims.super_admin,

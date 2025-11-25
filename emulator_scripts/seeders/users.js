@@ -15,6 +15,18 @@ const USER_DEFINITIONS = {
     displayName: 'Admin User',
     userType: 'admin'
   },
+  siteAdmin: {
+    email: 'siteadmin@levante.test',
+    password: 'site123',
+    displayName: 'Site Admin User',
+    userType: 'admin'
+  },
+  researchAssistant: {
+    email: 'ra@levante.test',
+    password: 'ras123',
+    displayName: 'Research Assistant User',
+    userType: 'admin'
+  },
   teacher: {
     email: 'teacher@levante.test',
     password: 'teach123',

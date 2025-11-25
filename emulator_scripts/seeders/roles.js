@@ -39,6 +39,26 @@ async function updateUserRoles(adminApp, users, organizations) {
             });
             console.log(`      - Added admin role with siteId: ${districtId}`);
           }
+        } else if (userKey === 'siteAdmin') {
+          // Site admin - has site_admin role for all districts in the emulator
+          for (const districtId of districtIds) {
+            roles.push({
+              siteId: districtId,
+              siteName: districtNamesById[districtId],
+              role: "site_admin"
+            });
+            console.log(`      - Added site_admin role with siteId: ${districtId}`);
+          }
+        } else if (userKey === 'researchAssistant') {
+          // Research assistant - has research_assistant role for all districts in the emulator
+          for (const districtId of districtIds) {
+            roles.push({
+              siteId: districtId,
+              siteName: districtNamesById[districtId],
+              role: "research_assistant"
+            });
+            console.log(`      - Added research_assistant role with siteId: ${districtId}`);
+          }
         }
       } else if (['student', 'parent', 'teacher'].includes(user.userType)) {
         // Participant users - they are linked to all districts in the emulator
