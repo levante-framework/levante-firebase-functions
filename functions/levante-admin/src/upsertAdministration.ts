@@ -80,7 +80,6 @@ export const upsertAdministrationHandler = async (
     creatorName,
   } = data as UpsertAdministrationData;
 
-
   if (
     !name ||
     !assessments ||

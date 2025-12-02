@@ -1,5 +1,6 @@
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
+import { HttpsError } from "firebase-functions/v2/https";
 
 interface User {
   id: string;
@@ -16,27 +17,36 @@ interface User {
 }
 
 export async function _linkUsers(
-  requestingUid: string,
-  users: User[]
+  users: User[],
+  siteId: string
 ): Promise<void> {
-  const adminDb = getFirestore();
+  const db = getFirestore();
+  const userMap = new Map(users.map((user) => [user.id, user]));
 
-  const claimsDocRef = adminDb.collection("userClaims").doc(requestingUid);
-  const currentClaims = await claimsDocRef.get().then((docSnapshot) => {
-    if (docSnapshot.exists) {
-      return docSnapshot.data()!.claims;
+  // Validate all users belong to the admin's site
+  const userUids = users.map((user) => user.uid);
+  const userDocRefs = userUids.map((uid) => db.collection("users").doc(uid));
+  const userDocs = await db.getAll(...userDocRefs);
+
+  const usersNotInSite: string[] = [];
+  for (const doc of userDocs) {
+    if (!doc.exists) {
+      throw new HttpsError("not-found", `User not found for uid: ${doc.id}`);
     }
-    return null;
-  });
-
-  if (!currentClaims.super_admin && !currentClaims.admin) {
-    logger.error("Requester lacks permissions to link users", {
-      requestingUid,
-    });
-    throw new Error("User does not have permission to link users");
+    const userData = doc.data();
+    const userDistricts: string[] = userData?.districts?.current || [];
+    if (!userDistricts.includes(siteId)) {
+      usersNotInSite.push(doc.id);
+    }
   }
 
-  const userMap = new Map(users.map((user) => [user.id, user]));
+  if (usersNotInSite.length > 0) {
+    logger.warn("Users not belonging to admin's site", { usersNotInSite, siteId });
+    throw new HttpsError(
+      "permission-denied",
+      `The following users do not belong to the admin's site: ${usersNotInSite.join(", ")}`
+    );
+  }
 
   for (const user of users) {
     const updates: { [key: string]: string[] } = {};
@@ -84,8 +94,8 @@ async function updateUserDoc(
   field: string | { [key: string]: string[] },
   value?: string
 ): Promise<void> {
-  const adminDb = getFirestore();
-  const userRef = adminDb.collection("users").doc(uid);
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(uid);
 
   if (typeof field === "string" && value) {
     await userRef.update({
