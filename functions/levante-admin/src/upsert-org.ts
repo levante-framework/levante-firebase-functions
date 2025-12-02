@@ -28,44 +28,6 @@ export async function _upsertOrg(
   console.log("orgData", orgData);
   const db = getFirestore();
 
-  // --- Permission Check 1: Fetch user and claims data ---
-  const userDocRef = db.collection("users").doc(requestingUid);
-  const userClaimsDocRef = db.collection("userClaims").doc(requestingUid);
-
-  const [userSnap, userClaimsSnap] = await Promise.all([
-    userDocRef.get(),
-    userClaimsDocRef.get(),
-  ]);
-
-  if (!userSnap.exists) {
-    logger.error("User document not found.", { requestingUid });
-    throw new HttpsError("permission-denied", "User document not found.");
-  }
-  if (!userClaimsSnap.exists) {
-    logger.error("User claims document not found.", { requestingUid });
-    throw new HttpsError("permission-denied", "User claims not found.");
-  }
-
-  const userData = userSnap.data();
-  const claims = userClaimsSnap.data()?.claims;
-
-  const isAdmin = userData?.userType === "admin";
-  const isSuperAdmin = claims?.super_admin === true;
-
-  // --- Permission Check 1b: Is the user an admin OR super_admin? ---
-  if (!isAdmin && !isSuperAdmin) {
-    logger.warn("User does not have admin or super_admin privileges.", {
-      requestingUid,
-      userType: userData?.userType,
-      claims,
-    });
-    throw new HttpsError(
-      "permission-denied",
-      "User does not have sufficient permissions to create or update Groups."
-    );
-  }
-  // --- End Permission Check 1 ---
-
   const { id: orgId, type: orgType, ...dataToSet } = orgData;
   const now = FieldValue.serverTimestamp();
 
@@ -83,23 +45,6 @@ export async function _upsertOrg(
     if (orgId) {
       // --- Update existing organization ---
       const orgDocRef = orgCollectionRef.doc(orgId);
-
-      // --- Permission Check 2: Is the user a super_admin OR an admin for this specific organization? ---
-      if (!isSuperAdmin) {
-        // User is an admin, but not super_admin, check specific org permission
-        const isAdminForOrg = claims?.adminOrgs?.[orgType]?.[orgId];
-        if (!isAdminForOrg) {
-          logger.warn(
-            "Admin user does not have privileges for this specific Group.",
-            { requestingUid, orgType, orgId }
-          );
-          throw new HttpsError(
-            "permission-denied",
-            `User does not have permission to update ${orgType} with ID ${orgId}.`
-          );
-        }
-      }
-      // --- End Permission Check 2 ---
 
       await db.runTransaction(async (transaction) => {
         const orgDocSnap = await transaction.get(orgDocRef);
@@ -231,7 +176,6 @@ export async function _upsertOrg(
       return orgId;
     } else {
       // --- Create new organization ---
-      // Permission Check 1 already verified user is admin or super_admin
       const newOrgDocRef = orgCollectionRef.doc();
       const newOrgId = newOrgDocRef.id;
 
@@ -316,23 +260,6 @@ export async function _upsertOrg(
           }
         }
         // --- End Handle relationship creation ---
-
-        // 2. Add the new org ID to the user's adminOrgs array claim
-        // This should happen regardless of whether user is admin or super_admin,
-        // as it grants explicit permission for future non-super_admin actions.
-        const adminOrgArrayPath = new FieldPath("claims", "adminOrgs", orgType);
-        logger.info("Updating user claims with new adminOrg array element.", {
-          requestingUid,
-          orgType,
-          newOrgId,
-        });
-        // Use update with arrayUnion to add the newOrgId to the correct array.
-        // This handles creating intermediate fields/arrays if they don't exist.
-        transaction.update(
-          userClaimsDocRef,
-          adminOrgArrayPath,
-          FieldValue.arrayUnion(newOrgId)
-        );
       });
 
       return newOrgId;

@@ -23,6 +23,7 @@ interface UpsertAdministrationData {
   isTestData?: boolean;
   legal?: { [key: string]: unknown };
   creatorName: string;
+  siteId: string;
 }
 
 interface IAdministrationDoc {
@@ -57,62 +58,6 @@ export const upsertAdministrationHandler = async (
   logger.info("Administration upsert started", { callerUid: callerAdminUid });
   const db = getFirestore();
 
-  // 2. Authorization Check (Verify caller is an admin or super_admin via userClaims collection)
-  try {
-    logger.info(
-      " *** Fetching userClaims document for authorization check ***"
-    );
-    console.log("callerAdminUid: ", callerAdminUid);
-    const userClaimsDocRef = db.collection("userClaims").doc(callerAdminUid);
-    const userClaimsDoc = await userClaimsDocRef.get();
-
-    if (!userClaimsDoc.exists) {
-      logger.warn(
-        `userClaims document not found for user ${callerAdminUid}. Assuming not admin.`
-      );
-      throw new HttpsError(
-        "permission-denied",
-        "User claims not found. Cannot verify admin privileges."
-      );
-    }
-
-    const claimsData = userClaimsDoc.data() || {};
-
-    if (
-      claimsData.claims.admin !== true &&
-      claimsData.claims.super_admin !== true
-    ) {
-      logger.warn(
-        `User ${callerAdminUid} is not an admin or super_admin based on userClaims doc. Claims: ${JSON.stringify(
-          claimsData
-        )}`
-      );
-      throw new HttpsError(
-        "permission-denied",
-        "Caller does not have admin privileges."
-      );
-    }
-
-    logger.info(
-      `User ${callerAdminUid} verified as admin/super_admin via userClaims doc.`
-    );
-  } catch (error: any) {
-    logger.error("Authorization check failed using userClaims", {
-      errorMessage: error.message,
-      errorDetails: error.toString(),
-      callerUid: callerAdminUid,
-    });
-    // If it's already an HttpsError, rethrow it
-    if (error instanceof HttpsError) {
-      throw error;
-    }
-    // Otherwise, wrap it in a generic internal error
-    throw new HttpsError(
-      "internal",
-      "An error occurred during authorization check."
-    );
-  }
-
   // 3. Input Validation
   const {
     name,
@@ -135,13 +80,6 @@ export const upsertAdministrationHandler = async (
     creatorName,
   } = data as UpsertAdministrationData;
 
-  // Debug logging for date values
-  logger.info("Date validation debug", {
-    dateOpen,
-    dateClose,
-    dateOpenType: typeof dateOpen,
-    dateCloseType: typeof dateClose,
-  });
 
   if (
     !name ||
@@ -246,79 +184,7 @@ export const upsertAdministrationHandler = async (
         const userDocRef = db.collection("users").doc(callerAdminUid);
         const userDoc = await transaction.get(userDocRef);
 
-        let siteId = orgs.districts?.[0];
-
-        if (!siteId) {
-          const groupId = orgs.groups?.[0];
-          const classId = orgs.classes?.[0];
-          const schoolId = orgs.schools?.[0];
-
-          if (groupId) {
-            const groupDocRef = db.collection("groups").doc(groupId);
-            const groupDoc = await transaction.get(groupDocRef);
-            if (!groupDoc.exists) {
-              throw new HttpsError(
-                "invalid-argument",
-                `Group ${groupId} not found while resolving siteId.`
-              );
-            }
-
-            const groupData = groupDoc.data() as Group | undefined;
-            if (!groupData?.parentOrgId) {
-              throw new HttpsError(
-                "invalid-argument",
-                `Group ${groupId} is missing a parentOrgId.`
-              );
-            }
-
-            siteId = groupData.parentOrgId;
-          } else if (classId) {
-            const classDocRef = db.collection("classes").doc(classId);
-            const classDoc = await transaction.get(classDocRef);
-            if (!classDoc.exists) {
-              throw new HttpsError(
-                "invalid-argument",
-                `Class ${classId} not found while resolving siteId.`
-              );
-            }
-
-            const classData = classDoc.data() as Class | undefined;
-            if (!classData?.districtId) {
-              throw new HttpsError(
-                "invalid-argument",
-                `Class ${classId} is missing a districtId.`
-              );
-            }
-
-            siteId = classData.districtId;
-          } else if (schoolId) {
-            const schoolDocRef = db.collection("schools").doc(schoolId);
-            const schoolDoc = await transaction.get(schoolDocRef);
-            if (!schoolDoc.exists) {
-              throw new HttpsError(
-                "invalid-argument",
-                `School ${schoolId} not found while resolving siteId.`
-              );
-            }
-
-            const schoolData = schoolDoc.data() as School | undefined;
-            if (!schoolData?.districtId) {
-              throw new HttpsError(
-                "invalid-argument",
-                `School ${schoolId} is missing a districtId.`
-              );
-            }
-
-            siteId = schoolData.districtId;
-          }
-        }
-
-        if (!siteId) {
-          throw new HttpsError(
-            "invalid-argument",
-            "Unable to determine siteId. Provide a district or an organization associated with a district."
-          );
-        }
+        const siteId = data.siteId;
 
         // Prepare Administration Data for creation
         const administrationData: IAdministrationDoc = {
