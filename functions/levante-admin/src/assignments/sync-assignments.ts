@@ -224,8 +224,9 @@ export const updateAssignmentsForOrgChunkHandler = async ({
       });
     });
 
-    for (const _userChunk of _chunk(usersToUpdate, MAX_TRANSACTIONS)) {
-      await db.runTransaction(async (transaction) => {
+    const userChunks = _chunk(usersToUpdate, MAX_TRANSACTIONS);
+    const transactionPromises = userChunks.map((_userChunk) => {
+      return db.runTransaction(async (transaction) => {
         if (mode === "update") {
           return updateAssignmentForUsers(
             _userChunk,
@@ -234,8 +235,6 @@ export const updateAssignmentsForOrgChunkHandler = async ({
             transaction
           );
         } else {
-          totalUsersAssigned += _userChunk.length;
-          createdUserIds.push(..._userChunk);
           return addAssignmentToUsers(
             _userChunk,
             administrationId,
@@ -244,6 +243,13 @@ export const updateAssignmentsForOrgChunkHandler = async ({
           );
         }
       });
+    });
+
+    await Promise.all(transactionPromises);
+
+    if (mode === "add") {
+      totalUsersAssigned = usersToUpdate.length;
+      createdUserIds.push(...usersToUpdate);
     }
 
     // Update administration stats synchronously for immediate visibility
