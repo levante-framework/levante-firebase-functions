@@ -631,25 +631,25 @@ export const editUsers = onCall(async (request) => {
 
 export const upsertOrg = onCall(async (request) => {
   const requestingUid = request.auth?.uid;
-  const orgData = request.data.orgData as OrgData;
+  const groupData = request.data.orgData as OrgData;
 
   if (!requestingUid) {
     logger.error("User is not authenticated.");
     throw new HttpsError("unauthenticated", "User must be authenticated.");
   }
 
-  if (!orgData || typeof orgData !== "object") {
-    logger.error("Invalid orgData provided.", { orgData });
+  if (!groupData || typeof groupData !== "object") {
+    logger.error("Invalid groupData provided.", { groupData });
     throw new HttpsError(
       "invalid-argument",
-      "Organization data is missing or invalid."
+      "Group data is missing or invalid."
     );
   }
 
   // Ensure basic data like type is present before calling the internal function
-  if (!orgData.type) {
-    logger.error("Organization type is missing in orgData.", { orgData });
-    throw new HttpsError("invalid-argument", "Organization type is required.");
+  if (!groupData.type) {
+    logger.error("Group type is missing in groupData.", { groupData });
+    throw new HttpsError("invalid-argument", "Group type is required.");
   }
 
   try {
@@ -662,39 +662,40 @@ export const upsertOrg = onCall(async (request) => {
       await ensurePermissionsLoaded();
       const user = buildPermissionsUserFromAuthRecord(userRecord);
 
-      const orgType =
-        orgData.type as keyof typeof ORG_COLLECTION_TO_SUBRESOURCE;
-      const subResource = ORG_COLLECTION_TO_SUBRESOURCE[orgType];
+      const groupType =
+        groupData.type as keyof typeof ORG_COLLECTION_TO_SUBRESOURCE;
+      const subResource = ORG_COLLECTION_TO_SUBRESOURCE[groupType];
 
       if (!subResource) {
-        logger.error("Unsupported organization type for permission check", {
-          orgType,
+        logger.error("Unsupported group type for permission check", {
+          groupType,
         });
         throw new HttpsError(
           "invalid-argument",
-          `Unsupported organization type: ${orgType}`
+          `Unsupported group type: ${groupType}`
         );
       }
 
-      const orgId = typeof orgData.id === "string" ? orgData.id : undefined;
+      const groupId = typeof groupData.id === "string" ? groupData.id : undefined;
       const rawSiteId =
-        (orgData.districtId as string | undefined) ||
-        (orgData.siteId as string | undefined);
+        (groupData.districtId as string | undefined) ||
+        (groupData.parentOrgId as string | undefined);
       const siteId =
         typeof rawSiteId === "string" ? rawSiteId.trim() : undefined;
+        console.log("siteId:  ", siteId);
 
       if (!siteId) {
-        logger.error("Missing site identifier for org upsert", {
+        logger.error("Missing site identifier for group upsert", {
           requestingUid,
-          orgType,
+          groupType,
         });
         throw new HttpsError(
           "invalid-argument",
-          "A siteId (e.g. districtId) is required to upsert organizations"
+          "A siteId is required to create or update groups"
         );
       }
 
-      const action = orgId ? ACTIONS.UPDATE : ACTIONS.CREATE;
+      const action = groupId ? ACTIONS.UPDATE : ACTIONS.CREATE;
       const allowed =
         filterSitesByPermission(user, [siteId], {
           resource: RESOURCES.GROUPS,
@@ -703,17 +704,17 @@ export const upsertOrg = onCall(async (request) => {
         }).length > 0;
 
       if (!allowed) {
-        logger.error("Permission denied for org upsert", {
+        logger.error("Permission denied for group upsert", {
           requestingUid,
-          orgType,
+          groupType,
           subResource,
-          orgId,
+          groupId,
           siteId,
           action,
         });
         throw new HttpsError(
           "permission-denied",
-          `You do not have permission to ${action} ${orgType} in site ${siteId}`
+          `You do not have permission to ${action} ${groupType} in site ${siteId}`
         );
       }
     }
@@ -726,13 +727,13 @@ export const upsertOrg = onCall(async (request) => {
   }
 
   try {
-    const orgId = await _upsertOrg(requestingUid, orgData);
-    logger.info("Organization successfully upserted.", {
+    const groupId = await _upsertOrg(requestingUid, groupData);
+    logger.info("Group successfully upserted.", {
       requestingUid,
-      orgType: orgData.type,
-      orgId,
+      groupType: groupData.type,
+      groupId,
     });
-    return { status: "ok", orgId };
+    return { status: "ok", orgId: groupId };
   } catch (error) {
     // Errors are logged and potentially transformed into HttpsError within _upsertOrg
     // Re-throw the error for the Cloud Functions framework to handle

@@ -178,15 +178,6 @@ export const _createUsers = async (
 ) => {
   const db = getFirestore();
   const auth = getAuth();
-  // Check requesting user's claims to make sure they are creating users within their permissions.
-  const claimsDocRef = db.collection("userClaims").doc(requestingUid);
-  const currentClaims = await claimsDocRef.get().then((docSnapshot) => {
-    if (docSnapshot.exists) {
-      return docSnapshot.data()!.claims;
-    }
-    return null;
-  });
-
   // We can share the id's across projects because the id algorithm uses timestamps under the hood.
   // Users will now have one uid across both projects
   const userAdminDocs: DocumentReference[] = userData.map((user) =>
