@@ -22,7 +22,11 @@ import {
   getExhaustiveOrgs,
   getUsersFromOrgs,
 } from "./orgs/org-utils.js";
-import { removeOrgsFromAssignments } from "./assignments/assignment-utils.js";
+import {
+  removeOrgsFromAssignments,
+  rollbackAssignmentCreation,
+  rollbackAdministrationCreation,
+} from "./assignments/assignment-utils.js";
 import _chunk from "lodash-es/chunk.js";
 import { MAX_TRANSACTIONS } from "./utils/utils.js";
 
@@ -112,17 +116,11 @@ const createAssignments = async (
 
         // Rollback all previously created assignments
         if (allCreatedUserIds.length > 0) {
-          const { rollbackAssignmentCreation } = await import(
-            "./assignments/assignment-utils.js"
-          );
           await rollbackAssignmentCreation(allCreatedUserIds, administrationId);
         }
 
         // If this is a new administration, also rollback the administration document
         if (isNewAdministration && creatorUid) {
-          const { rollbackAdministrationCreation } = await import(
-            "./assignments/assignment-utils.js"
-          );
           await rollbackAdministrationCreation(administrationId, creatorUid);
         }
 
@@ -149,9 +147,6 @@ const createAssignments = async (
     // Try to rollback any remaining assignments
     if (allCreatedUserIds.length > 0) {
       try {
-        const { rollbackAssignmentCreation } = await import(
-          "./assignments/assignment-utils.js"
-        );
         await rollbackAssignmentCreation(allCreatedUserIds, administrationId);
       } catch (rollbackError: any) {
         logger.error("Error during final rollback of assignments", {
@@ -165,9 +160,6 @@ const createAssignments = async (
     // If this is a new administration, also rollback the administration document
     if (isNewAdministration && creatorUid) {
       try {
-        const { rollbackAdministrationCreation } = await import(
-          "./assignments/assignment-utils.js"
-        );
         await rollbackAdministrationCreation(administrationId, creatorUid);
       } catch (adminRollbackError: any) {
         logger.error("Error during final rollback of administration document", {
