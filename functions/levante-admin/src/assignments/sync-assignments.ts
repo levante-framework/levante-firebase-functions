@@ -207,16 +207,12 @@ export const updateAssignmentsForOrgChunkHandler = async ({
     // ``MAX_TRANSACTIONS``. The number of affected users is potentially
     // larger. So we loop through chunks of the userIds and update them in
     // separate transactions if necessary.
-
-    // ``remainingUsers`` is a placeholder in the event that the number of
-    // affected users is greater than the maximum number of docs we can update
-    // in a single transaction.
-    let remainingUsers: string[] = [];
+    let usersToUpdate: string[] = [];
     let totalUsersAssigned = 0;
 
     // Run the first transaction to get the user list
     await db.runTransaction(async (transaction) => {
-      const usersToUpdate = await getUsersFromOrgs({
+      usersToUpdate = await getUsersFromOrgs({
         orgs: orgChunk,
         transaction,
         includeArchived: false, // Do not assign updated assignment to archived users
@@ -226,41 +222,9 @@ export const updateAssignmentsForOrgChunkHandler = async ({
         orgChunkSummary: summarizeOrgsForLog(orgChunk),
         userSummary: summarizeIdListForLog(usersToUpdate),
       });
-
-      if (usersToUpdate.length !== 0) {
-        if (usersToUpdate.length <= MAX_TRANSACTIONS) {
-          // If the number of users is small enough, update them in this transaction.
-          if (mode === "update") {
-            return updateAssignmentForUsers(
-              usersToUpdate,
-              administrationId,
-              administrationData,
-              transaction
-            );
-          } else {
-            console.log("adding assignments to users");
-            totalUsersAssigned = usersToUpdate.length;
-            createdUserIds.push(...usersToUpdate);
-            return addAssignmentToUsers(
-              usersToUpdate,
-              administrationId,
-              administrationData,
-              transaction
-            );
-          }
-        } else {
-          // Otherwise, just save for the next loop over user chunks.
-          remainingUsers = usersToUpdate;
-          return Promise.resolve(usersToUpdate.length);
-        }
-      } else {
-        return Promise.resolve(0);
-      }
     });
 
-    // If remainingUsersToRemove.length === 0, then these chunks will be of zero length
-    // and the entire loop below is a no-op.
-    for (const _userChunk of _chunk(remainingUsers, MAX_TRANSACTIONS)) {
+    for (const _userChunk of _chunk(usersToUpdate, MAX_TRANSACTIONS)) {
       await db.runTransaction(async (transaction) => {
         if (mode === "update") {
           return updateAssignmentForUsers(
