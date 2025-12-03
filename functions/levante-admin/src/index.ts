@@ -547,7 +547,8 @@ export const linkUsers = onCall(async (request) => {
       const allowed =
         filterSitesByPermission(user, [siteId], {
           resource: RESOURCES.USERS,
-          action: ACTIONS.UPDATE,
+          // If you can create users, you can link them.
+          action: ACTIONS.CREATE,
         }).length > 0;
 
       if (!allowed) {
