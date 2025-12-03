@@ -292,7 +292,8 @@ export const updateAdministrator = onCall(async (request) => {
         requestingUser,
         role.siteId,
         RESOURCES.ADMINS,
-        ACTIONS.UPDATE,
+        // Here we updating an admins roles to creating an admin with a new role,
+        ACTIONS.CREATE,
         role.role as (typeof ADMIN_SUB_RESOURCES)[keyof typeof ADMIN_SUB_RESOURCES]
       );
       if (allowed) {
@@ -523,7 +524,16 @@ export const saveSurveyResponses = onCall(async (request) => {
 export const linkUsers = onCall(async (request) => {
   const requestingUid = request.auth!.uid;
   const users = request.data.users;
-  // New permission system gate: ensure caller can update users in the requested site
+  const siteId: string | undefined = (request.data.siteId ||
+    request.data.districtId) as string | undefined;
+
+  if (!siteId) {
+    throw new HttpsError(
+      "invalid-argument",
+      "A siteId (or districtId) is required to link users"
+    );
+  }
+
   try {
     const auth = getAuth();
     const userRecord = await auth.getUser(requestingUid);
@@ -534,20 +544,11 @@ export const linkUsers = onCall(async (request) => {
       await ensurePermissionsLoaded();
       const user = buildPermissionsUserFromAuthRecord(userRecord);
 
-      const siteId: string | undefined = (request.data.siteId ||
-        request.data.districtId) as string | undefined;
-
-      if (!siteId) {
-        throw new HttpsError(
-          "invalid-argument",
-          "A siteId (or districtId) is required to link users"
-        );
-      }
-
       const allowed =
         filterSitesByPermission(user, [siteId], {
           resource: RESOURCES.USERS,
-          action: ACTIONS.UPDATE,
+          // If you can create users, you can link them.
+          action: ACTIONS.CREATE,
         }).length > 0;
 
       if (!allowed) {
@@ -564,7 +565,7 @@ export const linkUsers = onCall(async (request) => {
       (err as Error)?.message || "Permission check failed"
     );
   }
-  return await _linkUsers(requestingUid, users);
+  return await _linkUsers(users, siteId);
 });
 
 export const getAdministrations = onCall(async (request) => {
@@ -676,13 +677,14 @@ export const upsertOrg = onCall(async (request) => {
         );
       }
 
-      const groupId = typeof groupData.id === "string" ? groupData.id : undefined;
+      const groupId =
+        typeof groupData.id === "string" ? groupData.id : undefined;
       const rawSiteId =
         (groupData.districtId as string | undefined) ||
         (groupData.parentOrgId as string | undefined);
       const siteId =
         typeof rawSiteId === "string" ? rawSiteId.trim() : undefined;
-        console.log("siteId:  ", siteId);
+      console.log("siteId:  ", siteId);
 
       if (!siteId) {
         logger.error("Missing site identifier for group upsert", {
@@ -1004,7 +1006,7 @@ export const upsertAdministration = onCall(async (request) => {
 
       const allowed =
         filterSitesByPermission(user, [siteId], {
-          resource: RESOURCES.TASKS,
+          resource: RESOURCES.ASSIGNMENTS,
           action,
         }).length > 0;
 
