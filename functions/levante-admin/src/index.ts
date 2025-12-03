@@ -1005,7 +1005,7 @@ export const upsertAdministration = onCall(async (request) => {
 
       const allowed =
         filterSitesByPermission(user, [siteId], {
-          resource: RESOURCES.TASKS,
+          resource: RESOURCES.ASSIGNMENTS,
           action,
         }).length > 0;
 
