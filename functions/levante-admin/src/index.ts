@@ -686,7 +686,7 @@ export const upsertOrg = onCall(async (request) => {
         typeof rawSiteId === "string" ? rawSiteId.trim() : undefined;
       console.log("siteId:  ", siteId);
 
-      if (!siteId) {
+      if (groupData.type !== "districts" && !siteId) {
         logger.error("Missing site identifier for group upsert", {
           requestingUid,
           groupType,
@@ -699,7 +699,7 @@ export const upsertOrg = onCall(async (request) => {
 
       const action = groupId ? ACTIONS.UPDATE : ACTIONS.CREATE;
       const allowed =
-        filterSitesByPermission(user, [siteId], {
+        filterSitesByPermission(user, [siteId!], {
           resource: RESOURCES.GROUPS,
           action,
           subResource,
