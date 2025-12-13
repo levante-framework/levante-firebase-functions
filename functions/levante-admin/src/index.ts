@@ -534,6 +534,8 @@ export const linkUsers = onCall(async (request) => {
     );
   }
 
+  let isSuperAdmin = false;
+
   try {
     const auth = getAuth();
     const userRecord = await auth.getUser(requestingUid);
@@ -557,6 +559,8 @@ export const linkUsers = onCall(async (request) => {
           `You do not have permission to link users in site ${siteId}`
         );
       }
+
+      isSuperAdmin = user.roles.some((role) => role.role === "super_admin");
     }
   } catch (err) {
     if (err instanceof HttpsError) throw err;
@@ -565,7 +569,7 @@ export const linkUsers = onCall(async (request) => {
       (err as Error)?.message || "Permission check failed"
     );
   }
-  return await _linkUsers(users, siteId);
+  return await _linkUsers(users, siteId, isSuperAdmin);
 });
 
 export const getAdministrations = onCall(async (request) => {
