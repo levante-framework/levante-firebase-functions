@@ -41,21 +41,8 @@ export async function writeSurveyResponses(requesterUid, data) {
   }
 
   try {
-    // First, check if survey response already exists
-    const existingResponseQuery = await surveyResponsesCollection
-      .where("administrationId", "==", administrationId)
-      .limit(1)
-      .get();
-
-    let surveyRef: FirebaseFirestore.DocumentReference;
-    let isNewDocument = false;
-    if (existingResponseQuery.empty) {
-      surveyRef = surveyResponsesCollection.doc();
-      isNewDocument = true;
-    } else {
-      surveyRef = existingResponseQuery.docs[0].ref;
-    }
-
+    // Deterministic survey response document id ensures that the survey response is always written to the same document
+    const surveyRef = surveyResponsesCollection.doc(administrationId);
     const {
       pageNo,
       isGeneral,
@@ -79,16 +66,9 @@ export async function writeSurveyResponses(requesterUid, data) {
 
     // Use a transaction to ensure atomicity between survey responses and assignment updates
     await db.runTransaction(async (transaction) => {
-      // ALL READS FIRST - Firestore requires all reads before any writes
-
-      // Read existing survey data if document exists
-      let existingData: any = {};
-      if (!isNewDocument) {
-        const existingDoc = await transaction.get(surveyRef);
-        if (existingDoc.exists) {
-          existingData = existingDoc.data() || {};
-        }
-      }
+      const existingSurveyDoc = await transaction.get(surveyRef);
+      const isNewDocument = !existingSurveyDoc.exists;
+      const existingData: any = existingSurveyDoc.data() || {};
 
       // Read assignment document
       const assignmentRef = getAssignmentDocRef(
