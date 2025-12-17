@@ -208,7 +208,6 @@ export const updateAssignmentsForOrgChunkHandler = async ({
     // larger. So we loop through chunks of the userIds and update them in
     // separate transactions if necessary.
     let usersToUpdate: string[] = [];
-    let totalUsersAssigned = 0;
 
     // Run the first transaction to get the user list
     await db.runTransaction(async (transaction) => {
@@ -248,18 +247,17 @@ export const updateAssignmentsForOrgChunkHandler = async ({
     await Promise.all(transactionPromises);
 
     if (mode === "add") {
-      totalUsersAssigned = usersToUpdate.length;
       createdUserIds.push(...usersToUpdate);
     }
 
     // Update administration stats synchronously for immediate visibility
     // Only update stats when adding new assignments (not when updating)
-    if (mode === "add" && totalUsersAssigned > 0) {
+    if (mode === "add" && usersToUpdate.length > 0) {
       await updateAdministrationStatsForOrgChunk(
         administrationId,
         orgChunk,
         administrationData,
-        totalUsersAssigned
+        usersToUpdate.length
       );
     }
 
