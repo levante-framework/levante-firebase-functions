@@ -91,49 +91,63 @@ const createAssignments = async (
   const processedChunks: Array<{ orgChunk: IOrgsList; userIds: string[] }> = [];
 
   try {
-    for (let i = 0; i < orgChunks.length; i++) {
-      const orgChunk = orgChunks[i];
-      const result = await updateAssignmentsForOrgChunkHandler({
-        administrationId,
-        administrationData: currData,
-        orgChunk,
-        mode: "add",
-      });
-
-      if (!result.success) {
-        // If this chunk failed, rollback all previous chunks
-        logger.error(
-          `Assignment creation failed for org chunk ${
-            i + 1
-          }. Rolling back all previous chunks.`,
-          {
+    const chunkResults = await Promise.all(
+      orgChunks.map(async (orgChunk, i) => {
+        try {
+          const result = await updateAssignmentsForOrgChunkHandler({
             administrationId,
+            administrationData: currData,
+            orgChunk,
+            mode: "add",
+          });
+          return { orgChunk, result, chunkIndex: i };
+        } catch (error: any) {
+          const err = error instanceof Error ? error : new Error(String(error));
+          return {
+            orgChunk,
+            result: { success: false, userIds: [], error: err },
             chunkIndex: i,
-            error: result.error,
-            totalChunksProcessed: processedChunks.length,
-          }
-        );
-
-        // Rollback all previously created assignments
-        if (allCreatedUserIds.length > 0) {
-          await rollbackAssignmentCreation(allCreatedUserIds, administrationId);
+          };
         }
+      })
+    );
 
-        // If this is a new administration, also rollback the administration document
-        if (isNewAdministration && creatorUid) {
-          await rollbackAdministrationCreation(administrationId, creatorUid);
+    for (const { orgChunk, result } of chunkResults) {
+      if (result.success) {
+        allCreatedUserIds.push(...result.userIds);
+        processedChunks.push({ orgChunk, userIds: result.userIds });
+      }
+    }
+
+    const failedChunk = chunkResults.find(({ result }) => !result.success);
+    if (failedChunk) {
+      logger.error(
+        `Assignment creation failed for org chunk ${
+          failedChunk.chunkIndex + 1
+        }. Rolling back all successful chunks.`,
+        {
+          administrationId,
+          chunkIndex: failedChunk.chunkIndex,
+          error: failedChunk.result.error,
+          totalChunksProcessed: processedChunks.length,
         }
+      );
 
-        throw new Error(
-          `Failed to create assignment for all participants. ${
-            result.error?.message || "Unknown error"
-          }. Please try again.`
-        );
+      // Rollback all successfully created assignments
+      if (allCreatedUserIds.length > 0) {
+        await rollbackAssignmentCreation(allCreatedUserIds, administrationId);
       }
 
-      // Track successful chunk
-      allCreatedUserIds.push(...result.userIds);
-      processedChunks.push({ orgChunk, userIds: result.userIds });
+      // If this is a new administration, also rollback the administration document
+      if (isNewAdministration && creatorUid) {
+        await rollbackAdministrationCreation(administrationId, creatorUid);
+      }
+
+      throw new Error(
+        `Failed to create assignment for all participants. ${
+          failedChunk.result.error?.message || "Unknown error"
+        }. Please try again.`
+      );
     }
 
     logger.info(`Successfully created assignments for all participants`, {
@@ -235,16 +249,18 @@ const updateAssignments = async (
       }
     });
 
-    for (const _userChunk of _chunk(remainingUsersToRemove, MAX_TRANSACTIONS)) {
-      await db.runTransaction(async (transaction) => {
-        return removeOrgsFromAssignments(
-          _userChunk,
-          [administrationId],
-          removedExhaustiveOrgs,
-          transaction
-        );
-      });
-    }
+    await Promise.all(
+      _chunk(remainingUsersToRemove, MAX_TRANSACTIONS).map((_userChunk) =>
+        db.runTransaction(async (transaction) => {
+          return removeOrgsFromAssignments(
+            _userChunk,
+            [administrationId],
+            removedExhaustiveOrgs,
+            transaction
+          );
+        })
+      )
+    );
   }
 
   const { minimalOrgs } = await standardizeAdministrationOrgs({
@@ -257,27 +273,41 @@ const updateAssignments = async (
 
   const orgChunks = chunkOrgs(minimalOrgs, 100);
 
-  for (let i = 0; i < orgChunks.length; i++) {
-    const orgChunk = orgChunks[i];
-    const result = await updateAssignmentsForOrgChunkHandler({
-      administrationId,
-      administrationData: currData,
-      orgChunk,
-      mode: "update",
-    });
+  const chunkResults = await Promise.all(
+    orgChunks.map(async (orgChunk, i) => {
+      try {
+        const result = await updateAssignmentsForOrgChunkHandler({
+          administrationId,
+          administrationData: currData,
+          orgChunk,
+          mode: "update",
+        });
+        return { result, chunkIndex: i };
+      } catch (error: any) {
+        const err = error instanceof Error ? error : new Error(String(error));
+        return {
+          result: { success: false, userIds: [], error: err },
+          chunkIndex: i,
+        };
+      }
+    })
+  );
 
-    if (!result.success) {
-      logger.error(`Assignment update failed for org chunk ${i + 1}.`, {
+  const failedChunk = chunkResults.find(({ result }) => !result.success);
+  if (failedChunk) {
+    logger.error(
+      `Assignment update failed for org chunk ${failedChunk.chunkIndex + 1}.`,
+      {
         administrationId,
-        chunkIndex: i,
-        error: result.error,
-      });
-      throw new Error(
-        `Failed to update assignment for all participants. ${
-          result.error?.message || "Unknown error"
-        }. Please try again.`
-      );
-    }
+        chunkIndex: failedChunk.chunkIndex,
+        error: failedChunk.result.error,
+      }
+    );
+    throw new Error(
+      `Failed to update assignment for all participants. ${
+        failedChunk.result.error?.message || "Unknown error"
+      }. Please try again.`
+    );
   }
 
   logger.info(`Successfully updated assignments for all participants`, {
