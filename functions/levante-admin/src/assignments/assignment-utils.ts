@@ -35,6 +35,7 @@ import {
   summarizeAssessmentsForLog,
   summarizeIdListForLog,
 } from "../utils/logging.js";
+import { updateAdministrationStatsForOrgChunk } from "./on-assignment-updates.js";
 
 /**
  * Parse a Firestore Timestamp or Date instance
@@ -156,7 +157,11 @@ export const rollbackAdministrationCreation = async (
 
       if (creatorDoc.exists) {
         const fieldPath = new FieldPath("adminData", "administrationsCreated");
-        transaction.update(creatorDocRef, fieldPath, FieldValue.arrayRemove(administrationId));
+        transaction.update(
+          creatorDocRef,
+          fieldPath,
+          FieldValue.arrayRemove(administrationId)
+        );
       }
     });
 
@@ -239,9 +244,6 @@ export const rollbackAssignmentCreation = async (
   // Rollback stats if org chunk and administration data are provided
   if (orgChunk && administrationData && userIds.length > 0) {
     try {
-      const { updateAdministrationStatsForOrgChunk } = await import(
-        "./on-assignment-updates.js"
-      );
       // Decrement stats by the number of users that were rolled back
       await updateAdministrationStatsForOrgChunk(
         administrationId,
