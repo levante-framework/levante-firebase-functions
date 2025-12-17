@@ -248,7 +248,7 @@ export const _createUsers = async (
       roarUid: userAdminDocs[i].id,
       adminUid: userAdminDocs[i].id,
       assessmentUid: userAdminDocs[i].id,
-      useNewPermissions: false,
+      useNewPermissions: true,
       rolesSet: roleClaims.rolesSet,
       siteRoles: roleClaims.siteRoles,
       siteNames: roleClaims.siteNames,

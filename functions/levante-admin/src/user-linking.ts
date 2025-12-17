@@ -16,38 +16,44 @@ interface User {
   uid: string;
 }
 
-export async function _linkUsers(users: User[], siteId: string): Promise<void> {
+export async function _linkUsers(
+  users: User[],
+  siteId: string,
+  isSuperAdmin: boolean
+): Promise<void> {
   const db = getFirestore();
   const userMap = new Map(users.map((user) => [user.id, user]));
 
-  // Validate all users belong to the admin's site
-  const userUids = users.map((user) => user.uid);
-  const userDocRefs = userUids.map((uid) => db.collection("users").doc(uid));
-  const userDocs = await db.getAll(...userDocRefs);
+  if (!isSuperAdmin) {
+    // Validate all users belong to the admin's site
+    const userUids = users.map((user) => user.uid);
+    const userDocRefs = userUids.map((uid) => db.collection("users").doc(uid));
+    const userDocs = await db.getAll(...userDocRefs);
 
-  const usersNotInSite: string[] = [];
-  for (const doc of userDocs) {
-    if (!doc.exists) {
-      throw new HttpsError("not-found", `User not found for uid: ${doc.id}`);
+    const usersNotInSite: string[] = [];
+    for (const doc of userDocs) {
+      if (!doc.exists) {
+        throw new HttpsError("not-found", `User not found for uid: ${doc.id}`);
+      }
+      const userData = doc.data();
+      const userDistricts: string[] = userData?.districts?.current || [];
+      if (!userDistricts.includes(siteId)) {
+        usersNotInSite.push(doc.id);
+      }
     }
-    const userData = doc.data();
-    const userDistricts: string[] = userData?.districts?.current || [];
-    if (!userDistricts.includes(siteId)) {
-      usersNotInSite.push(doc.id);
-    }
-  }
 
-  if (usersNotInSite.length > 0) {
-    logger.warn("Users not belonging to admin's site", {
-      usersNotInSite,
-      siteId,
-    });
-    throw new HttpsError(
-      "permission-denied",
-      `The following users do not belong to the admin's site: ${usersNotInSite.join(
-        ", "
-      )}`
-    );
+    if (usersNotInSite.length > 0) {
+      logger.warn("Users not belonging to admin's site", {
+        usersNotInSite,
+        siteId,
+      });
+      throw new HttpsError(
+        "permission-denied",
+        `The following users do not belong to the admin's site: ${usersNotInSite.join(
+          ", "
+        )}`
+      );
+    }
   }
 
   for (const user of users) {

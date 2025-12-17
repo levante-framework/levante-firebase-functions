@@ -132,8 +132,10 @@ service cloud.firestore {
 
       // required for parent survey
       function isParentOfUser() {
-        let parentUser = get(/databases/$(database)/documents/users/$(getUid())).data;
-        return parentUser.userType == 'parent' && resource.data.parentIds.hasAny([getUid()]);
+        // Avoid self-referential reads of /users/{uid} which can cause recursive rule evaluation.
+        return uid != getUid()
+          && get(/databases/$(database)/documents/users/$(getUid())).data.userType == 'parent'
+          && resource.data.parentIds.hasAny([getUid()]);
       }
 
       // TARGET USER SITES (aka districts)
@@ -271,11 +273,24 @@ service cloud.firestore {
 
     // Classes
     match /classes/{classId} {
+      function userDoc() {
+  			return get(/databases/$(database)/documents/users/$(getUid()));
+			} 
+      
+      function userCurrentClassIds() {
+        return userDoc().data.get(['classes', 'current'], []);
+      }
+
+      function isClassInUsersCurrentClasses(classId) {
+        return userCurrentClassIds().hasAny([classId]);
+      }
+    
+    
       function canReadClass() {
         let siteId   = resource.data.get('districtId', 'nullId');
         let legacyCheck = isSuperAdminOrAdminLegacy();
 
-        return shouldUseNewPermissions() ? hasSiteGroupPermissionForSiteIds([siteId], 'classes', 'read') : legacyCheck;
+        return shouldUseNewPermissions() ? (hasSiteGroupPermissionForSiteIds([siteId], 'classes', 'read') || isClassInUsersCurrentClasses(classId)) : legacyCheck;
       }
       allow list: if isAuthed() && ((getHighestRole() != 'participant') || isSuperAdminOrAdminLegacy())
       allow read: if isAuthed() && canReadClass();

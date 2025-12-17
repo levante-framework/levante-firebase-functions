@@ -103,7 +103,7 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
       const now = new Date();
       const closeDate = new Date(now.getTime() + template.daysToClose * 24 * 60 * 60 * 1000);
 
-      // Build assessments array from task IDs
+      // Build assessments array from task IDs.
       const assessments = template.taskIds.map((taskId) => {
         const variantId = taskVariantMap[taskId];
         if (!variantId) {
@@ -111,14 +111,9 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
         }
 
         return {
-          conditions: {
-            assigned: {},
-            conditions: [],
-          },
+          taskId,
           params: getDefaultParamsForTask(taskId),
-          taskName: taskId,
-          taskId: taskId,
-          variantId: variantId,
+          variantId,
           variantName: getVariantNameForTask(taskId),
         };
       });
@@ -161,7 +156,15 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
       await createStats(adminRef, template);
 
       // Create user assignments
-      await createUserAssignments(db, administrationId, template, administrationData, participantUsers, taskVariantMap);
+      await createUserAssignments(
+        adminApp,
+        db,
+        administrationId,
+        template,
+        administrationData,
+        participantUsers,
+        taskVariantMap,
+      );
 
       createdAdministrations.push({
         id: administrationId,
@@ -271,6 +274,7 @@ async function createStats(adminRef, template) {
 }
 
 async function createUserAssignments(
+  adminApp,
   db,
   administrationId,
   template,
@@ -307,10 +311,11 @@ async function createUserAssignments(
 
   for (const [userKey, user] of eligibleUsers) {
     try {
-      // Build assessments array for assignment document
+      // Build assessments array for assignment document.
       const assessments = template.taskIds.map((taskId) => ({
         optional: false,
-        taskId: taskId,
+        taskId,
+        params: getDefaultParamsForTask(taskId),
         variantId: taskVariantMap[taskId],
         variantName: getVariantNameForTask(taskId),
       }));
@@ -344,14 +349,12 @@ async function createUserAssignments(
       };
 
       // Create assignment document in user's assignments subcollection
-      const assignmentRef = db.collection('users').doc(user.uid).collection('assignments').doc(administrationId);
+      const assignmentRef = db
+        .collection('users')
+        .doc(user.uid)
+        .collection('assignments')
+        .doc(administrationId);
       await assignmentRef.set(assignmentData);
-
-      // Update user document to add administration ID to assignments.assigned array
-      const userRef = db.collection('users').doc(user.uid);
-      await userRef.update({
-        'assignments.assigned': admin.firestore.FieldValue.arrayUnion(administrationId),
-      });
 
       console.log(`        ✅ Created assignment for ${userKey} (${user.email})`);
     } catch (error) {
