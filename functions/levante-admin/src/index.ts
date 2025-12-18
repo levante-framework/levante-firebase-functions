@@ -685,7 +685,8 @@ export const upsertOrg = onCall(async (request) => {
         typeof groupData.id === "string" ? groupData.id : undefined;
       const rawSiteId =
         (groupData.districtId as string | undefined) ||
-        (groupData.parentOrgId as string | undefined);
+        (groupData.parentOrgId as string | undefined) ||
+        (groupData.siteId as string | undefined);
       const siteId =
         typeof rawSiteId === "string" ? rawSiteId.trim() : undefined;
       console.log("siteId:  ", siteId);
