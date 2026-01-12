@@ -245,17 +245,17 @@ service cloud.firestore {
         let oldDistricts = get(/databases/$(database)/documents/users/$(getUid())).data.get('districts', {}).get('current', []);
 
         return shouldUseNewPermissions()
-          ? siteRoles.hasAny([districtId])
+          ? siteRoles.hasAny(['participant'])
           : oldDistricts.hasAny([districtId]);
       }
 
       function canReadDistrict() {
         // districtId is the siteId
-        return shouldUseNewPermissions() ? hasSiteGroupPermissionForSiteIds([districtId], 'sites', 'read') : (isSuperAdminOrAdminLegacy() || participantHasSite());
+        return shouldUseNewPermissions() ? (hasSiteGroupPermissionForSiteIds([districtId], 'sites', 'read') || participantHasSite()) : isSuperAdminOrAdminLegacy();
       }
 
       // Allowing list is necessary for multiple document queries. 
-      allow list: if isAuthed() && ((getHighestRole() != 'participant') || isSuperAdminOrAdminLegacy() || participantHasSite());
+      allow list: if isAuthed() && (isSuperAdminOrAdminLegacy() || participantHasSite());
       allow read: if isAuthed() && canReadDistrict();
     }
 
@@ -322,27 +322,21 @@ service cloud.firestore {
           && newParams.diff(oldParams).removedKeys().size() == 0;
       }
 
-      function canReadTask() {
-        return shouldUseNewPermissions()
-          ? (isAuthed() && hasPermission('tasks', 'read'))
-          : isAuthed();
-      }
-
       function canCreateTask() {
         let baseCheck = isAuthed() && !request.resource.data.keys().hasAny(['registered']);
         return shouldUseNewPermissions() ? (baseCheck && hasPermission('tasks', 'create')) : baseCheck;
       }
 
       function canUpdateTaskWithPermission() {
-        return shouldUseNewPermissions() ? (canUpdateTask() && hasPermission('tasks', 'update')) : canUpdateTask();
+        return true;
       }
 
-      allow read:   if isAuthed() && canReadTask();
+      allow read:   if isAuthed();
       allow create: if isAuthed() && canCreateTask();
       allow update: if isAuthed() && canUpdateTaskWithPermission();
 
       match /variants/{variantId} {
-        allow read:   if isAuthed() && canReadTask();
+        allow read:   if isAuthed();
         allow create: if isAuthed() && canCreateTask();
         allow update: if isAuthed() && canUpdateTaskWithPermission();
       }
