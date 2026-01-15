@@ -6,27 +6,6 @@ service cloud.firestore {
     function isAuthed() { return request.auth != null; }
     function getUid()   { return request.auth.uid; }
 
-    function shouldUseNewPermissions() {
-      return isAuthed() && request.auth.token.get('useNewPermissions', false) == true;
-    }
-
-    // ============ LEGACY (unchanged logic) ============
-    function getUserClaims() {
-      return get(/databases/$(database)/documents/userClaims/$(getUid())).data.get("claims", {});
-    }
-
-    function isSuperAdminOrAdminLegacy() {
-      let claims = getUserClaims();
-      return claims.get("super_admin", false) || claims.get("admin", false);
-    }
-
-    function getAdminOrgs() { return getUserClaims().get('adminOrgs', {}); }
-
-    function isAdminForOrgType(orgType, orgIds) {
-      // orgIds is a list; adminOrgs[orgType] is a list; we can check intersection via hasAny
-      return orgIds.size() > 0 && getAdminOrgs().get(orgType, []).hasAny(orgIds);
-    }
-
     // ============ NEW PERMISSION SYSTEM ============
 
     match /system/permissions {
@@ -110,11 +89,9 @@ service cloud.firestore {
              (roleHasGroupAction('research_assistant', groupType, action) && _anySiteWithRole('research_assistant', siteIds));
     }
 
-    // Unified “am I an admin for these sites?” with legacy fallback
+    // Unified “am I an admin for these sites?”
     function hasAdminPermission(permissionResource, action, targetSites) {
-      return shouldUseNewPermissions()
-        ? hasSitePermissionForSiteIds(targetSites, permissionResource, action)
-        : isSuperAdminOrAdminLegacy();
+      return hasSitePermissionForSiteIds(targetSites, permissionResource, action);
     }
 
     // ============ KEY VALIDATION HELPERS (unchanged) ============
@@ -152,15 +129,15 @@ service cloud.firestore {
       allow update: if isAuthed() && myData()
 
       match /surveyResponses/{responseId} { 
-        allow read: if isAuthed() && (myData() || hasAdminPermission('users', 'read', getTargetUserSites()) || isSuperAdminOrAdminLegacy()); 
-        allow create: if isAuthed() && (myData() || hasAdminPermission('users', 'read', getTargetUserSites()) || isSuperAdminOrAdminLegacy());
-        allow update: if isAuthed() && (myData() || hasAdminPermission('users', 'read', getTargetUserSites()) || isSuperAdminOrAdminLegacy());
+        allow read: if isAuthed() && (myData() || hasAdminPermission('users', 'read', getTargetUserSites())); 
+        allow create: if isAuthed() && (myData() || hasAdminPermission('users', 'read', getTargetUserSites()));
+        allow update: if isAuthed() && (myData() || hasAdminPermission('users', 'read', getTargetUserSites()));
       }
 
       match /runs/{runId} {
         // For runs we keep the user-centric check
         function canReadRun() {
-          return myData() || hasAdminPermission('users', 'read', getTargetUserSites()) || isSuperAdminOrAdminLegacy();
+          return myData() || hasAdminPermission('users', 'read', getTargetUserSites());
         }
         allow read: if isAuthed() && canReadRun();
         allow create: if isAuthed() && myData();
@@ -222,7 +199,7 @@ service cloud.firestore {
       function myData() { return getUid() == getAdminDocCreatorId(); }
 
       function canReadAdministration() {
-        return shouldUseNewPermissions() ? hasAdminPermission('assignments', 'read', [resource.data.siteId]) : isSuperAdminOrAdminLegacy();
+        return hasAdminPermission('assignments', 'read', [resource.data.siteId]);
       }
       allow read: if isAuthed() && (myData() || canReadAdministration());
 
@@ -231,7 +208,7 @@ service cloud.firestore {
           return get(/databases/$(database)/documents/administrations/$(administrationId)).data.siteId
         }
 
-        allow read: if isAuthed() && (myData() || hasAdminPermission('assignments', 'read', [getAssignmentSiteId()]) || isSuperAdminOrAdminLegacy());
+        allow read: if isAuthed() && (myData() || hasAdminPermission('assignments', 'read', [getAssignmentSiteId()]));
       }
     }
 
@@ -242,20 +219,16 @@ service cloud.firestore {
         let siteRoles = request.auth.token
           .get('siteRoles', {})
           .get(districtId, []);
-        let oldDistricts = get(/databases/$(database)/documents/users/$(getUid())).data.get('districts', {}).get('current', []);
-
-        return shouldUseNewPermissions()
-          ? siteRoles.hasAny([districtId])
-          : oldDistricts.hasAny([districtId]);
+        return siteRoles.hasAny([districtId]);
       }
 
       function canReadDistrict() {
         // districtId is the siteId
-        return shouldUseNewPermissions() ? hasSiteGroupPermissionForSiteIds([districtId], 'sites', 'read') : (isSuperAdminOrAdminLegacy() || participantHasSite());
+        return hasSiteGroupPermissionForSiteIds([districtId], 'sites', 'read') || participantHasSite();
       }
 
       // Allowing list is necessary for multiple document queries. 
-      allow list: if isAuthed() && ((getHighestRole() != 'participant') || isSuperAdminOrAdminLegacy() || participantHasSite());
+      allow list: if isAuthed() && ((getHighestRole() != 'participant') || participantHasSite());
       allow read: if isAuthed() && canReadDistrict();
     }
 
@@ -263,11 +236,9 @@ service cloud.firestore {
     match /schools/{schoolId} {
       function canReadSchool() {
         let siteId = resource.data.get('districtId', 'nullId'); // parent site
-        return shouldUseNewPermissions()
-          ? hasSiteGroupPermissionForSiteIds([siteId], 'schools', 'read')
-          : isSuperAdminOrAdminLegacy();
+        return hasSiteGroupPermissionForSiteIds([siteId], 'schools', 'read');
       }
-      allow list: if isAuthed() && ((getHighestRole() != 'participant') || isSuperAdminOrAdminLegacy())
+      allow list: if isAuthed() && (getHighestRole() != 'participant')
       allow read: if isAuthed() && canReadSchool();
     }
 
@@ -288,11 +259,9 @@ service cloud.firestore {
     
       function canReadClass() {
         let siteId   = resource.data.get('districtId', 'nullId');
-        let legacyCheck = isSuperAdminOrAdminLegacy();
-
-        return shouldUseNewPermissions() ? (hasSiteGroupPermissionForSiteIds([siteId], 'classes', 'read') || isClassInUsersCurrentClasses(classId)) : legacyCheck;
+        return hasSiteGroupPermissionForSiteIds([siteId], 'classes', 'read') || isClassInUsersCurrentClasses(classId);
       }
-      allow list: if isAuthed() && ((getHighestRole() != 'participant') || isSuperAdminOrAdminLegacy())
+      allow list: if isAuthed() && (getHighestRole() != 'participant')
       allow read: if isAuthed() && canReadClass();
     }
 
@@ -301,12 +270,9 @@ service cloud.firestore {
       function canReadGroup() {
         // parentOrgId for groups should be the parent site (district)
         let siteId = resource.data.get('parentOrgId', 'nullId');
-        let legacyCheck = isSuperAdminOrAdminLegacy();
-        return shouldUseNewPermissions()
-          ? hasSiteGroupPermissionForSiteIds([siteId], 'cohorts', 'read')
-          : legacyCheck;
+        return hasSiteGroupPermissionForSiteIds([siteId], 'cohorts', 'read');
       }
-      allow list: if isAuthed() && ((getHighestRole() != 'participant') || isSuperAdminOrAdminLegacy())
+      allow list: if isAuthed() && (getHighestRole() != 'participant')
       allow read: if isAuthed() && canReadGroup();
     }
 
@@ -323,18 +289,16 @@ service cloud.firestore {
       }
 
       function canReadTask() {
-        return shouldUseNewPermissions()
-          ? (isAuthed() && hasPermission('tasks', 'read'))
-          : isAuthed();
+        return isAuthed() && hasPermission('tasks', 'read');
       }
 
       function canCreateTask() {
         let baseCheck = isAuthed() && !request.resource.data.keys().hasAny(['registered']);
-        return shouldUseNewPermissions() ? (baseCheck && hasPermission('tasks', 'create')) : baseCheck;
+        return baseCheck && hasPermission('tasks', 'create');
       }
 
       function canUpdateTaskWithPermission() {
-        return shouldUseNewPermissions() ? (canUpdateTask() && hasPermission('tasks', 'update')) : canUpdateTask();
+        return canUpdateTask() && hasPermission('tasks', 'update');
       }
 
       allow read:   if isAuthed() && canReadTask();
@@ -351,9 +315,7 @@ service cloud.firestore {
         // Collection-group queries are evaluated at the top level and cannot be nested under their parent documents
     match /{parentPath=**}/variants/{variantId} {
       function canReadTask() {
-        return shouldUseNewPermissions()
-          ? (isAuthed() && hasPermission('tasks', 'read'))
-          : true
+        return isAuthed() && hasPermission('tasks', 'read');
       }
 
       allow list: if isAuthed() && canReadTask();
