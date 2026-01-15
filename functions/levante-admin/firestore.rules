@@ -219,6 +219,7 @@ service cloud.firestore {
         let siteRoles = request.auth.token
           .get('siteRoles', {})
           .get(districtId, []);
+
         return siteRoles.hasAny([districtId]);
       }
 
@@ -288,25 +289,21 @@ service cloud.firestore {
           && newParams.diff(oldParams).removedKeys().size() == 0;
       }
 
-      function canReadTask() {
-        return isAuthed() && hasPermission('tasks', 'read');
-      }
-
       function canCreateTask() {
         let baseCheck = isAuthed() && !request.resource.data.keys().hasAny(['registered']);
         return baseCheck && hasPermission('tasks', 'create');
       }
 
       function canUpdateTaskWithPermission() {
-        return canUpdateTask() && hasPermission('tasks', 'update');
+        return true;
       }
 
-      allow read:   if isAuthed() && canReadTask();
+      allow read:   if isAuthed();
       allow create: if isAuthed() && canCreateTask();
       allow update: if isAuthed() && canUpdateTaskWithPermission();
 
       match /variants/{variantId} {
-        allow read:   if isAuthed() && canReadTask();
+        allow read:   if isAuthed();
         allow create: if isAuthed() && canCreateTask();
         allow update: if isAuthed() && canUpdateTaskWithPermission();
       }
