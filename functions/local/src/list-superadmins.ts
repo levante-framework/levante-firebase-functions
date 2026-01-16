@@ -7,7 +7,7 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 
 type Environment = "dev" | "prod";
-type Format = "table" | "json";
+type Format = "table" | "json" | "compact";
 
 const envVariable = "LEVANTE_ADMIN_FIREBASE_CREDENTIALS";
 
@@ -26,8 +26,8 @@ const argv = yargs(hideBin(process.argv))
     format: {
       alias: "f",
       description: "Output format",
-      choices: ["table", "json"] as const,
-      default: "table" as const,
+      choices: ["compact", "table", "json"] as const,
+      default: "compact" as const,
     },
   })
   .help("help")
@@ -119,6 +119,16 @@ console.log(`Project: ${projectId}`);
 console.log(
   `SuperAdmins found (by Firestore userClaims): ${uids.length}${argv.limit ? ` (showing ${rows.length})` : ""}`,
 );
+
+if (argv.format === "compact") {
+  const compactRows = rows
+    .map((r) => ({ displayName: r.displayName ?? "", email: r.email ?? "" }))
+    .filter((r) => r.displayName || r.email);
+  console.table(compactRows);
+  await deleteApp(app);
+  process.exit(0);
+}
+
 console.table(rows);
 
 await deleteApp(app);
