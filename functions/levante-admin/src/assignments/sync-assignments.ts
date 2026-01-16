@@ -24,11 +24,13 @@ import { getUsersFromOrgs } from "../orgs/org-utils.js";
 import {
   addAssignmentToUsers,
   updateAssignmentForUsers,
+  rollbackAssignmentCreation,
 } from "./assignment-utils.js";
 import {
   summarizeIdListForLog,
   summarizeOrgsForLog,
 } from "../utils/logging.js";
+import { updateAdministrationStatsForOrgChunk } from "./on-assignment-updates.js";
 
 /**
  * Sync globally defined adminstrations with user-specific assignments.
@@ -191,85 +193,101 @@ export const updateAssignmentsForOrgChunkHandler = async ({
   administrationData: IAdministration;
   orgChunk: IOrgsList;
   mode: "update" | "add";
-}) => {
+}): Promise<{ success: boolean; userIds: string[]; error?: Error }> => {
   if (!["update", "add"].includes(mode)) {
     throw new Error(`Invalid mode: ${mode}. Expected 'update' or 'add'.`);
   }
 
   const db = getFirestore();
+  const createdUserIds: string[] = [];
 
-  // Get all of the current users and update their assignments. The
-  // maximum number of docs we can update in a single transaction is
-  // ``MAX_TRANSACTIONS``. The number of affected users is potentially
-  // larger. So we loop through chunks of the userIds and update them in
-  // separate transactions if necessary.
+  try {
+    // Get all of the current users and update their assignments. The
+    // maximum number of docs we can update in a single transaction is
+    // ``MAX_TRANSACTIONS``. The number of affected users is potentially
+    // larger. So we loop through chunks of the userIds and update them in
+    // separate transactions if necessary.
+    let usersToUpdate: string[] = [];
 
-  // ``remainingUsers`` is a placeholder in the event that the number of
-  // affected users is greater than the maximum number of docs we can update
-  // in a single transaction.
-  let remainingUsers: string[] = [];
+    // Run the first transaction to get the user list
+    await db.runTransaction(async (transaction) => {
+      usersToUpdate = await getUsersFromOrgs({
+        orgs: orgChunk,
+        transaction,
+        includeArchived: false, // Do not assign updated assignment to archived users
+      });
 
-  // Run the first transaction to get the user list
-  await db.runTransaction(async (transaction) => {
-    const usersToUpdate = await getUsersFromOrgs({
-      orgs: orgChunk,
-      transaction,
-      includeArchived: false, // Do not assign updated assignment to archived users
+      logger.info(`Updating assignment ${administrationId} for users`, {
+        orgChunkSummary: summarizeOrgsForLog(orgChunk),
+        userSummary: summarizeIdListForLog(usersToUpdate),
+      });
     });
 
-    logger.info(`Updating assignment ${administrationId} for users`, {
-      orgChunkSummary: summarizeOrgsForLog(orgChunk),
-      userSummary: summarizeIdListForLog(usersToUpdate),
-    });
-
-    if (usersToUpdate.length !== 0) {
-      if (usersToUpdate.length <= MAX_TRANSACTIONS) {
-        // If the number of users is small enough, update them in this transaction.
+    const userChunks = _chunk(usersToUpdate, MAX_TRANSACTIONS);
+    const transactionPromises = userChunks.map((_userChunk) => {
+      return db.runTransaction(async (transaction) => {
         if (mode === "update") {
           return updateAssignmentForUsers(
-            usersToUpdate,
+            _userChunk,
             administrationId,
             administrationData,
             transaction
           );
         } else {
-          console.log("adding assignments to users");
           return addAssignmentToUsers(
-            usersToUpdate,
+            _userChunk,
             administrationId,
             administrationData,
             transaction
           );
         }
-      } else {
-        // Otherwise, just save for the next loop over user chunks.
-        remainingUsers = usersToUpdate;
-        return Promise.resolve(usersToUpdate.length);
-      }
-    } else {
-      return Promise.resolve(0);
-    }
-  });
-
-  // If remainingUsersToRemove.length === 0, then these chunks will be of zero length
-  // and the entire loop below is a no-op.
-  for (const _userChunk of _chunk(remainingUsers, MAX_TRANSACTIONS)) {
-    await db.runTransaction(async (transaction) => {
-      if (mode === "update") {
-        return updateAssignmentForUsers(
-          _userChunk,
-          administrationId,
-          administrationData,
-          transaction
-        );
-      } else {
-        return addAssignmentToUsers(
-          _userChunk,
-          administrationId,
-          administrationData,
-          transaction
-        );
-      }
+      });
     });
+
+    await Promise.all(transactionPromises);
+
+    if (mode === "add") {
+      createdUserIds.push(...usersToUpdate);
+    }
+
+    // Update administration stats synchronously for immediate visibility
+    // Only update stats when adding new assignments (not when updating)
+    if (mode === "add" && usersToUpdate.length > 0) {
+      await updateAdministrationStatsForOrgChunk(
+        administrationId,
+        orgChunk,
+        administrationData,
+        usersToUpdate.length
+      );
+    }
+
+    return { success: true, userIds: createdUserIds };
+  } catch (error: any) {
+    logger.error("Error creating assignments for org chunk", {
+      error,
+      administrationId,
+      orgChunkSummary: summarizeOrgsForLog(orgChunk),
+      createdUserIds,
+    });
+
+    // Rollback all created assignments if any failed
+    if (mode === "add" && createdUserIds.length > 0) {
+      try {
+        await rollbackAssignmentCreation(
+          createdUserIds,
+          administrationId,
+          orgChunk,
+          administrationData
+        );
+      } catch (rollbackError: any) {
+        logger.error("Error during rollback of assignment creation", {
+          rollbackError,
+          administrationId,
+          userIds: createdUserIds,
+        });
+      }
+    }
+
+    return { success: false, userIds: createdUserIds, error };
   }
 };

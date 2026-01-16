@@ -1,5 +1,10 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
-import { getFirestore, Timestamp } from "firebase-admin/firestore";
+import {
+  getFirestore,
+  Timestamp,
+  FieldValue,
+  FieldPath,
+} from "firebase-admin/firestore";
 import type {
   CollectionReference,
   DocumentData,
@@ -30,6 +35,7 @@ import {
   summarizeAssessmentsForLog,
   summarizeIdListForLog,
 } from "../utils/logging.js";
+import { updateAdministrationStatsForOrgChunk } from "./on-assignment-updates.js";
 
 /**
  * Parse a Firestore Timestamp or Date instance
@@ -113,6 +119,151 @@ export const removeAssignmentFromUsers = async (
       removeAssignmentFromUser(user, administrationId, transaction)
     )
   );
+};
+
+/**
+ * Rolls back administration document creation by deleting the administration document
+ * and removing it from the creator's administrationsCreated array.
+ * This is used when assignment creation fails for a new administration to ensure full atomicity.
+ *
+ * @param {string} administrationId - The administration ID to rollback.
+ * @param {string} creatorUid - The UID of the user who created the administration.
+ */
+export const rollbackAdministrationCreation = async (
+  administrationId: string,
+  creatorUid: string
+) => {
+  const db = getFirestore();
+
+  logger.warn(`Rolling back administration document creation`, {
+    administrationId,
+    creatorUid,
+  });
+
+  try {
+    const administrationDocRef = db
+      .collection("administrations")
+      .doc(administrationId);
+
+    const creatorDocRef = db.collection("users").doc(creatorUid);
+
+    await db.runTransaction(async (transaction) => {
+      const adminDoc = await transaction.get(administrationDocRef);
+      const creatorDoc = await transaction.get(creatorDocRef);
+
+      if (adminDoc.exists) {
+        transaction.delete(administrationDocRef);
+      }
+
+      if (creatorDoc.exists) {
+        const fieldPath = new FieldPath("adminData", "administrationsCreated");
+        transaction.update(
+          creatorDocRef,
+          fieldPath,
+          FieldValue.arrayRemove(administrationId)
+        );
+      }
+    });
+
+    logger.info(`Successfully rolled back administration document creation`, {
+      administrationId,
+      creatorUid,
+    });
+  } catch (error: any) {
+    logger.error("Error rolling back administration document creation", {
+      error,
+      administrationId,
+      creatorUid,
+    });
+    throw error;
+  }
+};
+
+/**
+ * Rolls back assignment creation by deleting assignments and reverting user document updates.
+ * This is used when assignment creation fails to ensure atomicity.
+ *
+ * @param {string[]} userIds - Array of user IDs whose assignments should be rolled back.
+ * @param {string} administrationId - The administration ID.
+ * @param {IOrgsList} orgChunk - Optional org chunk to rollback stats for.
+ * @param {IAdministration} administrationData - Optional administration data for stats rollback.
+ */
+export const rollbackAssignmentCreation = async (
+  userIds: string[],
+  administrationId: string,
+  orgChunk?: IOrgsList,
+  administrationData?: IAdministration
+) => {
+  const db = getFirestore();
+
+  logger.warn(`Rolling back assignment creation for ${userIds.length} users`, {
+    administrationId,
+    userCount: userIds.length,
+  });
+
+  const batch = db.batch();
+  let batchCount = 0;
+  const MAX_BATCH_SIZE = 500;
+
+  for (const userId of userIds) {
+    if (batchCount >= MAX_BATCH_SIZE) {
+      await batch.commit();
+      batchCount = 0;
+    }
+
+    const assignmentRef = db
+      .collection("users")
+      .doc(userId)
+      .collection("assignments")
+      .doc(administrationId);
+
+    batch.delete(assignmentRef);
+    batchCount++;
+
+    const userDocRef = db.collection("users").doc(userId);
+    const fieldPathDate = new FieldPath(
+      "assignmentsAssigned",
+      administrationId
+    );
+    const fieldPathList = new FieldPath("assignments", "assigned");
+
+    batch.update(
+      userDocRef,
+      fieldPathDate,
+      FieldValue.delete(),
+      fieldPathList,
+      FieldValue.arrayRemove(administrationId)
+    );
+    batchCount++;
+  }
+
+  if (batchCount > 0) {
+    await batch.commit();
+  }
+
+  // Rollback stats if org chunk and administration data are provided
+  if (orgChunk && administrationData && userIds.length > 0) {
+    try {
+      // Decrement stats by the number of users that were rolled back
+      await updateAdministrationStatsForOrgChunk(
+        administrationId,
+        orgChunk,
+        administrationData,
+        -userIds.length
+      );
+    } catch (statsError: any) {
+      logger.error("Error rolling back administration stats", {
+        statsError,
+        administrationId,
+        userCount: userIds.length,
+      });
+    }
+  }
+
+  logger.info(`Successfully rolled back assignment creation`, {
+    administrationId,
+    userCount: userIds.length,
+  });
 };
 
 /**
@@ -301,6 +452,7 @@ export const addAssignmentToUsers = async (
   transaction: Transaction
 ) => {
   console.log("hit addAssignmentToUsers");
+  const db = getFirestore();
   const assignments = await Promise.all(
     _map(users, (user) =>
       prepareNewAssignment(
@@ -312,11 +464,31 @@ export const addAssignmentToUsers = async (
     )
   );
 
-  return _map(assignments, ([assignmentRef, assignmentData]) => {
+  return _map(assignments, ([assignmentRef, assignmentData], index: number) => {
     if (assignmentRef && assignmentData) {
       logger.debug(`Adding new assignment at ${assignmentRef.path}`, {
         assignmentSummary: summarizeAssignmentForLog(assignmentData),
       });
+
+      const userUid = users[index];
+      if (userUid) {
+        const userDocRef = db.collection("users").doc(userUid);
+        const fieldPathDate = new FieldPath(
+          "assignmentsAssigned",
+          administrationId
+        );
+        const fieldPathList = new FieldPath("assignments", "assigned");
+        const dateAssigned = assignmentData.dateAssigned || new Date();
+
+        transaction.update(
+          userDocRef,
+          fieldPathDate,
+          dateAssigned,
+          fieldPathList,
+          FieldValue.arrayUnion(administrationId)
+        );
+      }
+
       return transaction.set(assignmentRef, assignmentData, { merge: true });
     } else {
       return transaction;
