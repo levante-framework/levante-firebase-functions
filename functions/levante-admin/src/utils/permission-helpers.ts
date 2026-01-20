@@ -16,6 +16,7 @@ import {
   FIRESTORE_PERMISSIONS_LOGS_COLLECTION,
   FIRESTORE_SYSTEM_COLLECTION,
 } from "./constants.js";
+import { normalizeRoleKey } from "./role-helpers.js";
 
 export const createPermissionsFirestoreSink = (
   loggingConfig: LoggingModeConfig
@@ -101,14 +102,15 @@ const transformClaimsToRoles = (customClaims: unknown): PermUser["roles"] => {
 
   for (const [siteId, roleList] of Object.entries(siteRoles)) {
     for (const role of roleList) {
-      if (!role) continue;
-      const key = `${siteId}:${role}`;
+      const normalizedRole = normalizeRoleKey(role);
+      if (!normalizedRole) continue;
+      const key = `${siteId}:${normalizedRole}`;
       if (seen.has(key)) continue;
       seen.add(key);
       roles.push({
         siteId,
         siteName: siteNames[siteId] ?? siteId,
-        role,
+        role: normalizedRole,
       });
     }
   }

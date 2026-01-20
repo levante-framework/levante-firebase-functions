@@ -139,6 +139,18 @@ const sortStringRecord = (record: Record<string, string>) => {
     }, {});
 };
 
+const normalizeRoleKey = (role: unknown): string => {
+  if (typeof role !== "string") return "";
+  const cleaned = role.trim().toLowerCase();
+  if (cleaned.length === 0) return "";
+  const normalized = cleaned.replace(/\s+/g, "_");
+  if (normalized === "superadmin") return "super_admin";
+  if (normalized === "siteadmin") return "site_admin";
+  if (normalized === "research_associate") return "research_assistant";
+  if (normalized === "researchassistant") return "research_assistant";
+  return normalized;
+};
+
 const buildClaimsFromRoles = (
   rawRoles: unknown,
   siteIdToName: Map<string, string>,
@@ -158,11 +170,10 @@ const buildClaimsFromRoles = (
   for (const entry of rawRoles) {
     const { role, siteId } = (entry ?? {}) as UserRoleEntry;
 
-    if (typeof role !== "string" || role.trim().length === 0) {
+    const normalizedRole = normalizeRoleKey(role);
+    if (!normalizedRole) {
       continue;
     }
-
-    const normalizedRole = role.trim();
 
     if (typeof siteId !== "string" || siteId.trim().length === 0) {
       continue;

@@ -13,12 +13,24 @@ export interface RoleClaimsStructure {
   siteNames: Record<string, string>;
 }
 
+export const normalizeRoleKey = (role: unknown): string => {
+  if (typeof role !== "string") return "";
+  const cleaned = role.trim().toLowerCase();
+  if (cleaned.length === 0) return "";
+  const normalized = cleaned.replace(/\s+/g, "_");
+  if (normalized === "superadmin") return "super_admin";
+  if (normalized === "siteadmin") return "site_admin";
+  if (normalized === "research_associate") return "research_assistant";
+  if (normalized === "researchassistant") return "research_assistant";
+  return normalized;
+};
+
 export const sanitizeRoles = (roles: RoleDefinition[] = []) =>
   _uniqBy(
     roles
       .map(({ siteId, role, siteName }) => ({
         siteId: String(siteId ?? "").trim(),
-        role: String(role ?? "").trim(),
+        role: normalizeRoleKey(role),
         siteName: String(siteName ?? "").trim(),
       }))
       .filter(({ siteId, role }) => siteId.length > 0 && role.length > 0)

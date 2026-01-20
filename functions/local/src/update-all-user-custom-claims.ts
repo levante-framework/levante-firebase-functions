@@ -31,6 +31,18 @@ interface ClaimsUpdate {
 
 type AnyObject = Record<string, unknown>;
 
+const normalizeRoleKey = (role: unknown): string => {
+  if (typeof role !== "string") return "";
+  const cleaned = role.trim().toLowerCase();
+  if (cleaned.length === 0) return "";
+  const normalized = cleaned.replace(/\s+/g, "_");
+  if (normalized === "superadmin") return "super_admin";
+  if (normalized === "siteadmin") return "site_admin";
+  if (normalized === "research_associate") return "research_assistant";
+  if (normalized === "researchassistant") return "research_assistant";
+  return normalized;
+};
+
 const argv = yargs(hideBin(process.argv))
   .options({
     dryRun: {
@@ -168,11 +180,10 @@ const buildClaimsFromRoles = (rawRoles: unknown): ClaimsUpdate => {
   for (const entry of rawRoles) {
     const { role, siteId, siteName } = (entry ?? {}) as UserRoleEntry;
 
-    if (typeof role !== "string" || role.trim().length === 0) {
+    const normalizedRole = normalizeRoleKey(role);
+    if (!normalizedRole) {
       continue;
     }
-
-    const normalizedRole = role.trim();
 
     if (normalizedRole === "super_admin") {
       isSuperAdmin = true;
