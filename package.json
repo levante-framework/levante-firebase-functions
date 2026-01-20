@@ -7,10 +7,10 @@
     "functions/levante-admin"
   ],
   "scripts": {
-    "build": "npm run build --workspaces",
-    "build:watch": "npm run build:watch --workspaces",
-    "format": "npm run format --workspaces",
-    "lint": "npm run lint --workspaces",
+    "build": "npm --prefix functions/levante-admin run build",
+    "build:watch": "npm --prefix functions/levante-admin run build:watch",
+    "format": "npm --prefix functions/levante-admin run format",
+    "lint": "npm --prefix functions/levante-admin run lint",
     "prepare": "husky install || true",
     "test": "firebase emulators:exec \"npx vitest run\"",
     "predeploy:levante-admin": "npm run build",
