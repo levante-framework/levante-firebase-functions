@@ -100,9 +100,6 @@ const initializeApp = async () => {
 };
 
 const getSpecifiedUids = async (
-  uidArg: string | undefined
-): Promise<Set<string> | null> => {
-const getSpecifiedUids = async (
   uidArg: string | undefined,
 ): Promise<Set<string> | null> => {
   if (!uidArg) return null;
