@@ -68,6 +68,14 @@ const parsedArgs = yargs(hideBin(process.argv))
     type: "boolean",
     default: false,
   })
+  .option("email", {
+    describe: "Target a single user by email",
+    type: "string",
+  })
+  .option("uid", {
+    describe: "Target a single user by UID",
+    type: "string",
+  })
   .option("limit", {
     describe: "Limit number of users processed",
     type: "number",
@@ -79,6 +87,14 @@ const parsedArgs = yargs(hideBin(process.argv))
 const isDev = parsedArgs.d === "dev";
 const projectId = isDev ? "hs-levante-admin-dev" : "hs-levante-admin-prod";
 const apply = Boolean(parsedArgs.apply);
+const targetEmail =
+  typeof parsedArgs.email === "string" && parsedArgs.email.trim().length > 0
+    ? parsedArgs.email.trim()
+    : undefined;
+const targetUid =
+  typeof parsedArgs.uid === "string" && parsedArgs.uid.trim().length > 0
+    ? parsedArgs.uid.trim()
+    : undefined;
 const limit =
   typeof parsedArgs.limit === "number" && Number.isFinite(parsedArgs.limit)
     ? Math.floor(parsedArgs.limit)
@@ -86,6 +102,12 @@ const limit =
 
 console.log(`Using ${isDev ? "development" : "production"} database`);
 console.log(`Dry run mode: ${apply ? "OFF" : "ON"}`);
+if (targetEmail) {
+  console.log(`Target email: ${targetEmail}`);
+}
+if (targetUid) {
+  console.log(`Target UID: ${targetUid}`);
+}
 
 const adminCredentialFile = process.env.LEVANTE_ADMIN_FIREBASE_CREDENTIALS;
 const adminCredentials = adminCredentialFile
@@ -116,15 +138,35 @@ const db = getFirestore(adminApp);
 
 async function normalizeUserRoles() {
   try {
-    let query: FirebaseFirestore.Query<FirebaseFirestore.DocumentData> = db
-      .collection("users")
-      .where("userType", "==", "admin");
+    let snapshot: FirebaseFirestore.QuerySnapshot<FirebaseFirestore.DocumentData>;
 
-    if (typeof limit === "number") {
-      query = query.limit(limit);
+    if (targetUid) {
+      const doc = await db.collection("users").doc(targetUid).get();
+      snapshot = {
+        docs: doc.exists ? [doc] : [],
+        empty: !doc.exists,
+        size: doc.exists ? 1 : 0,
+        forEach: (fn: (doc: any) => void) => {
+          if (doc.exists) fn(doc);
+        },
+      } as FirebaseFirestore.QuerySnapshot<FirebaseFirestore.DocumentData>;
+    } else if (targetEmail) {
+      let query: FirebaseFirestore.Query<FirebaseFirestore.DocumentData> = db
+        .collection("users")
+        .where("email", "==", targetEmail);
+      if (typeof limit === "number") {
+        query = query.limit(limit);
+      }
+      snapshot = await query.get();
+    } else {
+      let query: FirebaseFirestore.Query<FirebaseFirestore.DocumentData> = db
+        .collection("users")
+        .where("userType", "==", "admin");
+      if (typeof limit === "number") {
+        query = query.limit(limit);
+      }
+      snapshot = await query.get();
     }
-
-    const snapshot = await query.get();
 
     if (snapshot.empty) {
       console.log("No admin users found.");
