@@ -2,12 +2,12 @@
 
 ## Setup
 
-These functions require two environment variables to be set:
+These functions can use either service-account credentials or Google ADC.
 
-- ROAR_ADMIN_FIREBASE_CREDENTIALS
-- ROAR_ASSESSMENT_FIREBASE_CREDENTIALS
+- Preferred: set `LEVANTE_ADMIN_FIREBASE_CREDENTIALS` (admin project JSON key).
+- Optional: set `ROAR_ASSESSMENT_FIREBASE_CREDENTIALS` if a script needs the assessment project.
 
-Each of these should point to a file containing the service account key for the admin and assessment firebase projects, respectively. See the [admin-SDK setup instructions](https://firebase.google.com/docs/admin/setup/#initialize_the_sdk_in_non-google_environments) for more details.
+See the [admin-SDK setup instructions](https://firebase.google.com/docs/admin/setup/#initialize_the_sdk_in_non-google_environments) for more details on service accounts and ADC.
 
 It might be helpful to set these environment variables in your `.zshrc` file (or similar shell setup files).
 For example,
@@ -30,7 +30,7 @@ This section describes each of the npm scripts available to you.
   npm run set-superadmin -- --environment prod --email someone@stanford.edu --apply
   ```
 
-- `npm run rebuild-custom-claims` rebuilds the role-mapping fields inside Firebase Auth custom claims from `users/<uid>.roles` (does not grant superadmin). By default it is a dry-run; add `-- --apply` to write.
+- `npm run rebuild-custom-claims` rebuilds the role-mapping fields inside Firebase Auth custom claims from `users/<uid>.roles` (does not grant superadmin). It normalizes role strings and sets `useNewPermissions` when missing. By default it is a dry-run; add `-- --apply` to write.
 
   ```bash
   npm run rebuild-custom-claims -- --environment prod --email someone@stanford.edu
@@ -51,12 +51,13 @@ This section describes each of the npm scripts available to you.
   npm run list-superadmins -- --environment prod --format json
   ```
 
-- `npm run normalize-user-roles` normalizes `users/<uid>.roles` entries (e.g. "site admin" -> "site_admin") for admin users. By default it is a dry-run; add `-- --apply` to write. If you apply this, follow it by rebuilding custom claims so `siteRoles/siteNames` stay in sync.
+- `npm run normalize-user-roles` normalizes `users/<uid>.roles` entries (e.g. "site admin" -> "site_admin") and updates `userClaims/<uid>.claims` to keep `roles`, `rolesSet`, `siteRoles`, `siteNames`, and `useNewPermissions` in sync. By default it is a dry-run; add `-- --apply` to write. You can target a single user by email or UID.
 
   ```bash
   npm run normalize-user-roles -- --database prod
   npm run normalize-user-roles -- --database prod --apply
-  npm run update-all-user-custom-claims -- --environment prod --dryRun=false
+  npm run normalize-user-roles -- --database prod --email someone@stanford.edu --apply
+  npm run normalize-user-roles -- --database prod --uid ROAR_UID --apply
   ```
 
 - `npm run list-admin-roles` exports a CSV of admin roles (Email, site, role) for the specified environment.
