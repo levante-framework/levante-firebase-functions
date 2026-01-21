@@ -177,6 +177,8 @@ async function normalizeUserRoles() {
       processed: 0,
       updated: 0,
       unchanged: 0,
+      userClaimsUpdated: 0,
+      userClaimsSkipped: 0,
     };
 
     for (const doc of snapshot.docs) {
@@ -186,6 +188,27 @@ async function normalizeUserRoles() {
 
       const rolesChanged =
         JSON.stringify(originalRoles) !== JSON.stringify(normalizedRoles);
+      const hasRoles = normalizedRoles.length > 0;
+      const rolesSet = Array.from(
+        new Set(normalizedRoles.map((role) => role.role)),
+      ).sort();
+      const siteRoles = normalizedRoles.reduce<Record<string, string[]>>(
+        (acc, role) => {
+          if (!acc[role.siteId]) acc[role.siteId] = [];
+          if (!acc[role.siteId].includes(role.role)) {
+            acc[role.siteId].push(role.role);
+          }
+          return acc;
+        },
+        {},
+      );
+      const siteNames = normalizedRoles.reduce<Record<string, string>>(
+        (acc, role) => {
+          if (!acc[role.siteId]) acc[role.siteId] = role.siteName;
+          return acc;
+        },
+        {},
+      );
 
       if (!rolesChanged) {
         stats.unchanged++;
@@ -196,6 +219,36 @@ async function normalizeUserRoles() {
         }
       }
 
+      if (apply) {
+        const userClaimsRef = db.collection("userClaims").doc(doc.id);
+        const userClaimsSnap = await userClaimsRef.get();
+        if (userClaimsSnap.exists) {
+          const existingClaims = (userClaimsSnap.data() ?? {}).claims ?? {};
+          const existingUseNewPermissions =
+            typeof existingClaims.useNewPermissions === "boolean"
+              ? existingClaims.useNewPermissions
+              : undefined;
+          await userClaimsRef.set(
+            {
+              claims: {
+                roles: normalizedRoles,
+                rolesSet,
+                siteRoles,
+                siteNames,
+                useNewPermissions:
+                  existingUseNewPermissions !== undefined
+                    ? existingUseNewPermissions
+                    : hasRoles,
+              },
+            },
+            { merge: true },
+          );
+          stats.userClaimsUpdated++;
+        } else {
+          stats.userClaimsSkipped++;
+        }
+      }
+
       stats.processed++;
     }
 
@@ -203,6 +256,8 @@ async function normalizeUserRoles() {
     console.log(`Processed: ${stats.processed}`);
     console.log(`Updated: ${stats.updated}`);
     console.log(`Unchanged: ${stats.unchanged}`);
+    console.log(`User claims updated: ${stats.userClaimsUpdated}`);
+    console.log(`User claims skipped: ${stats.userClaimsSkipped}`);
 
     if (!apply) {
       console.log("\n🔍 This was a dry run. No changes were made.");
