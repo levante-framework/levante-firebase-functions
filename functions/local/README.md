@@ -51,9 +51,30 @@ This section describes each of the npm scripts available to you.
   npm run list-superadmins -- --environment prod --format json
   ```
 
+- `npm run normalize-user-roles` normalizes `users/<uid>.roles` entries (e.g. "site admin" -> "site_admin") for admin users. By default it is a dry-run; add `-- --apply` to write. If you apply this, follow it by rebuilding custom claims so `siteRoles/siteNames` stay in sync.
+
+  ```bash
+  npm run normalize-user-roles -- --database prod
+  npm run normalize-user-roles -- --database prod --apply
+  npm run update-all-user-custom-claims -- --environment prod --dryRun=false
+  ```
+
+- `npm run list-admin-roles` exports a CSV of admin roles (Email, site, role) for the specified environment.
+
+  ```bash
+  npm run list-admin-roles -- --database prod
+  npm run list-admin-roles -- --database prod --out /tmp/admin-roles.csv
+  ```
+
+- `npm run list-roles-by-email` prints roles for specific email addresses.
+
+  ```bash
+  npm run list-roles-by-email -- --database prod --emails user1@example.com user2@example.com
+  ```
+
 - `npm run toggle-super-admin` will toggle the `super_admin` custom claim for a given ROAR UID. You must pass the ROAR UID as an argument to this script using the following syntax:
 
   ```bash
-  # Not the space separating the -- from the ROAR_UID argument
+  # Note the space separating the -- from the ROAR_UID argument
   npm run toggle-super-admin -- ROAR_UID
   ```
