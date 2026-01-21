@@ -16,12 +16,24 @@ type Role = {
 
 const envVariable = "LEVANTE_ADMIN_FIREBASE_CREDENTIALS";
 
+function normalizeRoleKey(role: unknown): string {
+  if (typeof role !== "string") return "";
+  const cleaned = role.trim().toLowerCase();
+  if (cleaned.length === 0) return "";
+  const normalized = cleaned.replace(/\s+/g, "_");
+  if (normalized === "superadmin") return "super_admin";
+  if (normalized === "siteadmin") return "site_admin";
+  if (normalized === "research_associate") return "research_assistant";
+  if (normalized === "researchassistant") return "research_assistant";
+  return normalized;
+}
+
 function normalizeRoles(roles: unknown): Role[] {
   if (!Array.isArray(roles)) return [];
   return roles
     .map((r: any) => ({
       siteId: String(r?.siteId ?? ""),
-      role: String(r?.role ?? ""),
+      role: normalizeRoleKey(r?.role),
       siteName: typeof r?.siteName === "string" ? r.siteName : "",
     }))
     .filter((r) => r.siteId && r.role);
@@ -73,31 +85,33 @@ const argv = yargs(hideBin(process.argv))
   .parseSync() as { environment: Environment; email?: string; uid?: string; apply: boolean };
 
 const credentialFile = process.env[envVariable];
-if (!credentialFile) {
-  console.error(
-    `Missing required environment variable: ${envVariable}
-    Please set this environment variable using
-    export ${envVariable}=path/to/credentials/for/admin/project.json`,
-  );
-  process.exit(1);
-}
 
 const isDev = argv.environment === "dev";
 const projectId = isDev ? "hs-levante-admin-dev" : "hs-levante-admin-prod";
 
-const credentials = (
-  await import(credentialFile, {
-    assert: { type: "json" },
-  })
-).default;
+const credentials = credentialFile
+  ? (
+      await import(credentialFile, {
+        assert: { type: "json" },
+      })
+    ).default
+  : null;
 
 const app = admin.initializeApp(
   {
-    credential: admin.cert(credentials),
+    credential: credentials
+      ? admin.cert(credentials)
+      : admin.applicationDefault(),
     projectId,
   },
   "admin",
 );
+
+if (!credentialFile) {
+  console.log(
+    "LEVANTE_ADMIN_FIREBASE_CREDENTIALS not set; using application default credentials.",
+  );
+}
 
 const auth = getAuth(app);
 const db = getFirestore(app);
@@ -111,6 +125,7 @@ const existingCustomClaims = (user.customClaims ?? {}) as Record<string, unknown
 const rolesFromUsers = normalizeRoles((usersDoc as any)?.roles);
 const rolesFromClaims = normalizeRoles((existingCustomClaims as any)?.roles);
 const baseRoles = rolesFromUsers.length > 0 ? rolesFromUsers : rolesFromClaims;
+const hasRoles = baseRoles.length > 0;
 
 const rolesSet = Array.from(new Set(baseRoles.map((r) => r.role)));
 const { siteRoles, siteNames } = buildRoleMaps(baseRoles);
@@ -121,6 +136,11 @@ const nextCustomClaims = {
   roles: baseRoles,
   siteRoles,
   siteNames,
+  useNewPermissions:
+    typeof (existingCustomClaims as Record<string, unknown>).useNewPermissions ===
+    "boolean"
+      ? (existingCustomClaims as Record<string, unknown>).useNewPermissions
+      : hasRoles,
 };
 
 console.log(
