@@ -54,31 +54,33 @@ const argv = yargs(hideBin(process.argv))
 };
 
 const credentialFile = process.env[envVariable];
-if (!credentialFile) {
-  console.error(
-    `Missing required environment variable: ${envVariable}
-    Please set this environment variable using
-    export ${envVariable}=path/to/credentials/for/admin/project.json`,
-  );
-  process.exit(1);
-}
 
 const isDev = argv.environment === "dev";
 const projectId = isDev ? "hs-levante-admin-dev" : "hs-levante-admin-prod";
 
-const credentials = (
-  await import(credentialFile, {
-    assert: { type: "json" },
-  })
-).default;
+const credentials = credentialFile
+  ? (
+      await import(credentialFile, {
+        assert: { type: "json" },
+      })
+    ).default
+  : null;
 
 const app = admin.initializeApp(
   {
-    credential: admin.cert(credentials),
+    credential: credentials
+      ? admin.cert(credentials)
+      : admin.applicationDefault(),
     projectId,
   },
   "admin",
 );
+
+if (!credentialFile) {
+  console.log(
+    "LEVANTE_ADMIN_FIREBASE_CREDENTIALS not set; using application default credentials.",
+  );
+}
 
 const auth = getAuth(app);
 const db = getFirestore(app);
