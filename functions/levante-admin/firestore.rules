@@ -117,7 +117,7 @@ service cloud.firestore {
 
       // TARGET USER SITES (aka districts)
       function getTargetUserSites() {
-        return resource.data.get(['districts', 'current'], []); // districts == sites
+        return get(/databases/$(database)/documents/users/$(uid)).data.get(['districts', 'current'], []);
       }
 
       function canReadUser() {
