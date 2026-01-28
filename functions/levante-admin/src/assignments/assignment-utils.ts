@@ -24,39 +24,12 @@ import type {
 import { ORG_NAMES } from "../interfaces.js";
 import { getReadOrgs, isEmptyOrgs } from "../orgs/org-utils.js";
 import { evaluateCondition } from "../administrations/conditions.js";
-import { removeUndefinedFields } from "../utils/utils.js";
+import { parseTimestamp, removeUndefinedFields } from "../utils/utils.js";
 import {
   summarizeAssignmentForLog,
   summarizeAssessmentsForLog,
   summarizeIdListForLog,
 } from "../utils/logging.js";
-
-/**
- * Parse a Firestore Timestamp or Date instance
- *
- * @param {Date | Timestamp} timestamp - The Firestore Timestamp or Date instance.
- *
- * @returns {Date} The parsed Date instance.
- */
-const parseTimestamp = (timestamp: Date | Timestamp): Date => {
-  if (
-    (timestamp as any)._seconds != undefined &&
-    (timestamp as any)._nanoseconds != undefined
-  ) {
-    return new Date(
-      new Timestamp(
-        (timestamp as any)._seconds,
-        (timestamp as any)._nanoseconds
-      ).toDate()
-    );
-  }
-
-  if ("toDate" in timestamp) {
-    return new Date((timestamp as Timestamp).toDate());
-  }
-
-  return new Date(timestamp);
-};
 
 /**
  * Removes an assignment document from a user.
