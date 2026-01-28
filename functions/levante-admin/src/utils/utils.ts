@@ -209,7 +209,18 @@ export const removeUndefinedFields = (obj: any): any => {
   return obj;
 };
 
-export const parseTimestamp = (timestamp: Date | Timestamp): Date => {
+/**
+ * Parse a Firestore Timestamp or Date instance
+ *
+ * @param {Date | Timestamp | undefined | null} timestamp - The Firestore Timestamp or Date instance.
+ *
+ * @returns {Date} The parsed Date instance.
+ */
+export const parseTimestamp = (
+  timestamp: Date | Timestamp | undefined | null
+): Date => {
+  if (!timestamp) return new Date(NaN);
+
   if (
     (timestamp as any)._seconds != undefined &&
     (timestamp as any)._nanoseconds != undefined
