@@ -44,7 +44,11 @@ import {
   summarizeIdListForLog,
   summarizeOrgsForLog,
 } from "../utils/logging.js";
-import { getFunctionUrl, MAX_TRANSACTIONS } from "../utils/utils.js";
+import {
+  getFunctionUrl,
+  MAX_TRANSACTIONS,
+  parseTimestamp,
+} from "../utils/utils.js";
 
 export const processRemovedAdministration = async (
   administrationId: string,
@@ -331,6 +335,10 @@ export const processUserAddedOrgs = async (
         if (administrationDoc.exists) {
           const administrationData =
             administrationDoc.data() as IAdministration;
+          const dateClosed = parseTimestamp(administrationData.dateClosed);
+          if (Number.isNaN(dateClosed.getTime()) || dateClosed <= new Date()) {
+            return [undefined, undefined];
+          }
           // Get administrationData using transaction.get()
           return updateAssignmentForUser(
             roarUid,
