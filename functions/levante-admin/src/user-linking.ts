@@ -116,6 +116,9 @@ async function updateUserDoc(
         updates[key] = FieldValue.arrayUnion(...values);
       }
     }
+    if (Object.keys(updates).length === 0) {
+      return;
+    }
     await userRef.update(updates);
   }
 }
