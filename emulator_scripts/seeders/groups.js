@@ -8,13 +8,15 @@ async function createGroups(adminApp, createdBy) {
 
   // Generate district ID
   const districtId = db.collection('districts').doc().id;
-  
-  // Generate school ID
+
+  // Generate school IDs
   const schoolId = db.collection('schools').doc().id;
-  
-  // Generate class ID  
+  const schoolId2 = db.collection('schools').doc().id;
+
+  // Generate class IDs
   const classId = db.collection('classes').doc().id;
-  
+  const classId2 = db.collection('classes').doc().id;
+
   // Generate group ID
   const groupId = db.collection('groups').doc().id;
 
@@ -28,7 +30,7 @@ async function createGroups(adminApp, createdBy) {
     normalizedName: normalizeToLowercase('Test District'),
     tags: ['test', 'levante'],
     subGroups: [groupId],
-    schools: [schoolId],
+    schools: [schoolId, schoolId2],
   };
 
   const districtRef = db.collection('districts').doc(districtId);
@@ -49,9 +51,24 @@ async function createGroups(adminApp, createdBy) {
     normalizedName: normalizeToLowercase('Test Elementary School'),
   };
 
+  const schoolData2 = {
+    archived: false,
+    classes: [classId2],
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdBy: createdBy,
+    districtId: districtId,
+    id: schoolId2,
+    name: 'Washington Elementary',
+    normalizedName: normalizeToLowercase('Washington Elementary'),
+  };
+
   const schoolRef = db.collection('schools').doc(schoolId);
   await schoolRef.set(schoolData);
   console.log(`    ✅ Created school: ${schoolId}`);
+  const schoolRef2 = db.collection('schools').doc(schoolId2);
+  await schoolRef2.set(schoolData2);
+  console.log(`    ✅ Created school: ${schoolId2}`);
 
   console.log('  Creating classes...');
 
@@ -68,9 +85,24 @@ async function createGroups(adminApp, createdBy) {
     schoolId: schoolId,
   };
 
+  const classData2 = {
+    archived: false,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdBy: createdBy,
+    districtId: districtId,
+    id: classId2,
+    name: '2nd Grade - Room 203',
+    normalizedName: normalizeToLowercase('2nd Grade - Room 203'),
+    schoolId: schoolId2,
+  };
+
   const classRef = db.collection('classes').doc(classId);
   await classRef.set(classData);
   console.log(`    ✅ Created class: ${classId}`);
+  const classRef2 = db.collection('classes').doc(classId2);
+  await classRef2.set(classData2);
+  console.log(`    ✅ Created class: ${classId2}`);
 
   console.log('  Creating groups...');
 
@@ -93,9 +125,13 @@ async function createGroups(adminApp, createdBy) {
 
   return {
     districts: [{ id: districtId, name: 'Test District' }],
-    schools: [{ id: schoolId, name: 'Test Elementary School', districtId: districtId }],
+    schools: [
+      { id: schoolId, name: 'Test Elementary School', districtId: districtId },
+      { id: schoolId2, name: 'Washington Elementary', districtId: districtId },
+    ],
     classes: [
       { id: classId, name: '3rd Grade - Room 101', schoolId: schoolId, districtId: districtId },
+      { id: classId2, name: '2nd Grade - Room 203', schoolId: schoolId2, districtId: districtId },
     ],
     groups: [{ id: groupId, name: 'Reading Intervention Cohort', parentOrgId: districtId }],
   };

@@ -251,6 +251,42 @@ async function processOrgUpdates(
  * @param timestamp - Timestamp to use for the 'from' field
  * @returns Error object if an error occurred, null otherwise
  */
+const buildUpdatedOrgMap = (
+  existingOrg: Record<string, any> | undefined,
+  orgId: string,
+  timestamp: Timestamp
+) => {
+  const existingAll: string[] = existingOrg?.all ?? [];
+  const existingCurrent: string[] = existingOrg?.current ?? [];
+  const existingDates: Record<string, { from: Timestamp; to: Timestamp | null }> =
+    existingOrg?.dates ?? {};
+
+  const updatedDates = { ...existingDates };
+  existingCurrent.forEach((currentId) => {
+    if (currentId !== orgId) {
+      updatedDates[currentId] = {
+        from: updatedDates[currentId]?.from ?? timestamp,
+        to: timestamp,
+      };
+    }
+  });
+
+  if (!updatedDates[orgId]) {
+    updatedDates[orgId] = { from: timestamp, to: null };
+  } else {
+    updatedDates[orgId] = {
+      from: updatedDates[orgId].from ?? timestamp,
+      to: null,
+    };
+  }
+
+  return {
+    all: Array.from(new Set([...existingAll, orgId])),
+    current: [orgId],
+    dates: updatedDates,
+  };
+};
+
 async function updateOrg(
   db: ReturnType<typeof getFirestore>,
   userRef: DocumentReference,
@@ -269,19 +305,12 @@ async function updateOrg(
       };
     }
 
-    // Create the update object with the correct structure
-    const update = {
-      [orgType]: {
-        all: [orgId],
-        current: [orgId],
-        dates: {
-          [orgId]: {
-            from: timestamp,
-            to: null,
-          },
-        },
-      },
-    };
+    const userSnapshot = await userRef.get();
+    const existingOrg = userSnapshot.exists
+      ? userSnapshot.data()?.[orgType]
+      : undefined;
+    const updatedOrg = buildUpdatedOrgMap(existingOrg, orgId, timestamp);
+    const update = { [orgType]: updatedOrg };
 
     // Update the user document with the new organization data
     await userRef.update(update);

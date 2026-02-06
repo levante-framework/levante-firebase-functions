@@ -7,57 +7,69 @@ const USER_DEFINITIONS = {
     email: 'superadmin@levante.test',
     password: 'super123',
     displayName: 'Super Admin User',
-    userType: 'admin'
+    userType: 'admin',
   },
   admin: {
     email: 'admin@levante.test',
     password: 'admin123',
     displayName: 'Admin User',
-    userType: 'admin'
+    userType: 'admin',
   },
   siteAdmin: {
     email: 'siteadmin@levante.test',
     password: 'site123',
     displayName: 'Site Admin User',
-    userType: 'admin'
+    userType: 'admin',
   },
   researchAssistant: {
     email: 'ra@levante.test',
     password: 'ras123',
     displayName: 'Research Assistant User',
-    userType: 'admin'
+    userType: 'admin',
   },
   teacher: {
     email: 'teacher@levante.test',
     password: 'teach123',
     displayName: 'Teacher User',
-    userType: 'teacher'
+    userType: 'teacher',
+  },
+  teacher2: {
+    email: 'teacher2@levante.test',
+    password: 'teach123',
+    displayName: 'Teacher User 2',
+    userType: 'teacher',
   },
   student: {
     email: 'student@levante.test',
     password: 'student123',
     displayName: 'Student User',
-    userType: 'student'
+    userType: 'student',
   },
   parent: {
     email: 'parent@levante.test',
     password: 'parent123',
     displayName: 'Parent User',
-    userType: 'parent'
-  }
+    userType: 'parent',
+  },
+  parent2: {
+    email: 'parent2@levante.test',
+    password: 'parent123',
+    displayName: 'Parent User 2',
+    userType: 'parent',
+  },
 };
 
 async function createUsers(adminApp) {
   const auth = getAuth(adminApp);
   const db = adminApp.firestore();
   const createdUsers = {};
-  
-  console.log("  Creating Auth users and user documents...");
-  
+
+  console.log('  Creating Auth users and user documents...');
+
   for (const [userKey, userDef] of Object.entries(USER_DEFINITIONS)) {
     try {
       console.log(`    Creating ${userKey}...`);
-      
+
       // Check if user already exists
       let userRecord;
       try {
@@ -71,16 +83,16 @@ async function createUsers(adminApp) {
             password: userDef.password,
             emailVerified: true,
             displayName: userDef.displayName,
-            disabled: false
+            disabled: false,
           });
           console.log(`      ✅ Created Auth user: ${userDef.email}`);
         } else {
           throw error;
         }
       }
-      
+
       const uid = userRecord.uid;
-      
+
       // Check if user document exists
       const userDoc = await db.collection('users').doc(uid).get();
       if (!userDoc.exists) {
@@ -97,70 +109,91 @@ async function createUsers(adminApp) {
           districts: {
             all: [],
             current: [],
-            dates: {}
+            dates: {},
           },
           schools: {
             all: [],
             current: [],
-            dates: {}
+            dates: {},
           },
           classes: {
             all: [],
             current: [],
-            dates: {}
+            dates: {},
           },
           groups: {
             all: [],
             current: [],
-            dates: {}
+            dates: {},
           },
           legal: {
             assent: {},
-            tos: {}
+            tos: {},
           },
           // Initialize empty roles array - will be populated after associations
-          roles: []
+          roles: [],
         };
-        
+
         // Add admin-specific data for admin users
         if (userDef.userType === 'admin') {
           userData.adminData = {
-            administrationsCreated: []
+            administrationsCreated: [],
           };
           userData.sso = 'internal'; // Or could be 'google' for SSO users
         }
-        
+
         // Add assignments for participant users
         if (['student', 'parent', 'teacher'].includes(userDef.userType)) {
           userData.assignments = {
             assigned: [],
             completed: [],
-            started: []
+            started: [],
+            excluded: [],
           };
         }
-        
+
+        userData.teacherLinks = {
+          all: [],
+          current: [],
+          dates: {},
+        };
+        userData.parentLinks = {
+          all: [],
+          current: [],
+          dates: {},
+        };
+        userData.childLinks = {
+          all: [],
+          current: [],
+          dates: {},
+        };
+
+        if (userDef.userType === 'student') {
+          userData.birthMonth = 8;
+          userData.birthYear = 2013;
+        }
+
         await db.collection('users').doc(uid).set(userData);
         console.log(`      ✅ Created user document: ${uid}`);
       } else {
         console.log(`      ⚠️  User document already exists: ${uid}`);
       }
-      
+
       // Store user info for later use
       createdUsers[userKey] = {
         uid,
         email: userDef.email,
         password: userDef.password,
         displayName: userDef.displayName,
-        userType: userDef.userType
+        userType: userDef.userType,
       };
-      
     } catch (error) {
       console.error(`      ❌ Failed to create ${userKey}:`, error.message);
       throw error;
     }
   }
-  
+
   return createdUsers;
 }
 
-module.exports = { createUsers }; 
+module.exports = { createUsers };

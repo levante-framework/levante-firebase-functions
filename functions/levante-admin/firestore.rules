@@ -112,7 +112,10 @@ service cloud.firestore {
         // Avoid self-referential reads of /users/{uid} which can cause recursive rule evaluation.
         return uid != getUid()
           && get(/databases/$(database)/documents/users/$(getUid())).data.userType == 'parent'
-          && resource.data.parentIds.hasAny([getUid()]);
+          && (
+            resource.data.get(['parentLinks','current'], []).hasAny([getUid()]) ||
+            resource.data.get(['parentIds'], []).hasAny([getUid()])
+          );
       }
 
       // TARGET USER SITES (aka districts)

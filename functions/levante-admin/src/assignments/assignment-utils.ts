@@ -112,6 +112,15 @@ const prepareNewAssignment = async (
   // Now we need to get the intersection of all the assigningOrgs with all of the users orgs.
   const userData = await transaction.get(userRef);
   if (userData.exists) {
+    const excludedAssignments: string[] =
+      userData.data()?.assignments?.excluded ?? [];
+    if (excludedAssignments.includes(administrationId)) {
+      logger.debug(
+        `Skipping assignment ${administrationId} for user ${userUid} (excluded)`
+      );
+      return [undefined, undefined];
+    }
+
     const userOrgs = _pick(userData.data(), ORG_NAMES);
 
     const usersAssigningOrgs: IOrgsList = {};

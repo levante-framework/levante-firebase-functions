@@ -183,10 +183,15 @@ export interface AdminData {
 }
 
 // Structure for organizational associations within Users
+export interface OrgAssociationDates {
+  from: Timestamp;
+  to: Timestamp | null;
+}
+
 export interface OrgAssociationMap {
   all: string[];
   current: string[];
-  dates: Record<string, Timestamp>; // Structure needs clarification
+  dates: Record<string, OrgAssociationDates>;
 }
 
 // Structure for user legal document acceptance within Users
@@ -204,9 +209,11 @@ export interface User {
     assigned: string[]; // Document IDs from `administrations` collection that are assigned
     completed: string[]; // Document IDs from `administrations` collection that are completed
     started: string[]; // Document IDs from `administrations` collection that are started
+    excluded?: string[]; // Document IDs from `administrations` collection that are excluded
   };
   archived: boolean;
   assessmentUid: string;
+  childLinks?: OrgAssociationMap;
   classes: OrgAssociationMap;
   createdAt: Timestamp;
   displayName: string;
@@ -214,10 +221,16 @@ export interface User {
   email: string;
   groups: OrgAssociationMap;
   legal: UserLegal;
+  parentLinks?: OrgAssociationMap;
   schools: OrgAssociationMap;
   sso?: string; // e.g., "google" only for admin users
+  teacherLinks?: OrgAssociationMap;
   userType: "admin" | "teacher" | "student" | "parent";
   testData?: boolean;
+  // Legacy link fields (to be deprecated in favor of *Links)
+  teacherIds?: string[];
+  parentIds?: string[];
+  childIds?: string[];
   roles: { siteId: string; role: string; siteName: string }[];
 }
 

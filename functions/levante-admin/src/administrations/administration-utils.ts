@@ -34,6 +34,7 @@ import {
   summarizeIdListForLog,
   summarizeOrgsForLog,
 } from "../utils/logging.js";
+import { parseTimestamp } from "../utils/utils.js";
 import { getAuth } from "firebase-admin/auth";
 import { HttpsError } from "firebase-functions/v1/https";
 
@@ -320,16 +321,18 @@ export const writeAdministrationOrgsToSubcollections = async ({
   const assignedCollectionRef = administrationDocRef.collection("assignedOrgs");
   const readCollectionRef = administrationDocRef.collection("readOrgs");
 
-  const denormalizedAdministrationData = _pick(administrationData, [
-    "dateClosed",
-    "dateOpened",
-    "dateCreated",
-    "createdBy",
-    "legal",
-    "name",
-    "publicName",
-    "testData",
-  ]);
+  const denormalizedAdministrationData = {
+    ..._pick(administrationData, [
+      "createdBy",
+      "legal",
+      "name",
+      "publicName",
+      "testData",
+    ]),
+    dateClosed: parseTimestamp(administrationData.dateClosed),
+    dateOpened: parseTimestamp(administrationData.dateOpened),
+    dateCreated: parseTimestamp(administrationData.dateCreated),
+  };
 
   for (const [orgType, orgIds] of _toPairs(readOrgs)) {
     for (const orgId of orgIds) {

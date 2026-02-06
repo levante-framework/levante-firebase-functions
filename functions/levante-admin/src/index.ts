@@ -526,6 +526,7 @@ export const linkUsers = onCall(async (request) => {
   const users = request.data.users;
   const siteId: string | undefined = (request.data.siteId ||
     request.data.districtId) as string | undefined;
+  const replaceLinks = request.data.replaceLinks === true;
 
   if (!siteId) {
     throw new HttpsError(
@@ -569,7 +570,7 @@ export const linkUsers = onCall(async (request) => {
       (err as Error)?.message || "Permission check failed"
     );
   }
-  return await _linkUsers(users, siteId, isSuperAdmin);
+  return await _linkUsers(users, siteId, isSuperAdmin, replaceLinks);
 });
 
 export const getAdministrations = onCall(async (request) => {
