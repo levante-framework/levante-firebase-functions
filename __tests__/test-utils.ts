@@ -1,5 +1,6 @@
 import { initializeTestEnvironment } from '@firebase/rules-unit-testing';
 import * as fs from 'fs';
+import * as admin from 'firebase-admin';
 
 export async function createTestEnvironment() {
   return await initializeTestEnvironment({
@@ -20,4 +21,20 @@ export function createUserWithClaims(testEnv: any, uid: string, claims: any = {}
 
 export function createUnauthenticatedContext(testEnv: any) {
   return testEnv.unauthenticatedContext();
+}
+
+export function initAdminEmulators() {
+  process.env.FIRESTORE_EMULATOR_HOST = process.env.FIRESTORE_EMULATOR_HOST || '127.0.0.1:8180';
+  process.env.FIREBASE_AUTH_EMULATOR_HOST =
+    process.env.FIREBASE_AUTH_EMULATOR_HOST || '127.0.0.1:9199';
+  process.env.GCLOUD_PROJECT = process.env.GCLOUD_PROJECT || 'demo-emulator';
+
+  if (admin.apps.length === 0) {
+    admin.initializeApp({ projectId: process.env.GCLOUD_PROJECT });
+  }
+
+  return {
+    auth: admin.auth(),
+    db: admin.firestore(),
+  };
 }
