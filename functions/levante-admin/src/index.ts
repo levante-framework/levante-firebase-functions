@@ -62,6 +62,23 @@ import { syncOnRunDocUpdateEventHandler } from "./runs/index.js";
 import { upsertAdministrationHandler } from "./upsertAdministration.js";
 import { ORG_COLLECTION_TO_SUBRESOURCE } from "./utils/constants.js";
 import { sanitizeRoles } from "./utils/role-helpers.js";
+import {
+  getUsersByOrg as getUsersByOrgQuery,
+  countUsersByOrg as countUsersByOrgQuery,
+  validateUserQueryInput,
+  logUserQuery,
+} from "./queries/user-queries.js";
+import {
+  getOrgByName as getOrgByNameQuery,
+  getOrgsForAdmin as getOrgsForAdminQuery,
+  getOrgsAll as getOrgsAllQuery,
+  getDistricts as getDistrictsQuery,
+  getSchools as getSchoolsQuery,
+  getOrgsBySite as getOrgsBySiteQuery,
+  getTreeOrgs as getTreeOrgsQuery,
+  validateOrgQueryInput,
+  logOrgQuery,
+} from "./queries/org-queries.js";
 
 // initialize 'default' app on Google cloud platform
 admin.initializeApp({
@@ -590,6 +607,159 @@ export const getAdministrations = onCall(async (request) => {
   });
 
   return { status: "ok", data: administrations };
+});
+
+export const getUsersByOrg = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "User must be authenticated");
+  const {
+    orgType,
+    orgId,
+    pageLimit,
+    page,
+    orderBy,
+    restrictToActiveUsers,
+    select,
+  } = request.data ?? {};
+
+  validateUserQueryInput({ orgType, orgId });
+  logUserQuery({ uid, orgType, orgId, action: "getUsersByOrg" });
+
+  const data = await getUsersByOrgQuery({
+    uid,
+    orgType,
+    orgId,
+    pageLimit,
+    page,
+    orderBy,
+    restrictToActiveUsers,
+    select,
+  });
+  return { status: "ok", data };
+});
+
+export const countUsersByOrg = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "User must be authenticated");
+  const { orgType, orgId, restrictToActiveUsers } = request.data ?? {};
+  validateUserQueryInput({ orgType, orgId });
+  logUserQuery({ uid, orgType, orgId, action: "countUsersByOrg" });
+
+  const count = await countUsersByOrgQuery({
+    uid,
+    orgType,
+    orgId,
+    restrictToActiveUsers,
+  });
+  return { status: "ok", count };
+});
+
+export const getOrgByName = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "User must be authenticated");
+  const {
+    orgType,
+    orgNormalizedName,
+    parentDistrict,
+    parentSchool,
+    orderBy,
+    select,
+  } = request.data ?? {};
+  validateOrgQueryInput({ orgType });
+  logOrgQuery({ uid, orgType, action: "getOrgByName" });
+  const data = await getOrgByNameQuery({
+    uid,
+    orgType,
+    orgNormalizedName,
+    parentDistrict,
+    parentSchool,
+    orderBy,
+    select,
+  });
+  return { status: "ok", data };
+});
+
+export const getOrgsForAdmin = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "User must be authenticated");
+  const { orgType, selectedDistrict, select } = request.data ?? {};
+  validateOrgQueryInput({ orgType });
+  logOrgQuery({ uid, orgType, action: "getOrgsForAdmin" });
+  const data = await getOrgsForAdminQuery({
+    uid,
+    orgType,
+    selectedDistrict,
+    select,
+  });
+  return { status: "ok", data };
+});
+
+export const getOrgsAll = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "User must be authenticated");
+  const {
+    orgType,
+    parentDistrict,
+    parentSchool,
+    orderBy,
+    select,
+    includeCreators,
+    loggedInUserId,
+  } = request.data ?? {};
+  validateOrgQueryInput({ orgType });
+  logOrgQuery({ uid, orgType, action: "getOrgsAll" });
+  const data = await getOrgsAllQuery({
+    uid,
+    orgType,
+    parentDistrict,
+    parentSchool,
+    orderBy,
+    select,
+    includeCreators,
+    loggedInUserId,
+  });
+  return { status: "ok", data };
+});
+
+export const getDistricts = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "User must be authenticated");
+  const { districts } = request.data ?? {};
+  const data = await getDistrictsQuery({ uid, districts });
+  return { status: "ok", data };
+});
+
+export const getSchools = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "User must be authenticated");
+  const { districts } = request.data ?? {};
+  const data = await getSchoolsQuery({ uid, districts });
+  return { status: "ok", data };
+});
+
+export const getOrgsBySite = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "User must be authenticated");
+  const { siteId } = request.data ?? {};
+  if (!siteId) {
+    throw new HttpsError("invalid-argument", "siteId is required");
+  }
+  const data = await getOrgsBySiteQuery({ uid, siteId });
+  return { status: "ok", data };
+});
+
+export const getTreeOrgs = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "User must be authenticated");
+  const { administrationId, assignedOrgs } = request.data ?? {};
+  if (!administrationId || !assignedOrgs) {
+    throw new HttpsError(
+      "invalid-argument",
+      "administrationId and assignedOrgs are required"
+    );
+  }
+  const data = await getTreeOrgsQuery({ uid, administrationId, assignedOrgs });
+  return { status: "ok", data };
 });
 
 export const unenrollOrgTask = onTaskDispatched(
