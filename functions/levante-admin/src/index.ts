@@ -79,6 +79,30 @@ import {
   validateOrgQueryInput,
   logOrgQuery,
 } from "./queries/org-queries.js";
+import {
+  getAdministrationsPage as getAdministrationsPageQuery,
+  getAdminsBySite as getAdminsBySiteQuery,
+  validateAdministrationQueryInput,
+} from "./queries/administration-queries.js";
+import {
+  getTasks as getTasksQuery,
+  getVariants as getVariantsQuery,
+  getTasksById as getTasksByIdQuery,
+  validateTaskQueryInput,
+} from "./queries/task-queries.js";
+import {
+  countRuns as countRunsQuery,
+  getRunsPage as getRunsPageQuery,
+  validateRunQueryInput,
+} from "./queries/run-queries.js";
+import {
+  countAssignments as countAssignmentsQuery,
+  getAssignmentsPage as getAssignmentsPageQuery,
+  getUserAssignments as getUserAssignmentsQuery,
+  getAssignmentsByNameAndSite as getAssignmentsByNameAndSiteQuery,
+  validateAssignmentQueryInput,
+} from "./queries/assignment-queries.js";
+import { getLegalDocs as getLegalDocsQuery } from "./queries/legal-queries.js";
 
 // initialize 'default' app on Google cloud platform
 admin.initializeApp({
@@ -607,6 +631,170 @@ export const getAdministrations = onCall(async (request) => {
   });
 
   return { status: "ok", data: administrations };
+});
+
+export const getAdministrationsPage = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  validateAdministrationQueryInput({ uid });
+  const { selectedDistrictId, fetchTestData, orderBy } = request.data ?? {};
+  const data = await getAdministrationsPageQuery({
+    uid: uid!,
+    selectedDistrictId,
+    fetchTestData,
+    orderBy,
+  });
+  return { status: "ok", data };
+});
+
+export const getAdminsBySite = onCall(async (request) => {
+  const uid = request.auth?.uid;
+  validateAdministrationQueryInput({ uid });
+  const { siteId } = request.data ?? {};
+  if (!siteId) {
+    throw new HttpsError("invalid-argument", "siteId is required");
+  }
+  const data = await getAdminsBySiteQuery({ siteId });
+  return { status: "ok", data };
+});
+
+export const getTasks = onCall(async (request) => {
+  const { registered, allData, orderBy, select } = request.data ?? {};
+  const data = await getTasksQuery({ registered, allData, orderBy, select });
+  return { status: "ok", data };
+});
+
+export const getTasksById = onCall(async (request) => {
+  const { taskIds } = request.data ?? {};
+  validateTaskQueryInput({ taskIds });
+  const data = await getTasksByIdQuery({ taskIds });
+  return { status: "ok", data };
+});
+
+export const getVariants = onCall(async (request) => {
+  const { registered } = request.data ?? {};
+  const data = await getVariantsQuery({ registered });
+  return { status: "ok", data };
+});
+
+export const countRuns = onCall(async (request) => {
+  const { administrationId, orgType, orgId, taskId, requireCompleted } =
+    request.data ?? {};
+  validateRunQueryInput({ administrationId });
+  const count = await countRunsQuery({
+    administrationId,
+    orgType,
+    orgId,
+    taskId,
+    requireCompleted,
+  });
+  return { status: "ok", count };
+});
+
+export const getRunsPage = onCall(async (request) => {
+  const {
+    administrationId,
+    userId,
+    orgType,
+    orgId,
+    taskId,
+    pageLimit,
+    page,
+    select,
+    scoreKey,
+    paginate,
+  } = request.data ?? {};
+  validateRunQueryInput({ administrationId });
+  const data = await getRunsPageQuery({
+    administrationId,
+    userId,
+    orgType,
+    orgId,
+    taskId,
+    pageLimit,
+    page,
+    select,
+    scoreKey,
+    paginate,
+  });
+  return { status: "ok", data };
+});
+
+export const countAssignments = onCall(async (request) => {
+  const { adminId, orgType, orgId, orgArray, filter, grades, useScoresFilter } =
+    request.data ?? {};
+  validateAssignmentQueryInput({ adminId });
+  const count = await countAssignmentsQuery({
+    adminId,
+    orgType,
+    orgId,
+    orgArray,
+    filter,
+    grades,
+    useScoresFilter,
+  });
+  return { status: "ok", count };
+});
+
+export const getAssignmentsPage = onCall(async (request) => {
+  const {
+    adminId,
+    orgType,
+    orgId,
+    pageLimit,
+    page,
+    includeScores,
+    includeSurveyResponses,
+    select,
+    paginate,
+    filters,
+    orderBy,
+  } = request.data ?? {};
+  validateAssignmentQueryInput({ adminId });
+  const data = await getAssignmentsPageQuery({
+    adminId,
+    orgType,
+    orgId,
+    pageLimit,
+    page,
+    includeScores,
+    includeSurveyResponses,
+    select,
+    paginate,
+    filters,
+    orderBy,
+  });
+  return { status: "ok", data };
+});
+
+export const getUserAssignments = onCall(async (request) => {
+  const { roarUid } = request.data ?? {};
+  if (!roarUid) {
+    throw new HttpsError("invalid-argument", "roarUid is required");
+  }
+  const data = await getUserAssignmentsQuery({ roarUid });
+  return { status: "ok", data };
+});
+
+export const getAssignmentsByNameAndSite = onCall(async (request) => {
+  const { name, normalizedName, siteId, adminId } = request.data ?? {};
+  if (!name || !normalizedName || !siteId) {
+    throw new HttpsError(
+      "invalid-argument",
+      "name, normalizedName, and siteId are required"
+    );
+  }
+  const data = await getAssignmentsByNameAndSiteQuery({
+    name,
+    normalizedName,
+    siteId,
+    adminId,
+  });
+  return { status: "ok", data };
+});
+
+export const getLegalDocs = onCall(async () => {
+  const data = await getLegalDocsQuery();
+  return { status: "ok", data };
 });
 
 export const getUsersByOrg = onCall(async (request) => {
