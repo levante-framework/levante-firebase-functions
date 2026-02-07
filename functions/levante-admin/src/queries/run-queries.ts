@@ -103,8 +103,8 @@ export const getRunsPage = async ({
   const runDocs = snapshot.docs.map((doc) => ({
     id: doc.id,
     parentDoc: doc.ref.parent.parent?.id,
-    ...doc.data(),
-  }));
+    ...(doc.data() as Record<string, unknown>),
+  })) as Array<Record<string, any>>;
 
   const userDocIds = _uniq(
     _without(runDocs.map((doc) => doc.parentDoc), undefined)

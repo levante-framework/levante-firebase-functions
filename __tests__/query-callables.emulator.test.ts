@@ -1,38 +1,5 @@
 import { beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { initAdminEmulators } from "./test-utils";
-import {
-  getUsersByOrg,
-  countUsersByOrg,
-} from "../functions/levante-admin/src/queries/user-queries.js";
-import {
-  getOrgByName,
-  getOrgsForAdmin,
-  getOrgsAll,
-  getDistricts,
-  getSchools,
-  getOrgsBySite,
-  getTreeOrgs,
-} from "../functions/levante-admin/src/queries/org-queries.js";
-import {
-  getAdministrationsPage,
-  getAdminsBySite,
-} from "../functions/levante-admin/src/queries/administration-queries.js";
-import {
-  getTasks,
-  getTasksById,
-  getVariants,
-} from "../functions/levante-admin/src/queries/task-queries.js";
-import {
-  countRuns,
-  getRunsPage,
-} from "../functions/levante-admin/src/queries/run-queries.js";
-import {
-  countAssignments,
-  getAssignmentsPage,
-  getUserAssignments,
-  getAssignmentsByNameAndSite,
-} from "../functions/levante-admin/src/queries/assignment-queries.js";
-import { getLegalDocs } from "../functions/levante-admin/src/queries/legal-queries.js";
 
 const districtId = "district-1";
 const schoolId = "school-1";
@@ -51,6 +18,28 @@ const studentUid = "student-uid";
 describe("query callables (emulator)", () => {
   const { auth, db } = initAdminEmulators();
 
+  let getUsersByOrg: typeof import("../functions/levante-admin/src/queries/user-queries.js").getUsersByOrg;
+  let countUsersByOrg: typeof import("../functions/levante-admin/src/queries/user-queries.js").countUsersByOrg;
+  let getOrgByName: typeof import("../functions/levante-admin/src/queries/org-queries.js").getOrgByName;
+  let getOrgsForAdmin: typeof import("../functions/levante-admin/src/queries/org-queries.js").getOrgsForAdmin;
+  let getOrgsAll: typeof import("../functions/levante-admin/src/queries/org-queries.js").getOrgsAll;
+  let getDistricts: typeof import("../functions/levante-admin/src/queries/org-queries.js").getDistricts;
+  let getSchools: typeof import("../functions/levante-admin/src/queries/org-queries.js").getSchools;
+  let getOrgsBySite: typeof import("../functions/levante-admin/src/queries/org-queries.js").getOrgsBySite;
+  let getTreeOrgs: typeof import("../functions/levante-admin/src/queries/org-queries.js").getTreeOrgs;
+  let getAdministrationsPage: typeof import("../functions/levante-admin/src/queries/administration-queries.js").getAdministrationsPage;
+  let getAdminsBySite: typeof import("../functions/levante-admin/src/queries/administration-queries.js").getAdminsBySite;
+  let getTasks: typeof import("../functions/levante-admin/src/queries/task-queries.js").getTasks;
+  let getTasksById: typeof import("../functions/levante-admin/src/queries/task-queries.js").getTasksById;
+  let getVariants: typeof import("../functions/levante-admin/src/queries/task-queries.js").getVariants;
+  let countRuns: typeof import("../functions/levante-admin/src/queries/run-queries.js").countRuns;
+  let getRunsPage: typeof import("../functions/levante-admin/src/queries/run-queries.js").getRunsPage;
+  let countAssignments: typeof import("../functions/levante-admin/src/queries/assignment-queries.js").countAssignments;
+  let getAssignmentsPage: typeof import("../functions/levante-admin/src/queries/assignment-queries.js").getAssignmentsPage;
+  let getUserAssignments: typeof import("../functions/levante-admin/src/queries/assignment-queries.js").getUserAssignments;
+  let getAssignmentsByNameAndSite: typeof import("../functions/levante-admin/src/queries/assignment-queries.js").getAssignmentsByNameAndSite;
+  let getLegalDocs: typeof import("../functions/levante-admin/src/queries/legal-queries.js").getLegalDocs;
+
   const clearCollection = async (collection: string) => {
     const snap = await db.collection(collection).get();
     await Promise.all(snap.docs.map((doc) => db.recursiveDelete(doc.ref)));
@@ -65,13 +54,57 @@ describe("query callables (emulator)", () => {
   };
 
   beforeAll(async () => {
+    const userQueries = await import(
+      "../functions/levante-admin/src/queries/user-queries.js"
+    );
+    const orgQueries = await import(
+      "../functions/levante-admin/src/queries/org-queries.js"
+    );
+    const administrationQueries = await import(
+      "../functions/levante-admin/src/queries/administration-queries.js"
+    );
+    const taskQueries = await import(
+      "../functions/levante-admin/src/queries/task-queries.js"
+    );
+    const runQueries = await import(
+      "../functions/levante-admin/src/queries/run-queries.js"
+    );
+    const assignmentQueries = await import(
+      "../functions/levante-admin/src/queries/assignment-queries.js"
+    );
+    const legalQueries = await import(
+      "../functions/levante-admin/src/queries/legal-queries.js"
+    );
+
+    getUsersByOrg = userQueries.getUsersByOrg;
+    countUsersByOrg = userQueries.countUsersByOrg;
+    getOrgByName = orgQueries.getOrgByName;
+    getOrgsForAdmin = orgQueries.getOrgsForAdmin;
+    getOrgsAll = orgQueries.getOrgsAll;
+    getDistricts = orgQueries.getDistricts;
+    getSchools = orgQueries.getSchools;
+    getOrgsBySite = orgQueries.getOrgsBySite;
+    getTreeOrgs = orgQueries.getTreeOrgs;
+    getAdministrationsPage = administrationQueries.getAdministrationsPage;
+    getAdminsBySite = administrationQueries.getAdminsBySite;
+    getTasks = taskQueries.getTasks;
+    getTasksById = taskQueries.getTasksById;
+    getVariants = taskQueries.getVariants;
+    countRuns = runQueries.countRuns;
+    getRunsPage = runQueries.getRunsPage;
+    countAssignments = assignmentQueries.countAssignments;
+    getAssignmentsPage = assignmentQueries.getAssignmentsPage;
+    getUserAssignments = assignmentQueries.getUserAssignments;
+    getAssignmentsByNameAndSite = assignmentQueries.getAssignmentsByNameAndSite;
+    getLegalDocs = legalQueries.getLegalDocs;
+  });
+
+  beforeEach(async () => {
     await deleteUserIfExists(adminUid);
     await deleteUserIfExists(superUid);
     await deleteUserIfExists(otherAdminUid);
     await deleteUserIfExists(studentUid);
-  });
 
-  beforeEach(async () => {
     await Promise.all([
       clearCollection("userClaims"),
       clearCollection("users"),
@@ -96,21 +129,45 @@ describe("query callables (emulator)", () => {
     await db.collection("userClaims").doc(adminUid).set({
       claims: {
         adminOrgs: { districts: [districtId], schools: [], classes: [], groups: [] },
+        minimalAdminOrgs: {
+          districts: [districtId],
+          schools: [],
+          classes: [],
+          groups: [],
+        },
+        adminUid,
         super_admin: false,
       },
+      lastUpdated: Date.now(),
     });
     await db.collection("userClaims").doc(superUid).set({
       claims: {
         adminOrgs: { districts: [], schools: [], classes: [], groups: [] },
+        minimalAdminOrgs: { districts: [], schools: [], classes: [], groups: [] },
+        adminUid: superUid,
         super_admin: true,
       },
+      lastUpdated: Date.now(),
     });
     await db.collection("userClaims").doc(otherAdminUid).set({
       claims: {
         adminOrgs: { districts: ["district-2"], schools: [], classes: [], groups: [] },
+        minimalAdminOrgs: {
+          districts: ["district-2"],
+          schools: [],
+          classes: [],
+          groups: [],
+        },
+        adminUid: otherAdminUid,
         super_admin: false,
       },
+      lastUpdated: Date.now(),
     });
+
+    const claimsCheck = await db.collection("userClaims").doc(adminUid).get();
+    if (!claimsCheck.exists) {
+      throw new Error("userClaims seed failed for adminUid");
+    }
 
     await db.collection("districts").doc(districtId).set({
       id: districtId,

@@ -304,8 +304,8 @@ export const getOrgsAll = async ({
 
   let orgs = (await query.get()).docs.map((doc) => ({
     id: doc.id,
-    ...doc.data(),
-  }));
+    ...(doc.data() as Record<string, unknown>),
+  })) as Array<Record<string, any>>;
 
   if (includeCreators) {
     const creatorIds = [
@@ -475,15 +475,17 @@ export const getTreeOrgs = async ({
         },
       };
       if (classes || archivedClasses) {
-        node.children = [...(classes ?? []), ...(archivedClasses ?? [])].map(
-          (classId) => ({
-            key: `${node.key}-${classId}`,
-            data: {
-              orgType: "classes",
-              id: classId,
-            },
-          })
-        );
+        const classIds = [
+          ...(Array.isArray(classes) ? classes : []),
+          ...(Array.isArray(archivedClasses) ? archivedClasses : []),
+        ];
+        node.children = classIds.map((classId) => ({
+          key: `${node.key}-${classId}`,
+          data: {
+            orgType: "classes",
+            id: classId,
+          },
+        }));
       }
       return node;
     }),

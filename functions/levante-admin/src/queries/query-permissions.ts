@@ -1,11 +1,7 @@
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
-import {
-  ACTIONS,
-  RESOURCES,
-  type PermissionResource,
-} from "@levante-framework/permissions-core";
+import { ACTIONS, RESOURCES } from "@levante-framework/permissions-core";
 import {
   ensurePermissionsLoaded,
   buildPermissionsUserFromAuthRecord,
@@ -18,6 +14,8 @@ type ClaimsOrgMap = {
   classes?: string[];
   groups?: string[];
 };
+
+type PermissionResource = (typeof RESOURCES)[keyof typeof RESOURCES];
 
 export const getUserClaims = async (uid: string) => {
   const db = getFirestore();

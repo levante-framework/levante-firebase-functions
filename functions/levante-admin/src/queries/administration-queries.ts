@@ -51,7 +51,7 @@ export const getAdministrationsPage = async ({
   const statsRefs = administrationData.map((admin) =>
     db.doc(`administrations/${admin.id}/stats/total`)
   );
-  const statsDocs = await db.getAll(...statsRefs);
+  const statsDocs = statsRefs.length > 0 ? await db.getAll(...statsRefs) : [];
   const statsByAdminId = new Map(
     statsDocs.map((doc) => [doc.ref.parent.parent?.id, doc.data()])
   );
@@ -107,8 +107,8 @@ export const getAdminsBySite = async ({
 
   const admins = adminSnapshot.docs.map((doc) => ({
     id: doc.id,
-    ...doc.data(),
-  }));
+    ...(doc.data() as Record<string, unknown>),
+  })) as Array<Record<string, unknown>>;
 
   if (siteId === "any") return admins;
 
@@ -119,10 +119,12 @@ export const getAdminsBySite = async ({
   ]);
 
   return admins.filter((admin) => {
-    const roles = Array.isArray(admin.roles) ? admin.roles : [];
+    const roles = Array.isArray((admin as { roles?: unknown }).roles)
+      ? ((admin as { roles?: unknown[] }).roles ?? [])
+      : [];
     return roles.some((role) => {
-      const roleSiteId = role?.siteId;
-      const roleName = role?.role;
+      const roleSiteId = (role as { siteId?: string })?.siteId;
+      const roleName = (role as { role?: string })?.role;
       if (!roleSiteId || !roleName) return false;
       return roleSiteId === siteId && allowedSiteRoles.has(roleName);
     });

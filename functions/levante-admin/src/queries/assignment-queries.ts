@@ -372,7 +372,11 @@ export const getAssignmentsPage = async ({
       assignment,
       user,
     };
-  });
+  }) as Array<{
+    assignment: any;
+    user: any;
+    surveyResponses?: unknown[];
+  }>;
 
   if (includeScores) {
     const runRefs = _flatten(
