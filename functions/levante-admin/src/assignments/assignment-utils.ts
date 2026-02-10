@@ -47,7 +47,7 @@ import {
 const removeAssignmentFromUser = async (
   userUid: string,
   administrationId: string,
-  transaction: Transaction
+  transaction: Transaction,
 ) => {
   const db = getFirestore();
   const assignmentRef = db
@@ -71,7 +71,7 @@ const removeAssignmentFromUser = async (
 export const removeAssignmentFromUsers = async (
   users: string[],
   administrationId: string,
-  transaction: Transaction
+  transaction: Transaction,
 ) => {
   if (!users.length) {
     return [];
@@ -83,8 +83,8 @@ export const removeAssignmentFromUsers = async (
 
   return Promise.all(
     _map(users, (user) =>
-      removeAssignmentFromUser(user, administrationId, transaction)
-    )
+      removeAssignmentFromUser(user, administrationId, transaction),
+    ),
   );
 };
 
@@ -101,7 +101,7 @@ const prepareNewAssignment = async (
   userUid: string,
   administrationId: string,
   administrationData: IAdministration,
-  transaction: Transaction
+  transaction: Transaction,
 ) => {
   const db = getFirestore();
   const userRef = db.collection("users").doc(userUid);
@@ -118,7 +118,7 @@ const prepareNewAssignment = async (
     for (const orgName of ORG_NAMES) {
       usersAssigningOrgs[orgName] = _intersection(
         userOrgs[orgName]?.current,
-        assigningOrgs[orgName]
+        assigningOrgs[orgName],
       );
     }
 
@@ -225,7 +225,7 @@ const prepareNewAssignment = async (
           assignmentPath: assignmentRef.path,
           originalSummary: summarizeAssessmentsForLog(assessments),
           cleanedSummary: summarizeAssessmentsForLog(cleanedAssessments),
-        }
+        },
       );
     }
 
@@ -244,7 +244,7 @@ const prepareNewAssignment = async (
       sequential: administrationData.sequential ?? false,
       assigningOrgs: usersAssigningOrgs,
       readOrgs: userReadOrgs,
-      assessments,
+      assessments: cleanedAssessments,
       progress,
       userData: userDataCopy,
       testData: administrationData.testData ?? false,
@@ -271,7 +271,7 @@ export const addAssignmentToUsers = async (
   users: string[],
   administrationId: string,
   administrationData: IAdministration,
-  transaction: Transaction
+  transaction: Transaction,
 ) => {
   console.log("hit addAssignmentToUsers");
   const assignments = await Promise.all(
@@ -280,17 +280,20 @@ export const addAssignmentToUsers = async (
         user,
         administrationId,
         administrationData,
-        transaction
-      )
-    )
+        transaction,
+      ),
+    ),
   );
 
   return _map(assignments, ([assignmentRef, assignmentData]) => {
     if (assignmentRef && assignmentData) {
+      const cleanedAssignmentData = removeUndefinedFields(assignmentData);
       logger.debug(`Adding new assignment at ${assignmentRef.path}`, {
-        assignmentSummary: summarizeAssignmentForLog(assignmentData),
+        assignmentSummary: summarizeAssignmentForLog(cleanedAssignmentData),
       });
-      return transaction.set(assignmentRef, assignmentData, { merge: true });
+      return transaction.set(assignmentRef, cleanedAssignmentData, {
+        merge: true,
+      });
     } else {
       return transaction;
     }
@@ -312,7 +315,7 @@ export const removeOrgsFromAssignment = async (
   userUid: string,
   administrationId: string,
   orgsToRemove: IOrgsList,
-  transaction: Transaction
+  transaction: Transaction,
 ) => {
   const db = getFirestore();
   const userDocRef = db.collection("users").doc(userUid);
@@ -325,14 +328,14 @@ export const removeOrgsFromAssignment = async (
     for (const orgName of Object.keys(assigningOrgs)) {
       assigningOrgs[orgName] = _without(
         assigningOrgs[orgName],
-        ...(orgsToRemove[orgName] ?? [])
+        ...(orgsToRemove[orgName] ?? []),
       );
     }
 
     const numRemainingAssigningOrgs = _reduce(
       assigningOrgs,
       (sum, value) => sum + value.length,
-      0
+      0,
     );
 
     if (numRemainingAssigningOrgs > 0) {
@@ -340,13 +343,13 @@ export const removeOrgsFromAssignment = async (
       return [assignmentRef, assigningOrgs, readOrgs] as [
         DocumentReference,
         IOrgsList | undefined,
-        IOrgsList | undefined
+        IOrgsList | undefined,
       ];
     } else {
       return [assignmentRef, undefined, undefined] as [
         DocumentReference,
         IOrgsList | undefined,
-        IOrgsList | undefined
+        IOrgsList | undefined,
       ];
     }
   } else {
@@ -367,7 +370,7 @@ export const removeOrgsFromAssignments = async (
   users: string[],
   administrationIds: string[],
   orgsToRemove: IOrgsList,
-  transaction: Transaction
+  transaction: Transaction,
 ) => {
   const assignments = await Promise.all(
     _flatten(
@@ -377,11 +380,11 @@ export const removeOrgsFromAssignments = async (
             user,
             administrationId,
             orgsToRemove,
-            transaction
+            transaction,
           );
         });
-      })
-    )
+      }),
+    ),
   );
 
   return _map(assignments, ([assignmentRef, assigningOrgs, readOrgs]) => {
@@ -423,7 +426,7 @@ export const updateAssignmentForUser = async (
   userUid: string,
   administrationId: string,
   administrationData: IAdministration,
-  transaction: Transaction
+  transaction: Transaction,
 ) => {
   const db = getFirestore();
   const userRef = db.collection("users").doc(userUid);
@@ -449,7 +452,7 @@ export const updateAssignmentForUser = async (
       for (const orgName of ORG_NAMES) {
         usersAssigningOrgs[orgName] = _intersection(
           userOrgs[orgName]?.current,
-          assigningOrgs[orgName]
+          assigningOrgs[orgName],
         );
       }
 
@@ -466,13 +469,13 @@ export const updateAssignmentForUser = async (
       const administrationAssessments = _get(
         administrationData,
         "assessments",
-        []
+        [],
       );
 
       // Initialize updatedAssessments by preserving any existingAssessments that
       // have been started.
       const updatedAssessments = existingAssessments.filter(
-        (assessment) => assessment.startedOn || assessment.runId
+        (assessment) => assessment.startedOn || assessment.runId,
       );
 
       // Then iterate through the administration assessments and add any that
@@ -493,7 +496,7 @@ export const updateAssignmentForUser = async (
           // ``optional`` condition and update the assessment's optional
           // parameter.
           const assessmentIdx = updatedAssessments.findIndex(
-            (a) => a.taskId === _assessment.taskId
+            (a) => a.taskId === _assessment.taskId,
           );
           let isOptional: boolean = false;
 
@@ -595,7 +598,7 @@ export const updateAssignmentForUser = async (
             assignmentPath: assignmentRef.path,
             originalSummary: summarizeAssessmentsForLog(updatedAssessments),
             cleanedSummary: summarizeAssessmentsForLog(cleanedAssessments),
-          }
+          },
         );
       }
 
@@ -621,7 +624,7 @@ export const updateAssignmentForUser = async (
 
       return [assignmentRef, assignmentData] as [
         DocumentReference,
-        DocumentData
+        DocumentData,
       ];
     } else {
       return [assignmentRef, undefined];
@@ -631,7 +634,7 @@ export const updateAssignmentForUser = async (
       userUid,
       administrationId,
       administrationData,
-      transaction
+      transaction,
     );
   }
 };
@@ -653,7 +656,7 @@ export const updateAssignmentForUsers = async (
   users: string[],
   administrationId: string,
   administrationData: IAdministration,
-  transaction: Transaction
+  transaction: Transaction,
 ) => {
   const assignments = await Promise.all(
     _map(users, (user) =>
@@ -661,17 +664,20 @@ export const updateAssignmentForUsers = async (
         user,
         administrationId,
         administrationData,
-        transaction
-      )
-    )
+        transaction,
+      ),
+    ),
   );
 
   return _map(assignments, ([assignmentRef, assignmentData]) => {
     if (assignmentRef && assignmentData) {
+      const cleanedAssignmentData = removeUndefinedFields(assignmentData);
       logger.info(`Updating or creating assignment ${assignmentRef.path}`, {
-        assignmentSummary: summarizeAssignmentForLog(assignmentData),
+        assignmentSummary: summarizeAssignmentForLog(cleanedAssignmentData),
       });
-      return transaction.set(assignmentRef, assignmentData, { merge: true });
+      return transaction.set(assignmentRef, cleanedAssignmentData, {
+        merge: true,
+      });
     } else if (assignmentRef) {
       return transaction.delete(assignmentRef);
     } else {

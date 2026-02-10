@@ -52,7 +52,7 @@ export const pluralizeFirestoreCollection = (singular: string) => {
   if (plural) return plural;
 
   throw new Error(
-    `There is no plural Firestore collection for the ${singular}`
+    `There is no plural Firestore collection for the ${singular}`,
   );
 };
 
@@ -196,7 +196,9 @@ export const doesDocExist = async (docRef, transaction) => {
  */
 export const removeUndefinedFields = (obj: any): any => {
   if (Array.isArray(obj)) {
-    return _without(obj, undefined);
+    return obj
+      .map((value) => removeUndefinedFields(value))
+      .filter((value) => value !== undefined);
   } else if (obj && typeof obj === "object") {
     return Object.entries(obj).reduce((acc, [key, value]) => {
       const cleanedValue = removeUndefinedFields(value);
@@ -217,7 +219,7 @@ export const removeUndefinedFields = (obj: any): any => {
  * @returns {Date} The parsed Date instance.
  */
 export const parseTimestamp = (
-  timestamp: Date | Timestamp | undefined | null
+  timestamp: Date | Timestamp | undefined | null,
 ): Date => {
   if (!timestamp) return new Date(NaN);
 
@@ -228,8 +230,8 @@ export const parseTimestamp = (
     return new Date(
       new Timestamp(
         (timestamp as any)._seconds,
-        (timestamp as any)._nanoseconds
-      ).toDate()
+        (timestamp as any)._nanoseconds,
+      ).toDate(),
     );
   }
 
