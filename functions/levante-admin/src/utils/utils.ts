@@ -196,7 +196,9 @@ export const doesDocExist = async (docRef, transaction) => {
  */
 export const removeUndefinedFields = (obj: any): any => {
   if (Array.isArray(obj)) {
-    return _without(obj, undefined);
+    return obj
+      .map((value) => removeUndefinedFields(value))
+      .filter((value) => value !== undefined);
   } else if (obj && typeof obj === "object") {
     return Object.entries(obj).reduce((acc, [key, value]) => {
       const cleanedValue = removeUndefinedFields(value);

@@ -244,7 +244,7 @@ const prepareNewAssignment = async (
       sequential: administrationData.sequential ?? false,
       assigningOrgs: usersAssigningOrgs,
       readOrgs: userReadOrgs,
-      assessments,
+      assessments: cleanedAssessments,
       progress,
       userData: userDataCopy,
       testData: administrationData.testData ?? false,
@@ -287,10 +287,13 @@ export const addAssignmentToUsers = async (
 
   return _map(assignments, ([assignmentRef, assignmentData]) => {
     if (assignmentRef && assignmentData) {
+      const cleanedAssignmentData = removeUndefinedFields(assignmentData);
       logger.debug(`Adding new assignment at ${assignmentRef.path}`, {
-        assignmentSummary: summarizeAssignmentForLog(assignmentData),
+        assignmentSummary: summarizeAssignmentForLog(cleanedAssignmentData),
       });
-      return transaction.set(assignmentRef, assignmentData, { merge: true });
+      return transaction.set(assignmentRef, cleanedAssignmentData, {
+        merge: true,
+      });
     } else {
       return transaction;
     }
@@ -668,10 +671,13 @@ export const updateAssignmentForUsers = async (
 
   return _map(assignments, ([assignmentRef, assignmentData]) => {
     if (assignmentRef && assignmentData) {
+      const cleanedAssignmentData = removeUndefinedFields(assignmentData);
       logger.info(`Updating or creating assignment ${assignmentRef.path}`, {
-        assignmentSummary: summarizeAssignmentForLog(assignmentData),
+        assignmentSummary: summarizeAssignmentForLog(cleanedAssignmentData),
       });
-      return transaction.set(assignmentRef, assignmentData, { merge: true });
+      return transaction.set(assignmentRef, cleanedAssignmentData, {
+        merge: true,
+      });
     } else if (assignmentRef) {
       return transaction.delete(assignmentRef);
     } else {

@@ -8,6 +8,7 @@ import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import type { IAssessment, IOrgsList } from "./interfaces.js"; // Assuming necessary types/helpers are in common
 import type { Class, Group, School } from "../firestore-schema.js";
+import { removeUndefinedFields } from "./utils/utils.js";
 
 interface UpsertAdministrationData {
   name: string;
@@ -51,6 +52,39 @@ interface IAdministrationDoc {
   creatorName: string;
 }
 
+const normalizeIdList = (ids: unknown): string[] => {
+  if (!Array.isArray(ids)) return [];
+  return [...new Set(ids)]
+    .filter((id): id is string => typeof id === "string")
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0);
+};
+
+const normalizeOrgs = (orgs?: IOrgsList): Required<IOrgsList> => {
+  return {
+    districts: normalizeIdList(orgs?.districts),
+    schools: normalizeIdList(orgs?.schools),
+    classes: normalizeIdList(orgs?.classes),
+    groups: normalizeIdList(orgs?.groups),
+  };
+};
+
+const normalizeAssessments = (assessments: IAssessment[]): IAssessment[] => {
+  return assessments.map((assessment) => {
+    const cleanedAssessment = removeUndefinedFields(assessment) as IAssessment;
+    const params =
+      cleanedAssessment.params &&
+      typeof cleanedAssessment.params === "object" &&
+      !Array.isArray(cleanedAssessment.params)
+        ? cleanedAssessment.params
+        : {};
+    return {
+      ...cleanedAssessment,
+      params,
+    };
+  });
+};
+
 export const upsertAdministrationHandler = async (
   callerAdminUid: string,
   data: UpsertAdministrationData
@@ -67,12 +101,7 @@ export const upsertAdministrationHandler = async (
     dateOpen,
     dateClose,
     sequential = true,
-    orgs = {
-      districts: [],
-      schools: [],
-      classes: [],
-      groups: [],
-    },
+    orgs,
     tags = [],
     administrationId,
     isTestData = false,
@@ -80,10 +109,19 @@ export const upsertAdministrationHandler = async (
     creatorName,
   } = data as UpsertAdministrationData;
 
+  const normalizedOrgs = normalizeOrgs(orgs);
+  const rawAssessments = Array.isArray(assessments) ? assessments : [];
+  const cleanedAssessments = normalizeAssessments(
+    removeUndefinedFields(rawAssessments) as IAssessment[]
+  );
+  const cleanedLegal = removeUndefinedFields(legal ?? {});
+  const cleanedTags = normalizeIdList(tags);
+
   if (
     !name ||
-    !assessments ||
-    !Array.isArray(assessments) ||
+    !cleanedAssessments ||
+    !Array.isArray(cleanedAssessments) ||
+    cleanedAssessments.length === 0 ||
     !dateOpen ||
     !dateClose
   ) {
@@ -93,11 +131,33 @@ export const upsertAdministrationHandler = async (
     );
   }
 
+  const hasInvalidAssessment = cleanedAssessments.some(
+    (assessment) =>
+      typeof assessment.taskId !== "string" ||
+      !assessment.taskId.trim() ||
+      typeof assessment.variantId !== "string" ||
+      !assessment.variantId.trim() ||
+      typeof assessment.variantName !== "string" ||
+      !assessment.variantName.trim()
+  );
+  if (hasInvalidAssessment) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Assessments must include taskId, variantId, and variantName."
+    );
+  }
+
   let dateOpenedTs: Timestamp;
   let dateClosedTs: Timestamp;
   try {
     const dateOpenObj = new Date(dateOpen);
     const dateCloseObj = new Date(dateClose);
+    if (
+      Number.isNaN(dateOpenObj.getTime()) ||
+      Number.isNaN(dateCloseObj.getTime())
+    ) {
+      throw new Error("Invalid date");
+    }
 
     dateOpenedTs = Timestamp.fromDate(dateOpenObj);
     dateClosedTs = Timestamp.fromDate(dateCloseObj);
@@ -134,43 +194,44 @@ export const upsertAdministrationHandler = async (
             `Administration with ID ${administrationId} not found for update.`
           );
         }
+        const existingData = existingDoc.data() as Partial<IAdministrationDoc>;
 
         // Prepare data for update (merge: true will handle partial updates)
-        const updateData: Partial<IAdministrationDoc> = {
+        const updateData: Partial<IAdministrationDoc> = removeUndefinedFields({
           // Use Partial for updates
           name,
           publicName: publicName ?? name,
           normalizedName,
-          // createdBy should not be updated
-          groups: orgs.groups ?? [],
-          classes: orgs.classes ?? [],
-          schools: orgs.schools ?? [],
-          districts: orgs.districts ?? [],
+          createdBy: existingData.createdBy ?? callerAdminUid,
+          groups: normalizedOrgs.groups,
+          classes: normalizedOrgs.classes,
+          schools: normalizedOrgs.schools,
+          districts: normalizedOrgs.districts,
           // dateCreated should not be updated
           dateOpened: dateOpenedTs,
           dateClosed: dateClosedTs,
-          assessments: assessments,
+          assessments: cleanedAssessments,
           sequential: sequential,
-          tags: tags,
-          legal: legal,
+          tags: cleanedTags,
+          legal: cleanedLegal,
           testData: isTestData ?? false,
           // Explicitly construct org lists for update
           readOrgs: {
             // Re-enabled
-            districts: orgs.districts ?? [],
-            schools: orgs.schools ?? [],
-            classes: orgs.classes ?? [],
-            groups: orgs.groups ?? [],
+            districts: normalizedOrgs.districts,
+            schools: normalizedOrgs.schools,
+            classes: normalizedOrgs.classes,
+            groups: normalizedOrgs.groups,
           },
           minimalOrgs: {
             // Re-enabled
-            districts: orgs.districts ?? [],
-            schools: orgs.schools ?? [],
-            classes: orgs.classes ?? [],
-            groups: orgs.groups ?? [],
+            districts: normalizedOrgs.districts,
+            schools: normalizedOrgs.schools,
+            classes: normalizedOrgs.classes,
+            groups: normalizedOrgs.groups,
           },
           updatedAt: FieldValue.serverTimestamp() as Timestamp,
-        };
+        });
 
         // --- Write 1 (Update Path) --- Update administration doc using transaction.update()
         transaction.update(administrationDocRef, updateData); // Switched from set with merge to update
@@ -186,30 +247,30 @@ export const upsertAdministrationHandler = async (
         const siteId = data.siteId;
 
         // Prepare Administration Data for creation
-        const administrationData: IAdministrationDoc = {
+        const administrationData: IAdministrationDoc = removeUndefinedFields({
           name,
           publicName: publicName ?? name,
           normalizedName,
           createdBy: callerAdminUid,
-          creatorName: creatorName,
-          groups: orgs.groups ?? [],
-          classes: orgs.classes ?? [],
-          schools: orgs.schools ?? [],
-          districts: orgs.districts ?? [],
+          creatorName: creatorName ?? "",
+          groups: normalizedOrgs.groups,
+          classes: normalizedOrgs.classes,
+          schools: normalizedOrgs.schools,
+          districts: normalizedOrgs.districts,
           dateCreated: FieldValue.serverTimestamp() as Timestamp,
           dateOpened: dateOpenedTs,
           dateClosed: dateClosedTs,
-          assessments: assessments,
+          assessments: cleanedAssessments,
           sequential: sequential,
-          tags: tags,
-          legal: legal,
+          tags: cleanedTags,
+          legal: cleanedLegal,
           testData: isTestData ?? false,
-          readOrgs: orgs,
-          minimalOrgs: orgs,
+          readOrgs: normalizedOrgs,
+          minimalOrgs: normalizedOrgs,
           siteId,
           createdAt: FieldValue.serverTimestamp() as Timestamp,
           updatedAt: FieldValue.serverTimestamp() as Timestamp,
-        };
+        });
 
         // --- Write 1 (Create Path) --- Create administration doc
         transaction.set(administrationDocRef, administrationData); // Use set without merge for creation
