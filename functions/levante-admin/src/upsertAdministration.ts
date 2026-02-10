@@ -87,7 +87,7 @@ const normalizeAssessments = (assessments: IAssessment[]): IAssessment[] => {
 
 export const upsertAdministrationHandler = async (
   callerAdminUid: string,
-  data: UpsertAdministrationData,
+  data: UpsertAdministrationData
 ) => {
   logger.info("Administration upsert started", { callerUid: callerAdminUid });
   const db = getFirestore();
@@ -112,7 +112,7 @@ export const upsertAdministrationHandler = async (
   const normalizedOrgs = normalizeOrgs(orgs);
   const rawAssessments = Array.isArray(assessments) ? assessments : [];
   const cleanedAssessments = normalizeAssessments(
-    removeUndefinedFields(rawAssessments) as IAssessment[],
+    removeUndefinedFields(rawAssessments) as IAssessment[]
   );
   const cleanedLegal = removeUndefinedFields(legal ?? {});
   const cleanedTags = normalizeIdList(tags);
@@ -127,7 +127,7 @@ export const upsertAdministrationHandler = async (
   ) {
     throw new HttpsError(
       "invalid-argument",
-      "Missing required fields: name, assessments, dateOpen, dateClose.",
+      "Missing required fields: name, assessments, dateOpen, dateClose."
     );
   }
 
@@ -138,12 +138,12 @@ export const upsertAdministrationHandler = async (
       typeof assessment.variantId !== "string" ||
       !assessment.variantId.trim() ||
       typeof assessment.variantName !== "string" ||
-      !assessment.variantName.trim(),
+      !assessment.variantName.trim()
   );
   if (hasInvalidAssessment) {
     throw new HttpsError(
       "invalid-argument",
-      "Assessments must include taskId, variantId, and variantName.",
+      "Assessments must include taskId, variantId, and variantName."
     );
   }
 
@@ -164,14 +164,14 @@ export const upsertAdministrationHandler = async (
   } catch (e: unknown) {
     throw new HttpsError(
       "invalid-argument",
-      "Invalid date format for dateOpen or dateClose. Use ISO 8601 format.",
+      "Invalid date format for dateOpen or dateClose. Use ISO 8601 format."
     );
   }
 
   if (dateClosedTs.toMillis() < dateOpenedTs.toMillis()) {
     throw new HttpsError(
       "invalid-argument",
-      `The end date cannot be before the start date: ${dateClose} < ${dateOpen}`,
+      `The end date cannot be before the start date: ${dateClose} < ${dateOpen}`
     );
   }
 
@@ -191,7 +191,7 @@ export const upsertAdministrationHandler = async (
         if (!existingDoc.exists) {
           throw new HttpsError(
             "not-found",
-            `Administration with ID ${administrationId} not found for update.`,
+            `Administration with ID ${administrationId} not found for update.`
           );
         }
         const existingData = existingDoc.data() as Partial<IAdministrationDoc>;
@@ -279,13 +279,13 @@ export const upsertAdministrationHandler = async (
           // --- Write 2 (Create Path) --- Update user if they exist
           transaction.update(userDocRef, {
             "adminData.administrationsCreated": FieldValue.arrayUnion(
-              administrationDocRef.id,
+              administrationDocRef.id
             ),
           });
         } else {
           // Log if user doc doesn't exist, but don't throw error
           logger.warn(
-            `User document ${callerAdminUid} not found. Cannot add administration ${administrationDocRef.id} to created list.`,
+            `User document ${callerAdminUid} not found. Cannot add administration ${administrationDocRef.id} to created list.`
           );
         }
       }
@@ -306,7 +306,7 @@ export const upsertAdministrationHandler = async (
     }
     throw new HttpsError(
       "internal",
-      `Failed to upsert administration: ${error.message}`,
+      `Failed to upsert administration: ${error.message}`
     );
   }
 };
