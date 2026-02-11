@@ -51,6 +51,32 @@ interface IAdministrationDoc {
   creatorName: string;
 }
 
+const normalizeIdList = (ids: unknown): string[] => {
+  if (!Array.isArray(ids)) return [];
+  return [...new Set(ids)]
+    .filter((id): id is string => typeof id === "string")
+    .map((id) => id.trim())
+    .filter((id) => id.length > 0);
+};
+
+const normalizeOrgs = (orgs?: IOrgsList): Required<IOrgsList> => {
+  return {
+    districts: normalizeIdList(orgs?.districts),
+    schools: normalizeIdList(orgs?.schools),
+    classes: normalizeIdList(orgs?.classes),
+    groups: normalizeIdList(orgs?.groups),
+  };
+};
+
+const hasAnyOrgIds = (orgs: Required<IOrgsList>): boolean => {
+  return (
+    orgs.districts.length > 0 ||
+    orgs.schools.length > 0 ||
+    orgs.classes.length > 0 ||
+    orgs.groups.length > 0
+  );
+};
+
 export const upsertAdministrationHandler = async (
   callerAdminUid: string,
   data: UpsertAdministrationData
@@ -79,6 +105,8 @@ export const upsertAdministrationHandler = async (
     legal,
     creatorName,
   } = data as UpsertAdministrationData;
+
+  const normalizedOrgs = normalizeOrgs(orgs);
 
   if (
     !name ||
@@ -135,6 +163,26 @@ export const upsertAdministrationHandler = async (
           );
         }
 
+        const existingData = existingDoc.data() as Partial<IAdministrationDoc>;
+        const existingOrgs = normalizeOrgs({
+          districts: existingData.districts,
+          schools: existingData.schools,
+          classes: existingData.classes,
+          groups: existingData.groups,
+        });
+
+        // Guardrail: if the caller payload doesn't include any valid org IDs (e.g. groups: [null]),
+        // preserve existing org targeting rather than overwriting it.
+        const effectiveOrgs = hasAnyOrgIds(normalizedOrgs)
+          ? normalizedOrgs
+          : existingOrgs;
+        if (!hasAnyOrgIds(normalizedOrgs) && hasAnyOrgIds(existingOrgs)) {
+          logger.warn(
+            "upsertAdministration: preserving existing org targeting (incoming orgs invalid/empty)",
+            { administrationId }
+          );
+        }
+
         // Prepare data for update (merge: true will handle partial updates)
         const updateData: Partial<IAdministrationDoc> = {
           // Use Partial for updates
@@ -142,10 +190,10 @@ export const upsertAdministrationHandler = async (
           publicName: publicName ?? name,
           normalizedName,
           // createdBy should not be updated
-          groups: orgs.groups ?? [],
-          classes: orgs.classes ?? [],
-          schools: orgs.schools ?? [],
-          districts: orgs.districts ?? [],
+          groups: effectiveOrgs.groups,
+          classes: effectiveOrgs.classes,
+          schools: effectiveOrgs.schools,
+          districts: effectiveOrgs.districts,
           // dateCreated should not be updated
           dateOpened: dateOpenedTs,
           dateClosed: dateClosedTs,
@@ -157,17 +205,17 @@ export const upsertAdministrationHandler = async (
           // Explicitly construct org lists for update
           readOrgs: {
             // Re-enabled
-            districts: orgs.districts ?? [],
-            schools: orgs.schools ?? [],
-            classes: orgs.classes ?? [],
-            groups: orgs.groups ?? [],
+            districts: effectiveOrgs.districts,
+            schools: effectiveOrgs.schools,
+            classes: effectiveOrgs.classes,
+            groups: effectiveOrgs.groups,
           },
           minimalOrgs: {
             // Re-enabled
-            districts: orgs.districts ?? [],
-            schools: orgs.schools ?? [],
-            classes: orgs.classes ?? [],
-            groups: orgs.groups ?? [],
+            districts: effectiveOrgs.districts,
+            schools: effectiveOrgs.schools,
+            classes: effectiveOrgs.classes,
+            groups: effectiveOrgs.groups,
           },
           updatedAt: FieldValue.serverTimestamp() as Timestamp,
         };
@@ -192,10 +240,10 @@ export const upsertAdministrationHandler = async (
           normalizedName,
           createdBy: callerAdminUid,
           creatorName: creatorName,
-          groups: orgs.groups ?? [],
-          classes: orgs.classes ?? [],
-          schools: orgs.schools ?? [],
-          districts: orgs.districts ?? [],
+          groups: normalizedOrgs.groups,
+          classes: normalizedOrgs.classes,
+          schools: normalizedOrgs.schools,
+          districts: normalizedOrgs.districts,
           dateCreated: FieldValue.serverTimestamp() as Timestamp,
           dateOpened: dateOpenedTs,
           dateClosed: dateClosedTs,
@@ -204,8 +252,8 @@ export const upsertAdministrationHandler = async (
           tags: tags,
           legal: legal,
           testData: isTestData ?? false,
-          readOrgs: orgs,
-          minimalOrgs: orgs,
+          readOrgs: normalizedOrgs,
+          minimalOrgs: normalizedOrgs,
           siteId,
           createdAt: FieldValue.serverTimestamp() as Timestamp,
           updatedAt: FieldValue.serverTimestamp() as Timestamp,
