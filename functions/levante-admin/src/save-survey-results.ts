@@ -41,8 +41,6 @@ export async function writeSurveyResponses(requesterUid, data) {
   }
 
   try {
-    // Deterministic survey response document id ensures that the survey response is always written to the same document
-    const surveyRef = surveyResponsesCollection.doc(administrationId);
     const {
       pageNo,
       isGeneral,
@@ -66,8 +64,22 @@ export async function writeSurveyResponses(requesterUid, data) {
 
     // Use a transaction to ensure atomicity between survey responses and assignment updates
     await db.runTransaction(async (transaction) => {
-      const existingSurveyDoc = await transaction.get(surveyRef);
-      const isNewDocument = !existingSurveyDoc.exists;
+      // Check if the survey response document already exists
+      const existingDocQuery = surveyResponsesCollection
+        .where("administrationId", "==", administrationId)
+        .limit(1);
+
+      const existingDocSnapshot = await transaction.get(existingDocQuery);
+
+      const surveyRef = existingDocSnapshot.empty
+        ? surveyResponsesCollection.doc()
+        : existingDocSnapshot.docs[0].ref;
+
+      const existingSurveyDoc = existingDocSnapshot.empty
+        ? await transaction.get(surveyRef)
+        : existingDocSnapshot.docs[0];
+
+      const isNewDocument = existingDocSnapshot.empty;
       const existingData: any = existingSurveyDoc.data() || {};
 
       // Read assignment document
