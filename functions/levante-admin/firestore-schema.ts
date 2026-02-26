@@ -64,6 +64,10 @@ export interface Administration {
   schools: string[]; // Document IDs from `schools` collection
   sequential: boolean;
   siteId: string;
+  syncChunksCompleted?: number;
+  syncChunksTotal?: number;
+  syncErrorMessage?: string;
+  syncStatus?: "pending" | "complete" | "failed";
   tags: string[];
   testData: boolean;
 }

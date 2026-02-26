@@ -51,6 +51,10 @@ interface IAdministrationDoc {
   legal?: { [key: string]: unknown };
   testData: boolean;
   siteId: string;
+  syncStatus?: "pending" | "complete" | "failed";
+  syncChunksTotal?: number;
+  syncChunksCompleted?: number;
+  syncErrorMessage?: string;
   readOrgs?: IOrgsList;
   minimalOrgs?: IOrgsList;
   createdAt: Timestamp;
@@ -150,6 +154,7 @@ export const upsertAdministrationHandler = async (
           name,
           publicName: publicName ?? name,
           normalizedName,
+          syncStatus: "pending",
           // createdBy should not be updated
           groups: orgs.groups ?? [],
           classes: orgs.classes ?? [],
@@ -199,6 +204,7 @@ export const upsertAdministrationHandler = async (
           name,
           publicName: publicName ?? name,
           normalizedName,
+          syncStatus: "pending",
           createdBy: callerAdminUid,
           creatorName: creatorName,
           groups: orgs.groups ?? [],

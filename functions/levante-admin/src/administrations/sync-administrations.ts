@@ -24,7 +24,6 @@ import _reduce from "lodash-es/reduce.js";
 import type { IAdministration, IOrgsList } from "../interfaces.js";
 import { ORG_NAMES } from "../interfaces.js";
 import {
-  chunkOrgs,
   getExhaustiveOrgs,
   getOnlyExistingOrgs,
   getUsersFromOrgs,
@@ -109,11 +108,13 @@ export const processRemovedAdministration = async (
   return Promise.resolve({ status: "ok" });
 };
 
-export const processNewAdministration = async (
+export async function enqueueAddUpdateTasksForAdministration(
   administrationId: string,
   administrationDocRef: DocumentReference,
-  currData: IAdministration
-) => {
+  currData: IAdministration,
+  prevData: IAdministration | undefined
+): Promise<{ status: "ok" }> {
+  const db = getFirestore();
   const { minimalOrgs } = await standardizeAdministrationOrgs({
     administrationId,
     administrationDocRef,
@@ -122,29 +123,59 @@ export const processNewAdministration = async (
     forceCopy: true,
   });
 
+  const usersToUpdate = await db.runTransaction(async (transaction) => {
+    return getUsersFromOrgs({
+      orgs: minimalOrgs,
+      transaction,
+      includeArchived: false,
+    });
+  });
+
+  const userChunks = _chunk(usersToUpdate, MAX_TRANSACTIONS);
+  if (userChunks.length === 0) {
+    const completeUpdate: Record<string, unknown> = {
+      syncStatus: "complete",
+      syncChunksTotal: 0,
+      syncChunksCompleted: 0,
+      updatedAt: FieldValue.serverTimestamp(),
+    };
+    if (prevData) {
+      completeUpdate._syncRollback = FieldValue.delete();
+    }
+    await administrationDocRef.update(completeUpdate);
+    return { status: "ok" };
+  }
+
+  await administrationDocRef.update({
+    syncStatus: "pending",
+    syncChunksTotal: userChunks.length,
+    syncChunksCompleted: 0,
+    ...(prevData ? { _syncRollback: prevData } : {}),
+    updatedAt: FieldValue.serverTimestamp(),
+  });
+
   const taskName = "updateAssignmentsForOrgChunk";
   const queue = getFunctions().taskQueue(taskName);
   const targetUri = await getFunctionUrl(taskName);
   const enqueues: Promise<void>[] = [];
 
-  for (const orgChunk of chunkOrgs(minimalOrgs, 100)) {
-    logger.debug("Enqueueing task for org chunk", {
+  for (const userIds of userChunks) {
+    logger.debug("Enqueueing task for user chunk", {
       administrationId,
       targetUri,
       taskName,
-      orgChunkSummary: summarizeOrgsForLog(orgChunk),
+      userCount: userIds.length,
     });
-
     enqueues.push(
       queue.enqueue(
         {
           administrationData: currData,
           administrationId,
-          orgChunk,
-          mode: "add",
+          userIds,
+          mode: prevData ? "update" : "add",
         },
         {
-          dispatchDeadlineSeconds: 60 * 30, // 30 minutes
+          dispatchDeadlineSeconds: 60 * 30,
           uri: targetUri,
         }
       )
@@ -152,8 +183,20 @@ export const processNewAdministration = async (
   }
 
   await Promise.all(enqueues);
+  return { status: "ok" };
+}
 
-  return Promise.resolve({ status: "ok" });
+export const processNewAdministration = async (
+  administrationId: string,
+  administrationDocRef: DocumentReference,
+  currData: IAdministration
+) => {
+  return enqueueAddUpdateTasksForAdministration(
+    administrationId,
+    administrationDocRef,
+    currData,
+    undefined
+  );
 };
 
 export const processModifiedAdministration = async (
@@ -204,9 +247,7 @@ export const processModifiedAdministration = async (
   let remainingUsersToRemove: string[] = [];
   let removedExhaustiveOrgs: IOrgsList = {};
 
-  // Skip removal transaction if no orgs were removed to avoid empty transaction errors.
   if (numRemovedOrgs > 0) {
-    // Run the first transaction to get the user list
     await db.runTransaction(async (transaction) => {
       const removedExistingOrgs = await getOnlyExistingOrgs(
         removedOrgs,
@@ -215,93 +256,68 @@ export const processModifiedAdministration = async (
       removedExhaustiveOrgs = await getExhaustiveOrgs({
         orgs: removedExistingOrgs,
         transaction,
-        includeArchived: true, // `includeArchived` is true to remove assignments even from archived orgs
+        includeArchived: true,
       });
-      const usersToRemove = await getUsersFromOrgs({
+      remainingUsersToRemove = await getUsersFromOrgs({
         orgs: removedExhaustiveOrgs,
         transaction,
-        includeArchived: true, // remove assignments even from archived users
+        includeArchived: true,
       });
-
-      logger.debug(`Removing assignment ${administrationId} from users`, {
-        userSummary: summarizeIdListForLog(usersToRemove),
-      });
-
-      if (usersToRemove.length !== 0) {
-        if (usersToRemove.length <= MAX_TRANSACTIONS) {
-          // If the number of users is small enough, remove them in this transaction.
-          return removeOrgsFromAssignments(
-            usersToRemove,
-            [administrationId],
-            removedExhaustiveOrgs,
-            transaction
-          );
-        } else {
-          // Otherwise, just save for the next loop over user chunks.
-          remainingUsersToRemove = usersToRemove;
-          return Promise.resolve(usersToRemove.length);
-        }
-      } else {
-        return Promise.resolve(0);
-      }
+      return remainingUsersToRemove.length;
     });
 
-    // If remainingUsersToRemove.length === 0, then these chunks will be of zero length
-    // and the entire loop below is a no-op.
-    for (const _userChunk of _chunk(remainingUsersToRemove, MAX_TRANSACTIONS)) {
-      await db.runTransaction(async (transaction) => {
-        return removeOrgsFromAssignments(
-          _userChunk,
-          [administrationId],
-          removedExhaustiveOrgs,
-          transaction
+    logger.debug(`Removing assignment ${administrationId} from users`, {
+      userSummary: summarizeIdListForLog(remainingUsersToRemove),
+    });
+
+    if (remainingUsersToRemove.length > 0) {
+      const removalChunks = _chunk(
+        remainingUsersToRemove,
+        MAX_TRANSACTIONS
+      ) as string[][];
+      const taskName = "updateAssignmentsForOrgChunk";
+      const queue = getFunctions().taskQueue(taskName);
+      const targetUri = await getFunctionUrl(taskName);
+      const enqueues: Promise<void>[] = [];
+
+      for (let i = 0; i < removalChunks.length; i++) {
+        const userIds = removalChunks[i];
+        const isLastRemovalChunk = i === removalChunks.length - 1;
+        logger.debug("Enqueueing removal task for user chunk", {
+          administrationId,
+          taskName,
+          userCount: userIds.length,
+          isLastRemovalChunk,
+        });
+        enqueues.push(
+          queue.enqueue(
+            {
+              mode: "remove",
+              administrationId,
+              userIds,
+              removedExhaustiveOrgs,
+              ...(isLastRemovalChunk
+                ? { isLastRemovalChunk: true, currData, prevData }
+                : {}),
+            },
+            {
+              dispatchDeadlineSeconds: 60 * 30,
+              uri: targetUri,
+            }
+          )
         );
-      });
+      }
+      await Promise.all(enqueues);
+      return { status: "ok" };
     }
   }
 
-  //        +-------------------------------+
-  // -------| Update or add remaining users |---------
-  //        +-------------------------------+
-
-  const { minimalOrgs } = await standardizeAdministrationOrgs({
+  return enqueueAddUpdateTasksForAdministration(
     administrationId,
     administrationDocRef,
     currData,
-    copyToSubCollections: true,
-    forceCopy: true,
-  });
-
-  const taskName = "updateAssignmentsForOrgChunk";
-  const queue = getFunctions().taskQueue(taskName);
-  const targetUri = await getFunctionUrl(taskName);
-  const enqueues: Promise<void>[] = [];
-
-  for (const orgChunk of chunkOrgs(minimalOrgs, 100)) {
-    logger.debug("Enqueueing task for org chunk", {
-      administrationId,
-      targetUri,
-      taskName,
-      orgChunkSummary: summarizeOrgsForLog(orgChunk),
-    });
-    enqueues.push(
-      queue.enqueue(
-        {
-          administrationData: currData,
-          administrationId,
-          orgChunk,
-          mode: "update",
-        },
-        {
-          dispatchDeadlineSeconds: 60 * 30, // 30 minutes
-          uri: targetUri,
-        }
-      )
-    );
-  }
-
-  await Promise.all(enqueues);
-  return Promise.resolve({ status: "ok" });
+    prevData
+  );
 };
 
 export const processUserAddedOrgs = async (

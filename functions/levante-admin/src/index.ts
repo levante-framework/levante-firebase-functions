@@ -377,14 +377,7 @@ export const updateAssignmentsForOrgChunk = onTaskDispatched(
     timeoutSeconds: 540,
   },
   async (request) => {
-    const { administrationId, administrationData, orgChunk, mode } =
-      request.data;
-    await updateAssignmentsForOrgChunkHandler({
-      administrationId,
-      administrationData,
-      orgChunk,
-      mode,
-    });
+    await updateAssignmentsForOrgChunkHandler(request.data);
   }
 );
 
