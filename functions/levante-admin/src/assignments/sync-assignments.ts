@@ -13,12 +13,9 @@ import _toPairs from "lodash-es/toPairs.js";
 import type { IAdministration, IOrgsList } from "../interfaces.js";
 import { ORG_NAMES } from "../interfaces.js";
 import {
-  processModifiedAdministration,
-  processNewAdministration,
-  processRemovedAdministration,
   processUserAddedOrgs,
 } from "../administrations/sync-administrations.js";
-import { type DocumentWrittenEvent, MAX_TRANSACTIONS } from "../utils/utils.js";
+import { MAX_TRANSACTIONS } from "../utils/utils.js";
 import { processUserRemovedOrgs } from "../administrations/administration-utils.js";
 import { getUsersFromOrgs } from "../orgs/org-utils.js";
 import {
@@ -29,82 +26,6 @@ import {
   summarizeIdListForLog,
   summarizeOrgsForLog,
 } from "../utils/logging.js";
-
-/**
- * Sync globally defined adminstrations with user-specific assignments.
- *
- * Administrations are globally defined, while assignments are specific to each
- * user. This function determines all assigned users and syncs the globally
- * defined adminstration data with their local assignment data.
- *
- * It also checks to see that the list of assigned orgs is exhaustive. By
- * "exhaustive," we mean that any organization in the administration's org list
- * must have each of its dependent organizations explicitly listed in the same
- * administration's org list. For example, if district1 is in the ``districts``
- * list and district1 contains schools A and B. Then schools A and B should also
- * be in the ``schools`` list of the administration. Likewise if school A
- * contains classes alpha and beta, then classes alpha and beta should also be
- * in the administration's ``classes`` list. This function ensures that org lists
- * are exhaustive.
- *
- * Because this function both writes to and is triggered by changes to the
- * administration document, we check to prevent infinite loops where document
- * change -> function trigger -> document change, and so on.
- *
- * @param {DocumentWrittenEvent} event - The event that triggered this function.
- */
-export const syncAssignmentsOnAdministrationUpdateEventHandler = async (
-  event: DocumentWrittenEvent
-) => {
-  const db = getFirestore();
-  const administrationId = event.params.administrationId;
-  const prevData = event.data?.before.data();
-  const currData = event.data?.after.data();
-  const administrationDocRef = db
-    .collection("administrations")
-    .doc(administrationId);
-  let prevOrgs: IOrgsList = {};
-
-  if (currData === undefined) {
-    // In this case, the document was deleted.
-    // So grab all of the previous orgs remove the assignments for their users.
-    if (prevData === undefined) {
-      // This is weird, we should never get here.
-      return Promise.resolve({ status: "ok" });
-    }
-    prevOrgs = _pick(prevData, ORG_NAMES);
-
-    const createdBy = _get(prevData, "createdBy");
-    if (createdBy) {
-      const creatorDocRef = db.collection("users").doc(createdBy);
-      const fieldPath = new FieldPath("adminData", "administrationsCreated");
-      await creatorDocRef.update(
-        fieldPath,
-        FieldValue.arrayRemove(administrationId)
-      );
-    }
-    return processRemovedAdministration(administrationId, prevOrgs);
-  }
-
-  if (prevData === undefined) {
-    console.log("new administration", administrationId);
-    // In this case, the document was created.
-    // So grab any orgs and assign all of those orgs' users to the administration.
-    return processNewAdministration(
-      administrationId,
-      administrationDocRef,
-      currData as IAdministration
-    );
-  }
-
-  // If we get here, then the document was modified.
-  return processModifiedAdministration(
-    administrationId,
-    administrationDocRef,
-    prevData as IAdministration,
-    currData as IAdministration
-  );
-};
 
 export const syncAssignmentsForUserOrgChange = async ({
   roarUid,
@@ -180,24 +101,6 @@ export const syncAssignmentsForUserOrgChange = async ({
       }
     }
   }
-};
-
-export const syncAssignmentsOnUserUpdateEventHandler = async ({
-  event,
-  userTypes = ["student"],
-}: {
-  event: DocumentWrittenEvent;
-  userTypes: string[];
-}) => {
-  const roarUid = event.params.roarUid;
-  const prevData = event.data?.before.data();
-  const currData = event.data?.after.data();
-  await syncAssignmentsForUserOrgChange({
-    roarUid,
-    prevData: prevData ?? undefined,
-    currData: currData ?? undefined,
-    userTypes,
-  });
 };
 
 export const updateAssignmentsForOrgChunkHandler = async ({
