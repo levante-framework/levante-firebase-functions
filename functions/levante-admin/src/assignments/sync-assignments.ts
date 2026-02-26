@@ -106,21 +106,22 @@ export const syncAssignmentsOnAdministrationUpdateEventHandler = async (
   );
 };
 
-export const syncAssignmentsOnUserUpdateEventHandler = async ({
-  event,
-  userTypes = ["student"],
+export const syncAssignmentsForUserOrgChange = async ({
+  roarUid,
+  prevData,
+  currData,
+  userTypes = ["student", "parent", "teacher"],
 }: {
-  event: DocumentWrittenEvent;
-  userTypes: string[];
+  roarUid: string;
+  prevData: Record<string, unknown> | undefined;
+  currData: Record<string, unknown> | undefined;
+  userTypes?: string[];
 }) => {
-  const roarUid = event.params.roarUid;
-  const prevData = event.data?.before.data();
-  const currData = event.data?.after.data();
-
+  if (!prevData || !currData) return;
   const prevOrgs = _pick(prevData, ORG_NAMES);
   const currOrgs = _pick(currData, ORG_NAMES);
 
-  if (userTypes.includes(currData?.userType)) {
+  if (userTypes.includes((currData?.userType as string) ?? "")) {
     // The orgs data structure for users is different than for administrations.
     // Each org is an object with fields `all`, `current`, and `dates`.
     // We are only concerned with the `current` orgs.
@@ -179,6 +180,24 @@ export const syncAssignmentsOnUserUpdateEventHandler = async ({
       }
     }
   }
+};
+
+export const syncAssignmentsOnUserUpdateEventHandler = async ({
+  event,
+  userTypes = ["student"],
+}: {
+  event: DocumentWrittenEvent;
+  userTypes: string[];
+}) => {
+  const roarUid = event.params.roarUid;
+  const prevData = event.data?.before.data();
+  const currData = event.data?.after.data();
+  await syncAssignmentsForUserOrgChange({
+    roarUid,
+    prevData: prevData ?? undefined,
+    currData: currData ?? undefined,
+    userTypes,
+  });
 };
 
 export const updateAssignmentsForOrgChunkHandler = async ({

@@ -30,6 +30,11 @@ import {
   summarizeAssessmentsForLog,
   summarizeIdListForLog,
 } from "../utils/logging.js";
+import {
+  syncOnAssignmentCreated,
+  syncOnAssignmentDeleted,
+  syncOnAssignmentUpdated,
+} from "./assignment-sync-in-transaction.js";
 
 /**
  * Removes an assignment document from a user.
@@ -55,6 +60,16 @@ const removeAssignmentFromUser = async (
     .doc(userUid)
     .collection("assignments")
     .doc(administrationId);
+
+  const assignmentDoc = await transaction.get(assignmentRef);
+  if (assignmentDoc.exists) {
+    const prevData = assignmentDoc.data();
+    await syncOnAssignmentDeleted(db, transaction, userUid, administrationId, {
+      assigningOrgs: prevData?.assigningOrgs,
+      assessments: prevData?.assessments,
+      completed: prevData?.completed,
+    });
+  }
 
   logger.debug(`Removing assignment ${administrationId} from user ${userUid}`);
   return transaction.delete(assignmentRef);
@@ -273,7 +288,7 @@ export const addAssignmentToUsers = async (
   administrationData: IAdministration,
   transaction: Transaction
 ) => {
-  console.log("hit addAssignmentToUsers");
+  const db = getFirestore();
   const assignments = await Promise.all(
     _map(users, (user) =>
       prepareNewAssignment(
@@ -285,16 +300,22 @@ export const addAssignmentToUsers = async (
     )
   );
 
-  return _map(assignments, ([assignmentRef, assignmentData]) => {
+  for (const [assignmentRef, assignmentData] of assignments) {
     if (assignmentRef && assignmentData) {
       logger.debug(`Adding new assignment at ${assignmentRef.path}`, {
         assignmentSummary: summarizeAssignmentForLog(assignmentData),
       });
-      return transaction.set(assignmentRef, assignmentData, { merge: true });
-    } else {
-      return transaction;
+      transaction.set(assignmentRef, assignmentData, { merge: true });
+      const userUid = assignmentRef.parent.parent?.id;
+      if (userUid) {
+        await syncOnAssignmentCreated(db, transaction, userUid, administrationId, {
+          assigningOrgs: assignmentData.assigningOrgs,
+          assessments: assignmentData.assessments,
+          dateAssigned: assignmentData.dateAssigned,
+        });
+      }
     }
-  });
+  }
 };
 
 /**
@@ -321,7 +342,8 @@ export const removeOrgsFromAssignment = async (
     .doc(administrationId);
   const assignmentDoc = await transaction.get(assignmentRef);
   if (assignmentDoc.exists) {
-    const assigningOrgs = _get(assignmentDoc.data(), "assigningOrgs", []);
+    const prevData = assignmentDoc.data()!;
+    const assigningOrgs = _get(prevData, "assigningOrgs", []);
     for (const orgName of Object.keys(assigningOrgs)) {
       assigningOrgs[orgName] = _without(
         assigningOrgs[orgName],
@@ -337,20 +359,22 @@ export const removeOrgsFromAssignment = async (
 
     if (numRemainingAssigningOrgs > 0) {
       const readOrgs = await getReadOrgs(assigningOrgs, transaction);
-      return [assignmentRef, assigningOrgs, readOrgs] as [
+      return [assignmentRef, assigningOrgs, readOrgs, prevData] as [
         DocumentReference,
-        IOrgsList | undefined,
-        IOrgsList | undefined
+        IOrgsList,
+        IOrgsList,
+        Record<string, unknown>
       ];
     } else {
-      return [assignmentRef, undefined, undefined] as [
+      return [assignmentRef, undefined, undefined, prevData] as [
         DocumentReference,
-        IOrgsList | undefined,
-        IOrgsList | undefined
+        undefined,
+        undefined,
+        Record<string, unknown>
       ];
     }
   } else {
-    return [undefined, undefined, undefined];
+    return [undefined, undefined, undefined, undefined];
   }
 };
 
@@ -369,6 +393,7 @@ export const removeOrgsFromAssignments = async (
   orgsToRemove: IOrgsList,
   transaction: Transaction
 ) => {
+  const db = getFirestore();
   const assignments = await Promise.all(
     _flatten(
       administrationIds.map((administrationId) => {
@@ -384,26 +409,38 @@ export const removeOrgsFromAssignments = async (
     )
   );
 
-  return _map(assignments, ([assignmentRef, assigningOrgs, readOrgs]) => {
-    if (assignmentRef) {
+  for (const [assignmentRef, assigningOrgs, readOrgs, prevData] of assignments) {
+    if (assignmentRef && prevData) {
+      const userUid = assignmentRef.parent.parent?.id;
+      const administrationId = assignmentRef.id;
       if (assigningOrgs) {
-        return transaction.update(assignmentRef, {
+        await syncOnAssignmentUpdated(db, transaction, userUid!, administrationId, {
+          assigningOrgs: prevData.assigningOrgs as IOrgsList,
+          assessments: prevData.assessments,
+          started: prevData.started,
+          completed: prevData.completed,
+        }, {
+          assigningOrgs,
+          assessments: prevData.assessments,
+          started: prevData.started,
+          completed: prevData.completed,
+        });
+        transaction.update(assignmentRef, {
           id: assignmentRef.id,
           assigningOrgs,
           readOrgs,
         });
       } else {
+        await syncOnAssignmentDeleted(db, transaction, userUid!, administrationId, {
+          assigningOrgs: prevData.assigningOrgs as IOrgsList,
+          assessments: prevData.assessments,
+          completed: prevData.completed,
+        });
         logger.debug(`Removing assignment ${assignmentRef.path}`);
-        // TODO: This removes assignments even if they are in progress or completed.
-        // We should consider handling in progress and completed assignments differently.
-        // Perhaps they get moved to a separate "archived" collection.
-        // Discuss with the partnerships team.
-        return transaction.delete(assignmentRef);
+        transaction.delete(assignmentRef);
       }
-    } else {
-      return transaction;
     }
-  });
+  }
 };
 
 /**
@@ -454,6 +491,12 @@ export const updateAssignmentForUser = async (
       }
 
       if (isEmptyOrgs(usersAssigningOrgs)) {
+        const prevData = assignmentDoc.data()!;
+        await syncOnAssignmentDeleted(db, transaction, userUid, administrationId, {
+          assigningOrgs: prevData.assigningOrgs,
+          assessments: prevData.assessments,
+          completed: prevData.completed,
+        });
         return [assignmentRef, undefined];
       }
 
@@ -561,6 +604,12 @@ export const updateAssignmentForUser = async (
       }
 
       if (updatedAssessments.length === 0) {
+        const prevData = assignmentDoc.data()!;
+        await syncOnAssignmentDeleted(db, transaction, userUid, administrationId, {
+          assigningOrgs: prevData.assigningOrgs,
+          assessments: prevData.assessments,
+          completed: prevData.completed,
+        });
         return [assignmentRef, undefined];
       }
 
@@ -599,8 +648,9 @@ export const updateAssignmentForUser = async (
         );
       }
 
+      const prevData = assignmentDoc.data()!;
       const assignmentData: DocumentData = {
-        ...assignmentDoc.data,
+        ...prevData,
         id: administrationId,
         dateOpened: parseTimestamp(dateOpened),
         dateClosed: parseTimestamp(dateClosed),
@@ -619,6 +669,18 @@ export const updateAssignmentForUser = async (
         lastSyncedFromAdministration: new Date(),
       };
 
+      await syncOnAssignmentUpdated(db, transaction, userUid, administrationId, {
+        assigningOrgs: prevData.assigningOrgs,
+        assessments: prevData.assessments,
+        started: prevData.started,
+        completed: prevData.completed,
+      }, {
+        assigningOrgs: usersAssigningOrgs,
+        assessments: cleanedAssessments,
+        started: assignmentData.started,
+        completed: assignmentData.completed,
+      });
+
       return [assignmentRef, assignmentData] as [
         DocumentReference,
         DocumentData
@@ -627,12 +689,23 @@ export const updateAssignmentForUser = async (
       return [assignmentRef, undefined];
     }
   } else {
-    return prepareNewAssignment(
+    const [assignmentRef, assignmentData] = await prepareNewAssignment(
       userUid,
       administrationId,
       administrationData,
       transaction
     );
+    if (assignmentRef && assignmentData) {
+      await syncOnAssignmentCreated(db, transaction, userUid, administrationId, {
+        assigningOrgs: assignmentData.assigningOrgs,
+        assessments: assignmentData.assessments,
+        dateAssigned: assignmentData.dateAssigned,
+      });
+    }
+    return [assignmentRef, assignmentData] as [
+      DocumentReference | undefined,
+      DocumentData | undefined
+    ];
   }
 };
 

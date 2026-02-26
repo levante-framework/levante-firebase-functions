@@ -4,6 +4,13 @@ import {
   Timestamp,
   type DocumentReference,
 } from "firebase-admin/firestore";
+import _pick from "lodash-es/pick.js";
+import type { IAdministration } from "./interfaces.js";
+import { ORG_NAMES } from "./interfaces.js";
+import {
+  processNewAdministration,
+  processModifiedAdministration,
+} from "./administrations/sync-administrations.js";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import type { IAssessment, IOrgsList } from "./interfaces.js"; // Assuming necessary types/helpers are in common
@@ -117,9 +124,10 @@ export const upsertAdministrationHandler = async (
 
   // 5. Firestore Transaction
   try {
-    const newAdministrationId = await db.runTransaction(async (transaction) => {
+    const { administrationId: newAdministrationId, prevData } = await db.runTransaction(async (transaction) => {
       let administrationDocRef: DocumentReference;
-      let operationType: string; // To log 'create' or 'update'
+      let operationType: "create" | "update";
+      let prevData: IAdministration | undefined;
 
       if (administrationId) {
         operationType = "update";
@@ -134,6 +142,7 @@ export const upsertAdministrationHandler = async (
             `Administration with ID ${administrationId} not found for update.`
           );
         }
+        prevData = _pick(existingDoc.data(), [...ORG_NAMES, "createdBy", "assessments", "name", "publicName", "dateOpened", "dateClosed", "sequential", "tags", "legal", "testData", "readOrgs", "minimalOrgs"]) as IAdministration;
 
         // Prepare data for update (merge: true will handle partial updates)
         const updateData: Partial<IAdministrationDoc> = {
@@ -223,20 +232,43 @@ export const upsertAdministrationHandler = async (
           });
         } else {
           // Log if user doc doesn't exist, but don't throw error
-          logger.warn(
-            `User document ${callerAdminUid} not found. Cannot add administration ${administrationDocRef.id} to created list.`
-          );
-        }
+        logger.warn(
+          `User document ${callerAdminUid} not found. Cannot add administration ${administrationDocRef.id} to created list.`
+        );
       }
+      prevData = undefined;
+    }
       logger.info(`Successfully prepared administration ${operationType}`, {
         administrationId: administrationDocRef.id,
       });
-      return administrationDocRef.id; // Return the ID
+      return { administrationId: administrationDocRef.id, prevData };
     }); // End Transaction
 
     logger.info("Finished administration upsert transaction", {
       administrationId: newAdministrationId,
     });
+
+    const administrationDocRef = db
+      .collection("administrations")
+      .doc(newAdministrationId);
+    const adminDoc = await administrationDocRef.get();
+    const currData = adminDoc.data() as IAdministration;
+
+    if (prevData === undefined) {
+      await processNewAdministration(
+        newAdministrationId,
+        administrationDocRef,
+        currData
+      );
+    } else {
+      await processModifiedAdministration(
+        newAdministrationId,
+        administrationDocRef,
+        prevData,
+        currData
+      );
+    }
+
     return { status: "ok", administrationId: newAdministrationId };
   } catch (error: any) {
     logger.error("Error during administration upsert", { error });

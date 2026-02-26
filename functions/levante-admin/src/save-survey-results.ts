@@ -5,6 +5,7 @@ import {
   getAssignmentDocRef,
   getAssignmentDoc,
 } from "./utils/assignment.js";
+import { syncOnAssignmentUpdated } from "./assignments/assignment-sync-in-transaction.js";
 
 type Response = {
   responseTime: string;
@@ -21,7 +22,17 @@ interface SurveyData {
   userType: string;
 }
 
-export async function writeSurveyResponses(requesterUid, data) {
+interface SurveyResponsesInput {
+  surveyResponses: {
+    administrationId: string;
+    surveyData: SurveyData;
+  };
+}
+
+export async function writeSurveyResponses(
+  requesterUid: string,
+  data: SurveyResponsesInput
+) {
   const db = getFirestore();
 
   // write or update survey responses as subcollection of user document
@@ -205,6 +216,19 @@ export async function writeSurveyResponses(requesterUid, data) {
 
           // Apply updates if any exist
           if (Object.keys(updates).length > 0) {
+            const prevData = assignmentData;
+            if (!prevData) {
+              throw new Error("Assignment data is missing");
+            }
+            const currData = { ...prevData, ...updates };
+            await syncOnAssignmentUpdated(
+              db,
+              transaction,
+              requesterUid,
+              administrationId,
+              prevData,
+              currData
+            );
             transaction.set(assignmentRef, updates, { merge: true });
           }
         }

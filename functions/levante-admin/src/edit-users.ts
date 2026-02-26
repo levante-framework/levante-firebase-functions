@@ -4,6 +4,7 @@ import {
   DocumentReference,
 } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
+import { syncAssignmentsForUserOrgChange } from "./assignments/sync-assignments.js";
 
 interface UserUpdateData {
   uid: string;
@@ -160,10 +161,24 @@ export async function _editUsers(
       }
 
       // Handle organization updates separately
+      const prevData = userDoc.data();
       const orgErrors = await processOrgUpdates(db, userRef, userData);
       if (orgErrors.length > 0) {
         errors.push(...orgErrors.map((err) => ({ ...err, uid })));
         hasErrors = true;
+      } else if (
+        (userData.district ?? userData.school ?? userData.class ?? userData.group) !== undefined
+      ) {
+        const currDoc = await userRef.get();
+        const currData = currDoc.data();
+        if (prevData && currData) {
+          await syncAssignmentsForUserOrgChange({
+            roarUid: uid,
+            prevData,
+            currData,
+            userTypes: ["student", "parent", "teacher"],
+          });
+        }
       }
 
       if (!hasErrors) {
