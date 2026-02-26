@@ -1,5 +1,7 @@
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getAuth, UserRecord } from "firebase-admin/auth";
+import { logger } from "firebase-functions/v2";
+import { HttpsError } from "firebase-functions/v2/https";
 import {
   ACTIONS,
   RESOURCES,
@@ -17,6 +19,7 @@ import {
   FIRESTORE_SYSTEM_COLLECTION,
 } from "./constants.js";
 import { normalizeRoleKey } from "./role-helpers.js";
+import type { CallableRequest } from "firebase-functions/v2/https";
 
 export const createPermissionsFirestoreSink = (
   loggingConfig: LoggingModeConfig
@@ -163,3 +166,82 @@ export const bulkCheckForSite = (
   siteId: string,
   checks: PermissionCheck[]
 ) => getPermissionService().bulkPermissionCheck(user, siteId, checks);
+
+/**
+ * 
+ * @param operation - The operation being performed.
+ * @param request - The request object.
+ * @param resource - The resource being performed.
+ * @param action - The action being performed.
+ * @param subResource - The sub-resource being performed.
+ * @param config - The configuration object for the operation.
+ * @returns void
+ * @throws HttpsError if the user is not authenticated or does not have permission to perform the operation.
+ * 
+ */
+export const checkPermission = async (
+  operation: string,
+  request: CallableRequest<any>,
+  resource: (typeof RESOURCES)[keyof typeof RESOURCES],
+  action: (typeof ACTIONS)[keyof typeof ACTIONS],
+  subResource?: string,
+  config: Record<string, any> = {},
+): Promise<void> => {
+  const requestingUid = request.auth?.uid;
+  if (!requestingUid) {
+    logger.error("User is not authenticated.");
+    throw new HttpsError("unauthenticated", "User must be authenticated.");
+  }
+  try {
+    const auth = getAuth();
+    const userRecord = await auth.getUser(requestingUid);
+    const customClaims: any = userRecord.customClaims || {};
+    const useNewPermissions = customClaims.useNewPermissions === true;
+    if (!useNewPermissions) {
+      throw new HttpsError(
+        "permission-denied",
+        `New permission system must be enabled to ${operation}`
+      );
+    }
+    await ensurePermissionsLoaded();
+    const user = buildPermissionsUserFromAuthRecord(userRecord);
+
+    const siteId = request.data.siteId;
+
+    if (!siteId) {
+      logger.error(`Missing site identifier for ${operation}`, {
+        requestingUid,
+        config,
+      });
+      throw new HttpsError(
+        "invalid-argument",
+        `A siteId (or districtId) is required to ${operation}`
+      );
+    }
+
+    const allowed =
+      filterSitesByPermission(user, [siteId], {
+        resource,
+        action,
+        subResource,
+      }).length > 0;
+
+    if (!allowed) {
+      logger.error(`Permission denied for ${operation}`, {
+        requestingUid,
+        config,
+        siteId,
+      });
+      throw new HttpsError(
+        "permission-denied",
+        `You do not have permission to ${operation} in site ${siteId}`
+      );
+    }
+  } catch (err) {
+    if (err instanceof HttpsError) throw err;
+    throw new HttpsError(
+      "internal",
+      (err as Error)?.message || "Permission check failed"
+    );
+  }
+}

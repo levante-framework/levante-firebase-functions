@@ -14,6 +14,7 @@ import {
   buildPermissionsUserFromAuthRecord,
   filterSitesByPermission,
   getPermissionService,
+  checkPermission,
 } from "./utils/permission-helpers.js";
 import {
   onDocumentCreated,
@@ -60,6 +61,11 @@ import { _upsertOrg } from "./upsert-org.js";
 import type { OrgData } from "./upsert-org.js";
 import { syncOnRunDocUpdateEventHandler } from "./runs/index.js";
 import { upsertAdministrationHandler } from "./upsertAdministration.js";
+import { upsertVariantHandler } from "./variant-admin/upsert-variant.js";
+import {
+  getTaskSchemasHandler,
+  upsertTaskSchemaHandler,
+} from "./variant-admin/task-schema.js";
 import { ORG_COLLECTION_TO_SUBRESOURCE } from "./utils/constants.js";
 import { sanitizeRoles } from "./utils/role-helpers.js";
 
@@ -1032,6 +1038,37 @@ export const upsertAdministration = onCall(async (request) => {
 
   // Delegate to handler
   return await upsertAdministrationHandler(requestingUid, request.data);
+});
+
+export const upsertTaskVariant = onCall(async (request) => {
+  const requestingUid = request.auth?.uid;
+  if (!requestingUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated.");
+  }
+  await checkPermission("upsert variant", request, RESOURCES.TASKS, ACTIONS.CREATE, undefined);
+  return await upsertVariantHandler(requestingUid, request.data);
+});
+
+export const getTaskSchemas = onCall(async (request) => {
+  const requestingUid = request.auth?.uid;
+  await checkPermission("Get Task Schemas", request, RESOURCES.TASKS, ACTIONS.READ, undefined);
+  if (!requestingUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated.");
+  }
+  const taskId = request.data?.taskId;
+  if (taskId === undefined) {
+    throw new HttpsError("invalid-argument", "taskId is required.");
+  }
+  return await getTaskSchemasHandler(requestingUid, taskId);
+});
+
+export const upsertTaskSchema = onCall(async (request) => {
+  const requestingUid = request.auth?.uid;
+  if (!requestingUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated.");
+  }
+  await checkPermission("Create Task Schema", request, RESOURCES.TASKS, ACTIONS.CREATE, undefined);
+  return await upsertTaskSchemaHandler(requestingUid, request.data);
 });
 
 export { completeTask } from "./tasks/completeTask.js";
