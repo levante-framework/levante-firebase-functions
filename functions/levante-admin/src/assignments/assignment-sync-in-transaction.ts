@@ -30,7 +30,7 @@ interface AssignmentData {
   completed?: boolean;
 }
 
-const incrementCompletionStatus = async (
+const incrementCompletionStatus = (
   orgList: string[],
   status: Status,
   taskIds: string[],
@@ -41,45 +41,16 @@ const incrementCompletionStatus = async (
 ) => {
   for (const org of orgList) {
     const completionDocRef = completionCollectionRef.doc(org);
-    const completionDocSnap = await transaction.get(completionDocRef);
-    const updateMethod = completionDocSnap.exists ? "update" : "set";
-
+    const data: Record<string, unknown> = {
+      updatedAt: FieldValue.serverTimestamp(),
+    };
     if (updateAssignmentTotal) {
-      const orgFieldPath = new FieldPath("assignment", status);
-      if (updateMethod === "update") {
-        transaction.update(
-          completionDocRef,
-          orgFieldPath,
-          FieldValue.increment(incrementBy),
-          "updatedAt",
-          FieldValue.serverTimestamp()
-        );
-      } else {
-        transaction.set(completionDocRef, {
-          assignment: { [status]: FieldValue.increment(incrementBy) },
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-      }
+      data.assignment = { [status]: FieldValue.increment(incrementBy) };
     }
     for (const taskId of taskIds) {
-      const taskFieldPath = new FieldPath(taskId, status);
-      if (updateMethod === "update") {
-        transaction.update(
-          completionDocRef,
-          taskFieldPath,
-          FieldValue.increment(incrementBy),
-          "updatedAt",
-          FieldValue.serverTimestamp()
-        );
-      } else {
-        transaction.set(completionDocRef, {
-          [taskId]: { [status]: FieldValue.increment(incrementBy) },
-          createdAt: FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        }, { merge: true });
-      }
+      data[taskId] = { [status]: FieldValue.increment(incrementBy) };
     }
+    transaction.set(completionDocRef, data, { merge: true });
   }
 };
 
