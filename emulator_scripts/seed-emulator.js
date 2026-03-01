@@ -33,7 +33,8 @@ async function seedDatabase() {
 
     // Step 3: Create groups (districts, schools, classes, groups)
     console.log("Step 3: Creating groups...");
-    const groups = await createGroups(adminApp, users.admin.uid);
+    const adminUser = users.find(user => user.userKey === 'admin');
+    const groups = await createGroups(adminApp, adminUser.uid);
     console.log("✅ Groups created successfully\n");
     
     // Step 4: Create userClaims documents
@@ -73,8 +74,8 @@ async function seedDatabase() {
     console.log(`- Administrations: ${administrations.length}`);
     
     console.log("\nUser credentials:");
-    Object.entries(users).forEach(([type, user]) => {
-      console.log(`- ${type}: ${user.email} (password: ${user.password})`);
+    users.forEach((user) => {
+      console.log(`- ${user.userKey}: ${user.email} (password: ${user.password})`);
     });
     
     console.log("\nCreated administrations:");
@@ -82,8 +83,8 @@ async function seedDatabase() {
       console.log(`- ${admin.name} (${admin.taskCount} tasks, ${admin.sequential ? 'sequential' : 'parallel'})`);
     });
     
-    const studentCount = Object.values(users).filter(user => user.userType === 'student').length;
-    const allParticipantCount = Object.values(users).filter(user => 
+    const studentCount = users.filter(user => user.userType === 'student').length;
+    const allParticipantCount = users.filter(user => 
       ['student', 'teacher', 'parent'].includes(user.userType)
     ).length;
     console.log(`\nAssignment distribution:`);

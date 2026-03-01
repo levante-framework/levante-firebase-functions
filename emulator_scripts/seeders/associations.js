@@ -12,13 +12,13 @@ async function linkUsersToGroups(adminApp, users, groups) {
   const groupId = groups.groups[0].id;
   
   // Get participant users (exclude admin users)
-  const participantUsers = Object.entries(users).filter(([userKey, user]) => 
+  const participantUsers = users.filter((user) => 
     ['student', 'parent', 'teacher'].includes(user.userType)
   );
   
-  for (const [userKey, user] of participantUsers) {
+  for (const user of participantUsers) {
     try {
-      console.log(`    Linking ${userKey} to groups...`);
+      console.log(`    Linking ${user.email} to groups...`);
       
       const currentTimestamp = admin.firestore.FieldValue.serverTimestamp();
       
@@ -49,14 +49,14 @@ async function linkUsersToGroups(adminApp, users, groups) {
       
       await userRef.update(updateData);
       
-      console.log(`      ✅ Linked ${userKey} to groups`);
+      console.log(`      ✅ Linked ${user.email} to groups`);
       console.log(`        - Districts: ${districtId}`);
       console.log(`        - Schools: ${schoolId}`);
       console.log(`        - Classes: ${classId}`);
       console.log(`        - Groups: ${groupId}`);
       
     } catch (error) {
-      console.error(`      ❌ Failed to link ${userKey} to groups:`, error.message);
+      console.error(`      ❌ Failed to link ${user.email} to groups:`, error.message);
       throw error;
     }
   }

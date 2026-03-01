@@ -47,14 +47,29 @@ const USER_DEFINITIONS = {
   }
 };
 
+const EXTENDED_STUDENTS = Array.from({ length: 200 }, (_, index) => ({
+  email: `student${index + 1}@levante.test`,
+  password: 'student123',
+  displayName: `Student ${index + 1}`,
+  userType: 'student',
+  userKey: `student`,
+}));
+
+const STANDARD_USERS = Object.entries(USER_DEFINITIONS).map(([userKey, userDef]) => ({
+  ...userDef,
+  userKey,
+}));
+
+
 async function createUsers(adminApp) {
   const auth = getAuth(adminApp);
   const db = adminApp.firestore();
-  const createdUsers = {};
+  const createdUsers = [];
   
   console.log("  Creating Auth users and user documents...");
   
-  for (const [userKey, userDef] of Object.entries(USER_DEFINITIONS)) {
+  for (const user of [...STANDARD_USERS, ...EXTENDED_STUDENTS]) {
+    const { userKey, ...userDef } = user;
     try {
       console.log(`    Creating ${userKey}...`);
       
@@ -146,13 +161,14 @@ async function createUsers(adminApp) {
       }
       
       // Store user info for later use
-      createdUsers[userKey] = {
+      createdUsers.push({
         uid,
         email: userDef.email,
         password: userDef.password,
         displayName: userDef.displayName,
-        userType: userDef.userType
-      };
+        userType: userDef.userType,
+        userKey,
+      });
       
     } catch (error) {
       console.error(`      ❌ Failed to create ${userKey}:`, error.message);
