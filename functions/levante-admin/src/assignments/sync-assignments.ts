@@ -134,7 +134,7 @@ const recordChunkFailure = async (
   db: ReturnType<typeof getFirestore>,
   administrationId: string,
   error: Error,
-  mode: "update" | "add"
+  mode: "update" | "add" | "remove"
 ) => {
   const adminRef = db.collection("administrations").doc(administrationId);
   if (mode === "update") {
@@ -181,44 +181,42 @@ export const updateAssignmentsForOrgChunkHandler = async (
   payload: AddUpdatePayload | RemovePayload
 ) => {
   const { administrationId, userIds, mode } = payload;
-
-  if (userIds.length > MAX_TRANSACTIONS) {
-    throw new Error(
-      `userIds length (${userIds.length}) exceeds MAX_TRANSACTIONS (${MAX_TRANSACTIONS})`
-    );
-  }
-
   const db = getFirestore();
-
-  if (mode === "remove") {
-    const { removedExhaustiveOrgs, isLastRemovalChunk, currData, prevData } =
-      payload;
-    await db.runTransaction(async (transaction) => {
-      return removeOrgsFromAssignments(
-        userIds,
-        [administrationId],
-        removedExhaustiveOrgs,
-        transaction
-      );
-    });
-    if (isLastRemovalChunk && currData && prevData) {
-      const adminRef = db.collection("administrations").doc(administrationId);
-      await enqueueAddUpdateTasksForAdministration(
-        administrationId,
-        adminRef,
-        currData,
-        prevData
+  try {
+    if (userIds.length > MAX_TRANSACTIONS) {
+      throw new Error(
+        `userIds length (${userIds.length}) exceeds MAX_TRANSACTIONS (${MAX_TRANSACTIONS})`
       );
     }
-    return;
-  }
 
-  const { administrationData } = payload as AddUpdatePayload;
-  if (!["update", "add"].includes(mode)) {
-    throw new Error(`Invalid mode: ${mode}. Expected 'update' or 'add'.`);
-  }
+    if (mode === "remove") {
+      const { removedExhaustiveOrgs, isLastRemovalChunk, currData, prevData } =
+        payload;
+      await db.runTransaction(async (transaction) => {
+        return removeOrgsFromAssignments(
+          userIds,
+          [administrationId],
+          removedExhaustiveOrgs,
+          transaction
+        );
+      });
+      if (isLastRemovalChunk && currData && prevData) {
+        const adminRef = db.collection("administrations").doc(administrationId);
+        await enqueueAddUpdateTasksForAdministration(
+          administrationId,
+          adminRef,
+          currData,
+          prevData
+        );
+      }
+      return;
+    }
 
-  try {
+    const { administrationData } = payload as AddUpdatePayload;
+    if (!["update", "add"].includes(mode)) {
+      throw new Error(`Invalid mode: ${mode}. Expected 'update' or 'add'.`);
+    }
+
     await db.runTransaction(async (transaction) => {
       if (mode === "update") {
         return updateAssignmentForUsers(
