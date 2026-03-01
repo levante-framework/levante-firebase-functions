@@ -709,6 +709,315 @@ export const updateAssignmentForUser = async (
   }
 };
 
+type PendingAssignmentWrite =
+  | {
+      action: "set";
+      assignmentRef: DocumentReference;
+      assignmentData: DocumentData;
+      syncData: {
+        type: "created";
+        roarUid: string;
+        assignmentUid: string;
+        assignmentData: {
+          assigningOrgs?: IOrgsList;
+          assessments?: unknown[];
+          dateAssigned?: Date;
+        };
+      };
+    }
+  | {
+      action: "set";
+      assignmentRef: DocumentReference;
+      assignmentData: DocumentData;
+      syncData: {
+        type: "updated";
+        roarUid: string;
+        assignmentUid: string;
+        prevData: { assigningOrgs?: IOrgsList; assessments?: unknown[]; started?: boolean; completed?: boolean };
+        currData: { assigningOrgs?: IOrgsList; assessments?: unknown[]; started?: boolean; completed?: boolean };
+      };
+    }
+  | {
+      action: "delete";
+      assignmentRef: DocumentReference;
+      syncData: {
+        type: "deleted";
+        roarUid: string;
+        assignmentUid: string;
+        prevData: { assigningOrgs?: IOrgsList; assessments?: unknown[]; completed?: boolean };
+      };
+    }
+  | { action: "skip" };
+
+const readPhaseForUser = async (
+  userUid: string,
+  administrationId: string,
+  administrationData: IAdministration,
+  transaction: Transaction
+): Promise<PendingAssignmentWrite> => {
+  const db = getFirestore();
+  const userRef = db.collection("users").doc(userUid);
+  const assignmentRef = userRef.collection("assignments").doc(administrationId);
+  const assignmentDoc = await transaction.get(assignmentRef);
+  if (assignmentDoc.exists) {
+    const assigningOrgs = _pick(administrationData, ORG_NAMES);
+    const userData = await transaction.get(userRef);
+    if (!userData.exists) {
+      return { action: "skip" };
+    }
+    const userOrgs = _pick(userData.data(), ORG_NAMES);
+    const usersAssigningOrgs: IOrgsList = {};
+    for (const orgName of ORG_NAMES) {
+      usersAssigningOrgs[orgName] = _intersection(
+        userOrgs[orgName]?.current,
+        assigningOrgs[orgName]
+      );
+    }
+    if (isEmptyOrgs(usersAssigningOrgs)) {
+      const prevData = assignmentDoc.data()!;
+      return {
+        action: "delete",
+        assignmentRef,
+        syncData: {
+          type: "deleted",
+          roarUid: userUid,
+          assignmentUid: administrationId,
+          prevData: {
+            assigningOrgs: prevData.assigningOrgs,
+            assessments: prevData.assessments,
+            completed: prevData.completed,
+          },
+        },
+      };
+    }
+    const userReadOrgs = await getReadOrgs(usersAssigningOrgs, transaction);
+    const existingAssessments = _get(assignmentDoc.data(), "assessments", []);
+    const administrationAssessments = _get(administrationData, "assessments", []);
+    const updatedAssessments = existingAssessments.filter(
+      (assessment: { startedOn?: unknown; runId?: unknown }) =>
+        assessment.startedOn || assessment.runId
+    );
+    for (const _assessment of administrationAssessments) {
+      const assessmentAlreadyStarted = updatedAssessments
+        .map((a: { taskId: string }) => a.taskId)
+        .includes(_assessment.taskId);
+      const { conditions } = _assessment;
+      if (assessmentAlreadyStarted) {
+        const assessmentIdx = updatedAssessments.findIndex(
+          (a: { taskId: string }) => a.taskId === _assessment.taskId
+        );
+        let isOptional = false;
+        if (conditions?.optional) {
+          isOptional = evaluateCondition({
+            userData: userData.data()! as IUserData,
+            condition: conditions.optional,
+          });
+        }
+        updatedAssessments[assessmentIdx].optional = isOptional;
+        if (_assessment.params) {
+          updatedAssessments[assessmentIdx].params = _assessment.params;
+        }
+      } else {
+        const assignedAssessment = {
+          taskId: _assessment.taskId,
+          optional: false,
+          params: _assessment.params,
+          variantId: _assessment.variantId,
+          variantName: _assessment.variantName,
+        };
+        if (conditions) {
+          const { optional, assigned } = conditions;
+          let pushAssessment = false;
+          if (assigned) {
+            pushAssessment = evaluateCondition({
+              userData: userData.data()! as IUserData,
+              condition: assigned,
+            });
+          } else {
+            pushAssessment = true;
+          }
+          if (optional) {
+            assignedAssessment.optional = evaluateCondition({
+              userData: userData.data()! as IUserData,
+              condition: optional,
+            });
+          }
+          if (pushAssessment) {
+            updatedAssessments.push(assignedAssessment);
+          }
+        } else {
+          updatedAssessments.push(assignedAssessment);
+        }
+      }
+    }
+    if (updatedAssessments.length === 0) {
+      const prevData = assignmentDoc.data()!;
+      return {
+        action: "delete",
+        assignmentRef,
+        syncData: {
+          type: "deleted",
+          roarUid: userUid,
+          assignmentUid: administrationId,
+          prevData: {
+            assigningOrgs: prevData.assigningOrgs,
+            assessments: prevData.assessments,
+            completed: prevData.completed,
+          },
+        },
+      };
+    }
+    const {
+      studentData = {},
+      name = null,
+      assessmentPid = null,
+      assessmentUid = null,
+      email = null,
+      username = null,
+    } = userData.data()!;
+    const userDataCopy = {
+      ...studentData,
+      name,
+      assessmentPid,
+      assessmentUid,
+      email,
+      username,
+    };
+    const { dateOpened, dateClosed, dateCreated } = administrationData;
+    const cleanedAssessments = removeUndefinedFields(updatedAssessments);
+    const prevData = assignmentDoc.data()!;
+    const assignmentData: DocumentData = {
+      ...prevData,
+      id: administrationId,
+      dateOpened: parseTimestamp(dateOpened),
+      dateClosed: parseTimestamp(dateClosed),
+      dateCreated: parseTimestamp(dateCreated),
+      assigningOrgs: usersAssigningOrgs,
+      createdBy: administrationData.createdBy,
+      legal: administrationData.legal ?? {},
+      name: administrationData.name ?? "",
+      publicName: administrationData.publicName ?? "",
+      sequential: administrationData.sequential ?? false,
+      readOrgs: userReadOrgs,
+      assessments: cleanedAssessments,
+      userData: userDataCopy,
+      testData: administrationData.testData ?? false,
+      demoData: administrationData.demoData ?? false,
+      lastSyncedFromAdministration: new Date(),
+    };
+    return {
+      action: "set",
+      assignmentRef,
+      assignmentData,
+      syncData: {
+        type: "updated",
+        roarUid: userUid,
+        assignmentUid: administrationId,
+        prevData: {
+          assigningOrgs: prevData.assigningOrgs,
+          assessments: prevData.assessments,
+          started: prevData.started,
+          completed: prevData.completed,
+        },
+        currData: {
+          assigningOrgs: usersAssigningOrgs,
+          assessments: cleanedAssessments,
+          started: assignmentData.started,
+          completed: assignmentData.completed,
+        },
+      },
+    };
+  } else {
+    const [newAssignmentRef, newAssignmentData] = await prepareNewAssignment(
+      userUid,
+      administrationId,
+      administrationData,
+      transaction
+    );
+    if (newAssignmentRef && newAssignmentData) {
+      return {
+        action: "set",
+        assignmentRef: newAssignmentRef,
+        assignmentData: newAssignmentData,
+        syncData: {
+          type: "created",
+          roarUid: userUid,
+          assignmentUid: administrationId,
+          assignmentData: {
+            assigningOrgs: newAssignmentData.assigningOrgs,
+            assessments: newAssignmentData.assessments,
+            dateAssigned: newAssignmentData.dateAssigned,
+          },
+        },
+      };
+    }
+    return { action: "skip" };
+  }
+};
+
+const writePhaseForUser = async (
+  pending: PendingAssignmentWrite,
+  transaction: Transaction
+) => {
+  const db = getFirestore();
+  if (pending.action === "skip") return;
+  if (pending.action === "delete") {
+    await syncOnAssignmentDeleted(
+      db,
+      transaction,
+      pending.syncData.roarUid,
+      pending.syncData.assignmentUid,
+      pending.syncData.prevData as {
+        assigningOrgs?: IOrgsList;
+        assessments?: Array<{ taskId: string; startedOn?: unknown; completedOn?: unknown }>;
+        completed?: boolean;
+      }
+    );
+    transaction.delete(pending.assignmentRef);
+    return;
+  }
+  if (pending.syncData.type === "created") {
+    await syncOnAssignmentCreated(
+      db,
+      transaction,
+      pending.syncData.roarUid,
+      pending.syncData.assignmentUid,
+      pending.syncData.assignmentData as {
+        assigningOrgs?: IOrgsList;
+        assessments?: Array<{ taskId: string; startedOn?: unknown; completedOn?: unknown }>;
+        dateAssigned?: Date;
+      }
+    );
+  } else {
+    const prevData = pending.syncData.prevData as {
+      assigningOrgs?: IOrgsList;
+      assessments?: Array<{ taskId: string; startedOn?: unknown; completedOn?: unknown }>;
+      started?: boolean;
+      completed?: boolean;
+    };
+    const currData = pending.syncData.currData as {
+      assigningOrgs?: IOrgsList;
+      assessments?: Array<{ taskId: string; startedOn?: unknown; completedOn?: unknown }>;
+      started?: boolean;
+      completed?: boolean;
+    };
+    await syncOnAssignmentUpdated(
+      db,
+      transaction,
+      pending.syncData.roarUid,
+      pending.syncData.assignmentUid,
+      prevData,
+      currData
+    );
+  }
+  logger.info(`Updating or creating assignment ${pending.assignmentRef.path}`, {
+    assignmentSummary: summarizeAssignmentForLog(pending.assignmentData),
+  });
+  transaction.set(pending.assignmentRef, pending.assignmentData, {
+    merge: true,
+  });
+};
+
 /**
  * Updates or creates assignments for multiple users based on the provided
  * administration data.
@@ -728,29 +1037,19 @@ export const updateAssignmentForUsers = async (
   administrationData: IAdministration,
   transaction: Transaction
 ) => {
-  const assignments = await Promise.all(
-    _map(users, (user) =>
-      updateAssignmentForUser(
-        user,
-        administrationId,
-        administrationData,
-        transaction
-      )
-    )
-  );
-
-  return _map(assignments, ([assignmentRef, assignmentData]) => {
-    if (assignmentRef && assignmentData) {
-      logger.info(`Updating or creating assignment ${assignmentRef.path}`, {
-        assignmentSummary: summarizeAssignmentForLog(assignmentData),
-      });
-      return transaction.set(assignmentRef, assignmentData, { merge: true });
-    } else if (assignmentRef) {
-      return transaction.delete(assignmentRef);
-    } else {
-      return transaction;
-    }
-  });
+  const pendingWrites: PendingAssignmentWrite[] = [];
+  for (const user of users) {
+    const pending = await readPhaseForUser(
+      user,
+      administrationId,
+      administrationData,
+      transaction
+    );
+    pendingWrites.push(pending);
+  }
+  for (const pending of pendingWrites) {
+    await writePhaseForUser(pending, transaction);
+  }
 };
 
 export const updateAllAssignmentsInCollection = async ({

@@ -126,9 +126,19 @@ export const upsertAdministrationHandler = async (
     );
   }
 
-  // 5. Firestore Transaction
+  const sanitizeOrgIds = (ids: string[] | undefined): string[] =>
+    (ids ?? []).filter((id) => typeof id === "string" && id.length > 0);
+
+  const sanitizedOrgs: IOrgsList = {
+    districts: sanitizeOrgIds(orgs.districts),
+    schools: sanitizeOrgIds(orgs.schools),
+    classes: sanitizeOrgIds(orgs.classes),
+    groups: sanitizeOrgIds(orgs.groups),
+  };
+
+  let newAdministrationId: string | undefined;
   try {
-    const { administrationId: newAdministrationId, prevData } = await db.runTransaction(async (transaction) => {
+    const result = await db.runTransaction(async (transaction) => {
       let administrationDocRef: DocumentReference;
       let operationType: "create" | "update";
       let prevData: IAdministration | undefined;
@@ -156,10 +166,10 @@ export const upsertAdministrationHandler = async (
           normalizedName,
           syncStatus: "pending",
           // createdBy should not be updated
-          groups: orgs.groups ?? [],
-          classes: orgs.classes ?? [],
-          schools: orgs.schools ?? [],
-          districts: orgs.districts ?? [],
+          groups: sanitizedOrgs.groups ?? [],
+          classes: sanitizedOrgs.classes ?? [],
+          schools: sanitizedOrgs.schools ?? [],
+          districts: sanitizedOrgs.districts ?? [],
           // dateCreated should not be updated
           dateOpened: dateOpenedTs,
           dateClosed: dateClosedTs,
@@ -170,18 +180,16 @@ export const upsertAdministrationHandler = async (
           testData: isTestData ?? false,
           // Explicitly construct org lists for update
           readOrgs: {
-            // Re-enabled
-            districts: orgs.districts ?? [],
-            schools: orgs.schools ?? [],
-            classes: orgs.classes ?? [],
-            groups: orgs.groups ?? [],
+            districts: sanitizedOrgs.districts ?? [],
+            schools: sanitizedOrgs.schools ?? [],
+            classes: sanitizedOrgs.classes ?? [],
+            groups: sanitizedOrgs.groups ?? [],
           },
           minimalOrgs: {
-            // Re-enabled
-            districts: orgs.districts ?? [],
-            schools: orgs.schools ?? [],
-            classes: orgs.classes ?? [],
-            groups: orgs.groups ?? [],
+            districts: sanitizedOrgs.districts ?? [],
+            schools: sanitizedOrgs.schools ?? [],
+            classes: sanitizedOrgs.classes ?? [],
+            groups: sanitizedOrgs.groups ?? [],
           },
           updatedAt: FieldValue.serverTimestamp() as Timestamp,
         };
@@ -207,10 +215,10 @@ export const upsertAdministrationHandler = async (
           syncStatus: "pending",
           createdBy: callerAdminUid,
           creatorName: creatorName,
-          groups: orgs.groups ?? [],
-          classes: orgs.classes ?? [],
-          schools: orgs.schools ?? [],
-          districts: orgs.districts ?? [],
+          groups: sanitizedOrgs.groups ?? [],
+          classes: sanitizedOrgs.classes ?? [],
+          schools: sanitizedOrgs.schools ?? [],
+          districts: sanitizedOrgs.districts ?? [],
           dateCreated: FieldValue.serverTimestamp() as Timestamp,
           dateOpened: dateOpenedTs,
           dateClosed: dateClosedTs,
@@ -219,8 +227,8 @@ export const upsertAdministrationHandler = async (
           tags: tags,
           legal: legal,
           testData: isTestData ?? false,
-          readOrgs: orgs,
-          minimalOrgs: orgs,
+          readOrgs: sanitizedOrgs,
+          minimalOrgs: sanitizedOrgs,
           siteId,
           createdAt: FieldValue.serverTimestamp() as Timestamp,
           updatedAt: FieldValue.serverTimestamp() as Timestamp,
@@ -248,7 +256,9 @@ export const upsertAdministrationHandler = async (
         administrationId: administrationDocRef.id,
       });
       return { administrationId: administrationDocRef.id, prevData };
-    }); // End Transaction
+    });
+    newAdministrationId = result.administrationId;
+    const prevData = result.prevData;
 
     logger.info("Finished administration upsert transaction", {
       administrationId: newAdministrationId,
@@ -276,14 +286,37 @@ export const upsertAdministrationHandler = async (
     }
 
     return { status: "ok", administrationId: newAdministrationId };
-  } catch (error: any) {
-    logger.error("Error during administration upsert", { error });
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error("Error during administration upsert", {
+      error: err,
+      message: err.message,
+      stack: err.stack,
+      administrationId: newAdministrationId,
+    });
+    if (newAdministrationId) {
+      try {
+        const adminRef = db
+          .collection("administrations")
+          .doc(newAdministrationId);
+        await adminRef.update({
+          syncStatus: "failed",
+          syncErrorMessage: err.message,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      } catch (updateErr) {
+        logger.error("Failed to update administration sync status to failed", {
+          administrationId: newAdministrationId,
+          updateError: updateErr,
+        });
+      }
+    }
     if (error instanceof HttpsError) {
-      throw error; // Re-throw HttpsError
+      throw error;
     }
     throw new HttpsError(
       "internal",
-      `Failed to upsert administration: ${error.message}`
+      `Failed to upsert administration: ${err.message}`
     );
   }
 };
