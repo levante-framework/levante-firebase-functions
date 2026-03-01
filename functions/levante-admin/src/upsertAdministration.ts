@@ -14,7 +14,6 @@ import {
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import type { IAssessment, IOrgsList } from "./interfaces.js"; // Assuming necessary types/helpers are in common
-import type { Class, Group, School } from "../firestore-schema.js";
 
 interface UpsertAdministrationData {
   name: string;

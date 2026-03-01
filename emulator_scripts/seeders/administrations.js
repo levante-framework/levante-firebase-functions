@@ -73,11 +73,11 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
 
   console.log('  Creating administrations...');
 
-  // Create organization references using the generated IDs
+  // Create organization references using the generated IDs (both classes; site has all users)
   const testOrgs = {
     districts: [groups.districts[0].id],
     schools: [groups.schools[0].id],
-    classes: [groups.classes[0].id],
+    classes: groups.classes.map((c) => c.id),
     groups: [groups.groups[0].id],
     families: [],
   };
