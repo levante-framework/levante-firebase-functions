@@ -280,6 +280,8 @@ export interface AssignmentAssessment {
   demoData: boolean;
   id: string;
   name: string;
+  /** Mirrors administration syncStatus. Only show "complete" assignments to users. */
+  syncStatus?: "pending" | "complete" | "failed";
 }
 
 // Tracks versions of legal documents using GitHub as a reference point.

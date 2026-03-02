@@ -265,6 +265,9 @@ const prepareNewAssignment = async (
       testData: administrationData.testData ?? false,
       demoData: administrationData.demoData ?? false,
       lastSyncedFromAdministration: new Date(),
+      syncStatus:
+        (administrationData.syncStatus as "pending" | "complete" | "failed") ??
+        "complete",
     };
 
     return [assignmentRef, assignmentData] as [DocumentReference, DocumentData];
@@ -904,6 +907,9 @@ const readPhaseForUser = async (
       testData: administrationData.testData ?? false,
       demoData: administrationData.demoData ?? false,
       lastSyncedFromAdministration: new Date(),
+      syncStatus:
+        (administrationData.syncStatus as "pending" | "complete" | "failed") ??
+        "complete",
     };
     return {
       action: "set",

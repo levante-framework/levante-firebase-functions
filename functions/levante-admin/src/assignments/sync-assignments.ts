@@ -1,4 +1,8 @@
-import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import {
+  getFirestore,
+  FieldValue,
+  FieldPath,
+} from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import _difference from "lodash-es/difference.js";
 import _fromPairs from "lodash-es/fromPairs.js";
@@ -103,6 +107,34 @@ export const syncAssignmentsForUserOrgChange = async ({
   }
 };
 
+const BATCH_SIZE = 500;
+
+const updateAssignmentDocsSyncStatus = async (
+  db: ReturnType<typeof getFirestore>,
+  administrationId: string,
+  syncStatus: "complete" | "failed"
+) => {
+  const snapshot = await db
+    .collectionGroup("assignments")
+    .where("id", "==", administrationId)
+    .get();
+  if (snapshot.empty) return;
+  for (let i = 0; i < snapshot.docs.length; i += BATCH_SIZE) {
+    const batch = db.batch();
+    const chunk = snapshot.docs.slice(i, i + BATCH_SIZE);
+    for (const doc of chunk) {
+      batch.update(doc.ref, {
+        syncStatus,
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  }
+  logger.debug(`Updated ${snapshot.size} assignment(s) to syncStatus=${syncStatus}`, {
+    administrationId,
+  });
+};
+
 const recordChunkSuccess = async (
   db: ReturnType<typeof getFirestore>,
   administrationId: string
@@ -125,6 +157,7 @@ const recordChunkSuccess = async (
       _syncRollback: FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
     });
+    await updateAssignmentDocsSyncStatus(db, administrationId, "complete");
   }
 };
 
@@ -150,6 +183,7 @@ const recordChunkFailure = async (
         _syncRollback: FieldValue.delete(),
         updatedAt: FieldValue.serverTimestamp(),
       });
+      await updateAssignmentDocsSyncStatus(db, administrationId, "failed");
       return;
     }
   }
@@ -158,6 +192,7 @@ const recordChunkFailure = async (
     syncErrorMessage: error.message,
     updatedAt: FieldValue.serverTimestamp(),
   });
+  await updateAssignmentDocsSyncStatus(db, administrationId, "failed");
 };
 
 type AddUpdatePayload = {
