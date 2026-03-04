@@ -1036,6 +1036,7 @@ export const upsertAdministration = onCall(async (request) => {
 
 export { completeTask } from "./tasks/completeTask.js";
 export { startTask } from "./tasks/startTask.js";
+export { getLocation, upsertLocation } from "./location/location-functions.js";
 
 export const syncOnRunDocUpdate = onDocumentWritten(
   {
