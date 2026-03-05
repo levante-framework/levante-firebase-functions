@@ -1,8 +1,4 @@
-import {
-  getFirestore,
-  FieldValue,
-  FieldPath,
-} from "firebase-admin/firestore";
+import { getFirestore, FieldValue, FieldPath } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import _difference from "lodash-es/difference.js";
 import _fromPairs from "lodash-es/fromPairs.js";
@@ -130,9 +126,12 @@ const updateAssignmentDocsSyncStatus = async (
     }
     await batch.commit();
   }
-  logger.debug(`Updated ${snapshot.size} assignment(s) to syncStatus=${syncStatus}`, {
-    administrationId,
-  });
+  logger.debug(
+    `Updated ${snapshot.size} assignment(s) to syncStatus=${syncStatus}`,
+    {
+      administrationId,
+    }
+  );
 };
 
 const recordChunkSuccess = async (

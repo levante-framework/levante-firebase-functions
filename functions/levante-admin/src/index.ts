@@ -32,9 +32,7 @@ import {
 } from "./users/update-administrator.js";
 import type { AdministratorRoleDefinition } from "./users/create-administrator.js";
 import { createSoftDeleteCloudFunction } from "./utils/soft-delete.js";
-import {
-  updateAssignmentsForOrgChunkHandler,
-} from "./assignments/sync-assignments.js";
+import { updateAssignmentsForOrgChunkHandler } from "./assignments/sync-assignments.js";
 import { getAdministrationsForAdministrator } from "./administrations/administration-utils.js";
 import { _deleteAdministration } from "./administrations/delete-administration.js";
 import { unenrollOrg } from "./orgs/org-utils.js";

@@ -1,7 +1,4 @@
-import {
-  getFirestore,
-  FieldValue,
-} from "firebase-admin/firestore";
+import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { FieldPath } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import _get from "lodash-es/get.js";

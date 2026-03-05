@@ -311,11 +311,17 @@ export const addAssignmentToUsers = async (
       transaction.set(assignmentRef, assignmentData, { merge: true });
       const userUid = assignmentRef.parent.parent?.id;
       if (userUid) {
-        await syncOnAssignmentCreated(db, transaction, userUid, administrationId, {
-          assigningOrgs: assignmentData.assigningOrgs,
-          assessments: assignmentData.assessments,
-          dateAssigned: assignmentData.dateAssigned,
-        });
+        await syncOnAssignmentCreated(
+          db,
+          transaction,
+          userUid,
+          administrationId,
+          {
+            assigningOrgs: assignmentData.assigningOrgs,
+            assessments: assignmentData.assessments,
+            dateAssigned: assignmentData.dateAssigned,
+          }
+        );
       }
     }
   }
@@ -412,33 +418,51 @@ export const removeOrgsFromAssignments = async (
     )
   );
 
-  for (const [assignmentRef, assigningOrgs, readOrgs, prevData] of assignments) {
+  for (const [
+    assignmentRef,
+    assigningOrgs,
+    readOrgs,
+    prevData,
+  ] of assignments) {
     if (assignmentRef && prevData) {
       const userUid = assignmentRef.parent.parent?.id;
       const administrationId = assignmentRef.id;
       if (assigningOrgs) {
-        await syncOnAssignmentUpdated(db, transaction, userUid!, administrationId, {
-          assigningOrgs: prevData.assigningOrgs as IOrgsList,
-          assessments: prevData.assessments,
-          started: prevData.started,
-          completed: prevData.completed,
-        }, {
-          assigningOrgs,
-          assessments: prevData.assessments,
-          started: prevData.started,
-          completed: prevData.completed,
-        });
+        await syncOnAssignmentUpdated(
+          db,
+          transaction,
+          userUid!,
+          administrationId,
+          {
+            assigningOrgs: prevData.assigningOrgs as IOrgsList,
+            assessments: prevData.assessments,
+            started: prevData.started,
+            completed: prevData.completed,
+          },
+          {
+            assigningOrgs,
+            assessments: prevData.assessments,
+            started: prevData.started,
+            completed: prevData.completed,
+          }
+        );
         transaction.update(assignmentRef, {
           id: assignmentRef.id,
           assigningOrgs,
           readOrgs,
         });
       } else {
-        await syncOnAssignmentDeleted(db, transaction, userUid!, administrationId, {
-          assigningOrgs: prevData.assigningOrgs as IOrgsList,
-          assessments: prevData.assessments,
-          completed: prevData.completed,
-        });
+        await syncOnAssignmentDeleted(
+          db,
+          transaction,
+          userUid!,
+          administrationId,
+          {
+            assigningOrgs: prevData.assigningOrgs as IOrgsList,
+            assessments: prevData.assessments,
+            completed: prevData.completed,
+          }
+        );
         logger.debug(`Removing assignment ${assignmentRef.path}`);
         transaction.delete(assignmentRef);
       }
@@ -495,11 +519,17 @@ export const updateAssignmentForUser = async (
 
       if (isEmptyOrgs(usersAssigningOrgs)) {
         const prevData = assignmentDoc.data()!;
-        await syncOnAssignmentDeleted(db, transaction, userUid, administrationId, {
-          assigningOrgs: prevData.assigningOrgs,
-          assessments: prevData.assessments,
-          completed: prevData.completed,
-        });
+        await syncOnAssignmentDeleted(
+          db,
+          transaction,
+          userUid,
+          administrationId,
+          {
+            assigningOrgs: prevData.assigningOrgs,
+            assessments: prevData.assessments,
+            completed: prevData.completed,
+          }
+        );
         return [assignmentRef, undefined];
       }
 
@@ -608,11 +638,17 @@ export const updateAssignmentForUser = async (
 
       if (updatedAssessments.length === 0) {
         const prevData = assignmentDoc.data()!;
-        await syncOnAssignmentDeleted(db, transaction, userUid, administrationId, {
-          assigningOrgs: prevData.assigningOrgs,
-          assessments: prevData.assessments,
-          completed: prevData.completed,
-        });
+        await syncOnAssignmentDeleted(
+          db,
+          transaction,
+          userUid,
+          administrationId,
+          {
+            assigningOrgs: prevData.assigningOrgs,
+            assessments: prevData.assessments,
+            completed: prevData.completed,
+          }
+        );
         return [assignmentRef, undefined];
       }
 
@@ -672,17 +708,24 @@ export const updateAssignmentForUser = async (
         lastSyncedFromAdministration: new Date(),
       };
 
-      await syncOnAssignmentUpdated(db, transaction, userUid, administrationId, {
-        assigningOrgs: prevData.assigningOrgs,
-        assessments: prevData.assessments,
-        started: prevData.started,
-        completed: prevData.completed,
-      }, {
-        assigningOrgs: usersAssigningOrgs,
-        assessments: cleanedAssessments,
-        started: assignmentData.started,
-        completed: assignmentData.completed,
-      });
+      await syncOnAssignmentUpdated(
+        db,
+        transaction,
+        userUid,
+        administrationId,
+        {
+          assigningOrgs: prevData.assigningOrgs,
+          assessments: prevData.assessments,
+          started: prevData.started,
+          completed: prevData.completed,
+        },
+        {
+          assigningOrgs: usersAssigningOrgs,
+          assessments: cleanedAssessments,
+          started: assignmentData.started,
+          completed: assignmentData.completed,
+        }
+      );
 
       return [assignmentRef, assignmentData] as [
         DocumentReference,
@@ -699,11 +742,17 @@ export const updateAssignmentForUser = async (
       transaction
     );
     if (assignmentRef && assignmentData) {
-      await syncOnAssignmentCreated(db, transaction, userUid, administrationId, {
-        assigningOrgs: assignmentData.assigningOrgs,
-        assessments: assignmentData.assessments,
-        dateAssigned: assignmentData.dateAssigned,
-      });
+      await syncOnAssignmentCreated(
+        db,
+        transaction,
+        userUid,
+        administrationId,
+        {
+          assigningOrgs: assignmentData.assigningOrgs,
+          assessments: assignmentData.assessments,
+          dateAssigned: assignmentData.dateAssigned,
+        }
+      );
     }
     return [assignmentRef, assignmentData] as [
       DocumentReference | undefined,
@@ -736,8 +785,18 @@ type PendingAssignmentWrite =
         type: "updated";
         roarUid: string;
         assignmentUid: string;
-        prevData: { assigningOrgs?: IOrgsList; assessments?: unknown[]; started?: boolean; completed?: boolean };
-        currData: { assigningOrgs?: IOrgsList; assessments?: unknown[]; started?: boolean; completed?: boolean };
+        prevData: {
+          assigningOrgs?: IOrgsList;
+          assessments?: unknown[];
+          started?: boolean;
+          completed?: boolean;
+        };
+        currData: {
+          assigningOrgs?: IOrgsList;
+          assessments?: unknown[];
+          started?: boolean;
+          completed?: boolean;
+        };
       };
     }
   | {
@@ -747,7 +806,11 @@ type PendingAssignmentWrite =
         type: "deleted";
         roarUid: string;
         assignmentUid: string;
-        prevData: { assigningOrgs?: IOrgsList; assessments?: unknown[]; completed?: boolean };
+        prevData: {
+          assigningOrgs?: IOrgsList;
+          assessments?: unknown[];
+          completed?: boolean;
+        };
       };
     }
   | { action: "skip" };
@@ -795,7 +858,11 @@ const readPhaseForUser = async (
     }
     const userReadOrgs = await getReadOrgs(usersAssigningOrgs, transaction);
     const existingAssessments = _get(assignmentDoc.data(), "assessments", []);
-    const administrationAssessments = _get(administrationData, "assessments", []);
+    const administrationAssessments = _get(
+      administrationData,
+      "assessments",
+      []
+    );
     const updatedAssessments = existingAssessments.filter(
       (assessment: { startedOn?: unknown; runId?: unknown }) =>
         assessment.startedOn || assessment.runId
@@ -975,7 +1042,11 @@ const writePhaseForUser = async (
       pending.syncData.assignmentUid,
       pending.syncData.prevData as {
         assigningOrgs?: IOrgsList;
-        assessments?: Array<{ taskId: string; startedOn?: unknown; completedOn?: unknown }>;
+        assessments?: Array<{
+          taskId: string;
+          startedOn?: unknown;
+          completedOn?: unknown;
+        }>;
         completed?: boolean;
       }
     );
@@ -990,20 +1061,32 @@ const writePhaseForUser = async (
       pending.syncData.assignmentUid,
       pending.syncData.assignmentData as {
         assigningOrgs?: IOrgsList;
-        assessments?: Array<{ taskId: string; startedOn?: unknown; completedOn?: unknown }>;
+        assessments?: Array<{
+          taskId: string;
+          startedOn?: unknown;
+          completedOn?: unknown;
+        }>;
         dateAssigned?: Date;
       }
     );
   } else {
     const prevData = pending.syncData.prevData as {
       assigningOrgs?: IOrgsList;
-      assessments?: Array<{ taskId: string; startedOn?: unknown; completedOn?: unknown }>;
+      assessments?: Array<{
+        taskId: string;
+        startedOn?: unknown;
+        completedOn?: unknown;
+      }>;
       started?: boolean;
       completed?: boolean;
     };
     const currData = pending.syncData.currData as {
       assigningOrgs?: IOrgsList;
-      assessments?: Array<{ taskId: string; startedOn?: unknown; completedOn?: unknown }>;
+      assessments?: Array<{
+        taskId: string;
+        startedOn?: unknown;
+        completedOn?: unknown;
+      }>;
       started?: boolean;
       completed?: boolean;
     };

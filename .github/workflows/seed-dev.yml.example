@@ -1,0 +1,62 @@
+# Rename to seed-dev.yml and configure repository secrets.
+# This runs the seed (or reset) script against the dev Firebase project from CI.
+#
+# Required repository secrets:
+#   FIREBASE_SERVICE_ACCOUNT_SEED_DEV  - Full JSON content of the service account key (Firebase Console → Project settings → Service accounts → Generate new key). Paste the entire JSON.
+#   SEED_PROJECT (or use a repository Variable) - Firebase project ID. Required in CI because firebaseconfig.js is not in the repo.
+
+name: Seed dev Firebase project
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Seed or reset (clear then seed)'
+        required: true
+        default: 'seed'
+        type: choice
+        options:
+          - seed
+          - reset
+
+env:
+  HUSKY: 0
+  # Set project ID via repository variable or secret so it is not in the workflow file.
+  SEED_PROJECT: ${{ vars.SEED_PROJECT || secrets.SEED_PROJECT }}
+
+jobs:
+  seed:
+    name: ${{ github.event.inputs.action }} dev
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Authenticate to Firebase (service account)
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_SEED_DEV }}' > "$RUNNER_TEMP/firebase-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-sa.json" >> "$GITHUB_ENV"
+        shell: bash
+
+      - name: Seed dev project
+        if: github.event.inputs.action == 'seed'
+        run: npm run seed:dev
+
+      - name: Reset dev project (clear + seed)
+        if: github.event.inputs.action == 'reset'
+        run: npm run reset:dev
+        env:
+          CONFIRM_CLEAR: '1'

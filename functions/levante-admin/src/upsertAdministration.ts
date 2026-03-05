@@ -155,7 +155,21 @@ export const upsertAdministrationHandler = async (
             `Administration with ID ${administrationId} not found for update.`
           );
         }
-        prevData = _pick(existingDoc.data(), [...ORG_NAMES, "createdBy", "assessments", "name", "publicName", "dateOpened", "dateClosed", "sequential", "tags", "legal", "testData", "readOrgs", "minimalOrgs"]) as IAdministration;
+        prevData = _pick(existingDoc.data(), [
+          ...ORG_NAMES,
+          "createdBy",
+          "assessments",
+          "name",
+          "publicName",
+          "dateOpened",
+          "dateClosed",
+          "sequential",
+          "tags",
+          "legal",
+          "testData",
+          "readOrgs",
+          "minimalOrgs",
+        ]) as IAdministration;
 
         // Prepare data for update (merge: true will handle partial updates)
         const updateData: Partial<IAdministrationDoc> = {
@@ -245,12 +259,12 @@ export const upsertAdministrationHandler = async (
           });
         } else {
           // Log if user doc doesn't exist, but don't throw error
-        logger.warn(
-          `User document ${callerAdminUid} not found. Cannot add administration ${administrationDocRef.id} to created list.`
-        );
+          logger.warn(
+            `User document ${callerAdminUid} not found. Cannot add administration ${administrationDocRef.id} to created list.`
+          );
+        }
+        prevData = undefined;
       }
-      prevData = undefined;
-    }
       logger.info(`Successfully prepared administration ${operationType}`, {
         administrationId: administrationDocRef.id,
       });

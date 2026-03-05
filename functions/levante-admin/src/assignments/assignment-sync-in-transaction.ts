@@ -3,11 +3,7 @@
  * Replaces event-driven onDocumentCreated/Updated/Deleted triggers with
  * atomic, inline sync that fails with the calling transaction.
  */
-import {
-  getFirestore,
-  FieldValue,
-  FieldPath,
-} from "firebase-admin/firestore";
+import { getFirestore, FieldValue, FieldPath } from "firebase-admin/firestore";
 import type {
   CollectionReference,
   Transaction,
@@ -335,7 +331,10 @@ export const syncOnAssignmentUpdated = async (
     );
   }
 
-  const addedCompletedTasks = _without(currCompletedTasks, ...prevCompletedTasks);
+  const addedCompletedTasks = _without(
+    currCompletedTasks,
+    ...prevCompletedTasks
+  );
   if (addedCompletedTasks.length > 0) {
     await incrementCompletionStatus(
       unchangedOrgs,
@@ -347,7 +346,10 @@ export const syncOnAssignmentUpdated = async (
       !!currData.completed && !prevData.completed
     );
   }
-  const removedCompletedTasks = _without(prevCompletedTasks, ...currCompletedTasks);
+  const removedCompletedTasks = _without(
+    prevCompletedTasks,
+    ...currCompletedTasks
+  );
   if (removedCompletedTasks.length > 0) {
     await incrementCompletionStatus(
       unchangedOrgs,

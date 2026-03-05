@@ -167,7 +167,10 @@ export async function _editUsers(
         errors.push(...orgErrors.map((err) => ({ ...err, uid })));
         hasErrors = true;
       } else if (
-        (userData.district ?? userData.school ?? userData.class ?? userData.group) !== undefined
+        (userData.district ??
+          userData.school ??
+          userData.class ??
+          userData.group) !== undefined
       ) {
         const currDoc = await userRef.get();
         const currData = currDoc.data();
