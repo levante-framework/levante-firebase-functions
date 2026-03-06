@@ -1,0 +1,71 @@
+# Rename to preview-dev.yml and configure repository secrets.
+# This workflow resets preview data and/or deploys levante-admin functions to assessment-dev from CI.
+#
+# Required repository secrets:
+#   FIREBASE_SERVICE_ACCOUNT_PREVIEW_DEV  - Full JSON content of the service account key. For "both" or "deploy only"
+#     the account must have Firestore + Firebase deploy permissions for the target project(s).
+#   PREVIEW_PROJECT (or use a repository Variable) - Firebase project ID for reset/clear. Required in CI because
+#     firebaseconfig.js is not in the repo.
+
+name: Preview dev (reset and deploy)
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: 'Branch to checkout'
+        required: true
+        default: 'main'
+        type: string
+      action:
+        description: 'What to run'
+        required: true
+        default: 'both'
+        type: choice
+        options:
+          - both
+          - reset_only
+          - deploy_only
+
+env:
+  HUSKY: 0
+  SEED_PROJECT: ${{ vars.PREVIEW_PROJECT || secrets.PREVIEW_PROJECT || vars.SEED_PROJECT || secrets.SEED_PROJECT }}
+
+jobs:
+  preview:
+    name: ${{ github.event.inputs.action }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Authenticate to Firebase (service account)
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_PREVIEW_DEV }}' > "$RUNNER_TEMP/firebase-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-sa.json" >> "$GITHUB_ENV"
+        shell: bash
+
+      - name: Reset preview project (clear + seed)
+        if: github.event.inputs.action == 'both' || github.event.inputs.action == 'reset_only'
+        run: npm run reset:dev
+        env:
+          CONFIRM_CLEAR: '1'
+
+      - name: Deploy to preview (assessment-dev)
+        if: github.event.inputs.action == 'both' || github.event.inputs.action == 'deploy_only'
+        run: npm run deploy:preview
