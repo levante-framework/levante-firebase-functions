@@ -17,6 +17,7 @@
     "predeploy:levante-assessment": "npm run build",
     "deploy:levante-admin": "firebase deploy --only functions --prefix ./functions/levante-admin/firebase.json",
     "deploy:levante-assessment": "firebase deploy --only functions --prefix ./functions/levante-assessment/firebase.json",
+    "deploy:preview": "npm run build && (cd functions/levante-admin && firebase deploy --only functions --project hs-levante-assessment-dev)",
     "dev": "EMULATOR=TRUE firebase emulators:start --import=./emulator_data --export-on-exit=./emulator_data",
     "emulator:seed": "node emulator_scripts/seed-emulator.js",
     "emulator:clear": "node emulator_scripts/clear-emulator.js",
