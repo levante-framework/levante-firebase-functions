@@ -53,6 +53,17 @@ npm run dev
 npm run emulator:seed
 ```
 
+### Emulator Ports
+
+The current emulator ports are defined in `firebase.json`:
+
+- Auth: `9290`
+- Functions: `5005`
+- Firestore: `8185`
+- Hub: `4402`
+- UI: `4002`
+- Logging: `4502`
+
 
 ### Database Seeding Scripts
 
