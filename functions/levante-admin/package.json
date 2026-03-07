@@ -24,6 +24,7 @@
   "license": "Stanford Academic Software License for LEVANTE",
   "main": "lib/src/index.js",
   "dependencies": {
+    "@levante-framework/levante-zod": "^1.0.6",
     "@bdelab/roar-utils": "^1.1.0",
     "@firebase/logger": "^0.4.4",
     "@google-cloud/secret-manager": "^4.2.2",
@@ -35,6 +36,7 @@
     "dotenv": "^16.0.0",
     "firebase-admin": "^13.4.0",
     "firebase-functions": "^6.3.2",
+    "h3-js": "^4.4.0",
     "lodash-es": "^4.17.21",
     "status-code-enum": "^1.0.0",
     "uuid": "^9.0.0"

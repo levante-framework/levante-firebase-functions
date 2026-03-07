@@ -63,15 +63,40 @@ import { upsertAdministrationHandler } from "./upsertAdministration.js";
 import { ORG_COLLECTION_TO_SUBRESOURCE } from "./utils/constants.js";
 import { sanitizeRoles } from "./utils/role-helpers.js";
 
-// initialize 'default' app on Google cloud platform
-admin.initializeApp({
-  credential: admin.applicationDefault(),
+// Surface runtime failures in emulator logs.
+process.on("unhandledRejection", (error) => {
+  logger.error("Unhandled rejection", { error });
+});
+process.on("uncaughtException", (error) => {
+  logger.error("Uncaught exception", { error });
 });
 
+// Initialize default app. Use application default credentials only outside emulators.
+const isEmulator =
+  Boolean(process.env.FUNCTIONS_EMULATOR)
+  || Boolean(process.env.FIRESTORE_EMULATOR_HOST)
+  || Boolean(process.env.FIREBASE_AUTH_EMULATOR_HOST)
+  || Boolean(process.env.FIREBASE_EMULATOR_HUB);
+
+if (isEmulator) {
+  admin.initializeApp();
+} else {
+  admin.initializeApp({
+    credential: admin.applicationDefault(),
+  });
+}
+
 // Initialize permission system (lazy-loads on first use)
-ensurePermissionsLoaded().catch((error) =>
-  logger.error("Error initializing permissions at module load", { error })
-);
+const shouldInitPermissions = !isEmulator && process.env.SKIP_PERMISSION_INIT !== "true";
+if (shouldInitPermissions) {
+  try {
+    void ensurePermissionsLoaded().catch((error) =>
+      logger.error("Error initializing permissions at module load", { error })
+    );
+  } catch (error) {
+    logger.error("Error initializing permissions at module load", { error });
+  }
+}
 
 setGlobalOptions({ timeoutSeconds: 540 });
 
@@ -1036,6 +1061,7 @@ export const upsertAdministration = onCall(async (request) => {
 
 export { completeTask } from "./tasks/completeTask.js";
 export { startTask } from "./tasks/startTask.js";
+export { getLocation, upsertLocation } from "./location/location-functions.js";
 
 export const syncOnRunDocUpdate = onDocumentWritten(
   {
