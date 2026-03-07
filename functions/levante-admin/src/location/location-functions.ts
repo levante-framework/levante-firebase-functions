@@ -231,27 +231,37 @@ async function buildLocationDocId(location: LocationRecord): Promise<string> {
 }
 
 export const upsertLocation = onCall(async (request) => {
-  if (!request.auth?.uid) {
-    throw new HttpsError("unauthenticated", "User must be authenticated");
+  logger.info("upsertLocation called", {
+    hasAuth: Boolean(request.auth?.uid),
+    emulator: Boolean(process.env.FIRESTORE_EMULATOR_HOST),
+  });
+  try {
+    if (!request.auth?.uid) {
+      throw new HttpsError("unauthenticated", "User must be authenticated");
+    }
+
+    const requestData = isObject(request.data) ? request.data : {};
+    const locationPayload = requestData.location ?? request.data;
+    const collection = sanitizeCollection(requestData.collection);
+    const parsedLocation = await parseLocation(locationPayload);
+    const docId = await buildLocationDocId(parsedLocation);
+
+    const db = getFirestore();
+    if (process.env.FIRESTORE_EMULATOR_HOST) {
+      db.settings({ ignoreUndefinedProperties: true });
+    }
+    await db.collection(collection).doc(docId).set(parsedLocation, { merge: false });
+
+    return {
+      success: true,
+      id: docId,
+      path: `${collection}/${docId}`,
+      location: parsedLocation,
+    };
+  } catch (error) {
+    logger.error("upsertLocation error", { error });
+    throw error;
   }
-
-  const requestData = isObject(request.data) ? request.data : {};
-  const locationPayload = requestData.location ?? request.data;
-  const collection = sanitizeCollection(requestData.collection);
-  const parsedLocation = await parseLocation(locationPayload);
-  const docId = await buildLocationDocId(parsedLocation);
-
-  await getFirestore()
-    .collection(collection)
-    .doc(docId)
-    .set(parsedLocation, { merge: false });
-
-  return {
-    success: true,
-    id: docId,
-    path: `${collection}/${docId}`,
-    location: parsedLocation,
-  };
 });
 
 export const getLocation = onCall(async (request) => {
