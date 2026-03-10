@@ -175,6 +175,38 @@ export async function _upsertOrg(
 
       return orgId;
     } else {
+      // --- Prevent duplicates ---
+      const siteId = dataToSet.siteId;
+      const name = dataToSet.name;
+      const normalizedName = dataToSet.normalizedName;
+      const existing = await orgCollectionRef
+        .where("siteId", "==", siteId)
+        .where("normalizedName", "==", normalizedName)
+        .limit(1)
+        .get();
+
+      if (!existing.empty) {
+        const groupType = () => {
+          switch (orgType) {
+            case "districts":
+              return "Site";
+            case "classes":
+              return "Class";
+            case "schools":
+              return "School";
+            case "groups":
+              return "Cohort";
+            default:
+              return "Group";
+          }
+        };
+
+        throw new HttpsError(
+          "internal",
+          `${groupType()} "${name}" already exists`
+        );
+      }
+
       // --- Create new organization ---
       const newOrgDocRef = orgCollectionRef.doc();
       const newOrgId = newOrgDocRef.id;

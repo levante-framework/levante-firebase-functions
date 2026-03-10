@@ -636,7 +636,7 @@ export const editUsers = onCall(async (request) => {
 
 export const upsertOrg = onCall(async (request) => {
   const requestingUid = request.auth?.uid;
-  const groupData = request.data.orgData as OrgData;
+  const groupData = request.data as OrgData;
 
   if (!requestingUid) {
     logger.error("User is not authenticated.");
