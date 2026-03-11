@@ -4,10 +4,16 @@ import {
   Timestamp,
   type DocumentReference,
 } from "firebase-admin/firestore";
+import _pick from "lodash-es/pick.js";
+import type { IAdministration } from "./interfaces.js";
+import { ORG_NAMES } from "./interfaces.js";
+import {
+  processNewAdministration,
+  processModifiedAdministration,
+} from "./administrations/sync-administrations.js";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import type { IAssessment, IOrgsList } from "./interfaces.js"; // Assuming necessary types/helpers are in common
-import type { Class, Group, School } from "../firestore-schema.js";
 
 interface UpsertAdministrationData {
   name: string;
@@ -44,6 +50,10 @@ interface IAdministrationDoc {
   legal?: { [key: string]: unknown };
   testData: boolean;
   siteId: string;
+  syncStatus?: "pending" | "complete" | "failed";
+  syncChunksTotal?: number;
+  syncChunksCompleted?: number;
+  syncErrorMessage?: string;
   readOrgs?: IOrgsList;
   minimalOrgs?: IOrgsList;
   createdAt: Timestamp;
@@ -115,11 +125,22 @@ export const upsertAdministrationHandler = async (
     );
   }
 
-  // 5. Firestore Transaction
+  const sanitizeOrgIds = (ids: string[] | undefined): string[] =>
+    (ids ?? []).filter((id) => typeof id === "string" && id.length > 0);
+
+  const sanitizedOrgs: IOrgsList = {
+    districts: sanitizeOrgIds(orgs.districts),
+    schools: sanitizeOrgIds(orgs.schools),
+    classes: sanitizeOrgIds(orgs.classes),
+    groups: sanitizeOrgIds(orgs.groups),
+  };
+
+  let newAdministrationId: string | undefined;
   try {
-    const newAdministrationId = await db.runTransaction(async (transaction) => {
+    const result = await db.runTransaction(async (transaction) => {
       let administrationDocRef: DocumentReference;
-      let operationType: string; // To log 'create' or 'update'
+      let operationType: "create" | "update";
+      let prevData: IAdministration | undefined;
 
       if (administrationId) {
         operationType = "update";
@@ -134,6 +155,21 @@ export const upsertAdministrationHandler = async (
             `Administration with ID ${administrationId} not found for update.`
           );
         }
+        prevData = _pick(existingDoc.data(), [
+          ...ORG_NAMES,
+          "createdBy",
+          "assessments",
+          "name",
+          "publicName",
+          "dateOpened",
+          "dateClosed",
+          "sequential",
+          "tags",
+          "legal",
+          "testData",
+          "readOrgs",
+          "minimalOrgs",
+        ]) as IAdministration;
 
         // Prepare data for update (merge: true will handle partial updates)
         const updateData: Partial<IAdministrationDoc> = {
@@ -141,11 +177,12 @@ export const upsertAdministrationHandler = async (
           name,
           publicName: publicName ?? name,
           normalizedName,
+          syncStatus: "pending",
           // createdBy should not be updated
-          groups: orgs.groups ?? [],
-          classes: orgs.classes ?? [],
-          schools: orgs.schools ?? [],
-          districts: orgs.districts ?? [],
+          groups: sanitizedOrgs.groups ?? [],
+          classes: sanitizedOrgs.classes ?? [],
+          schools: sanitizedOrgs.schools ?? [],
+          districts: sanitizedOrgs.districts ?? [],
           // dateCreated should not be updated
           dateOpened: dateOpenedTs,
           dateClosed: dateClosedTs,
@@ -156,18 +193,16 @@ export const upsertAdministrationHandler = async (
           testData: isTestData ?? false,
           // Explicitly construct org lists for update
           readOrgs: {
-            // Re-enabled
-            districts: orgs.districts ?? [],
-            schools: orgs.schools ?? [],
-            classes: orgs.classes ?? [],
-            groups: orgs.groups ?? [],
+            districts: sanitizedOrgs.districts ?? [],
+            schools: sanitizedOrgs.schools ?? [],
+            classes: sanitizedOrgs.classes ?? [],
+            groups: sanitizedOrgs.groups ?? [],
           },
           minimalOrgs: {
-            // Re-enabled
-            districts: orgs.districts ?? [],
-            schools: orgs.schools ?? [],
-            classes: orgs.classes ?? [],
-            groups: orgs.groups ?? [],
+            districts: sanitizedOrgs.districts ?? [],
+            schools: sanitizedOrgs.schools ?? [],
+            classes: sanitizedOrgs.classes ?? [],
+            groups: sanitizedOrgs.groups ?? [],
           },
           updatedAt: FieldValue.serverTimestamp() as Timestamp,
         };
@@ -190,12 +225,13 @@ export const upsertAdministrationHandler = async (
           name,
           publicName: publicName ?? name,
           normalizedName,
+          syncStatus: "pending",
           createdBy: callerAdminUid,
           creatorName: creatorName,
-          groups: orgs.groups ?? [],
-          classes: orgs.classes ?? [],
-          schools: orgs.schools ?? [],
-          districts: orgs.districts ?? [],
+          groups: sanitizedOrgs.groups ?? [],
+          classes: sanitizedOrgs.classes ?? [],
+          schools: sanitizedOrgs.schools ?? [],
+          districts: sanitizedOrgs.districts ?? [],
           dateCreated: FieldValue.serverTimestamp() as Timestamp,
           dateOpened: dateOpenedTs,
           dateClosed: dateClosedTs,
@@ -204,8 +240,8 @@ export const upsertAdministrationHandler = async (
           tags: tags,
           legal: legal,
           testData: isTestData ?? false,
-          readOrgs: orgs,
-          minimalOrgs: orgs,
+          readOrgs: sanitizedOrgs,
+          minimalOrgs: sanitizedOrgs,
           siteId,
           createdAt: FieldValue.serverTimestamp() as Timestamp,
           updatedAt: FieldValue.serverTimestamp() as Timestamp,
@@ -227,25 +263,73 @@ export const upsertAdministrationHandler = async (
             `User document ${callerAdminUid} not found. Cannot add administration ${administrationDocRef.id} to created list.`
           );
         }
+        prevData = undefined;
       }
       logger.info(`Successfully prepared administration ${operationType}`, {
         administrationId: administrationDocRef.id,
       });
-      return administrationDocRef.id; // Return the ID
-    }); // End Transaction
+      return { administrationId: administrationDocRef.id, prevData };
+    });
+    newAdministrationId = result.administrationId;
+    const prevData = result.prevData;
 
     logger.info("Finished administration upsert transaction", {
       administrationId: newAdministrationId,
     });
+
+    const administrationDocRef = db
+      .collection("administrations")
+      .doc(newAdministrationId);
+    const adminDoc = await administrationDocRef.get();
+    const currData = adminDoc.data() as IAdministration;
+
+    if (prevData === undefined) {
+      await processNewAdministration(
+        newAdministrationId,
+        administrationDocRef,
+        currData
+      );
+    } else {
+      await processModifiedAdministration(
+        newAdministrationId,
+        administrationDocRef,
+        prevData,
+        currData
+      );
+    }
+
     return { status: "ok", administrationId: newAdministrationId };
-  } catch (error: any) {
-    logger.error("Error during administration upsert", { error });
+  } catch (error: unknown) {
+    const err = error instanceof Error ? error : new Error(String(error));
+    logger.error("Error during administration upsert", {
+      error: err,
+      message: err.message,
+      stack: err.stack,
+      administrationId: newAdministrationId,
+    });
+    if (newAdministrationId) {
+      try {
+        const adminRef = db
+          .collection("administrations")
+          .doc(newAdministrationId);
+        await adminRef.update({
+          syncStatus: "failed",
+          syncErrorMessage: err.message,
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      } catch (updateErr) {
+        logger.error("Failed to update administration sync status to failed", {
+          administrationId: newAdministrationId,
+          updateError: updateErr,
+        });
+      }
+    }
     if (error instanceof HttpsError) {
-      throw error; // Re-throw HttpsError
+      throw error;
     }
     throw new HttpsError(
       "internal",
-      `Failed to upsert administration: ${error.message}`
+      `Failed to upsert administration: ${err.message}`
     );
   }
 };

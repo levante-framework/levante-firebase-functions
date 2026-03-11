@@ -64,6 +64,10 @@ export interface Administration {
   schools: string[]; // Document IDs from `schools` collection
   sequential: boolean;
   siteId: string;
+  syncChunksCompleted?: number;
+  syncChunksTotal?: number;
+  syncErrorMessage?: string;
+  syncStatus?: "pending" | "complete" | "failed";
   tags: string[];
   testData: boolean;
 }
@@ -276,6 +280,8 @@ export interface AssignmentAssessment {
   demoData: boolean;
   id: string;
   name: string;
+  /** Mirrors administration syncStatus. Only show "complete" assignments to users. */
+  syncStatus?: "pending" | "complete" | "failed";
 }
 
 // Tracks versions of legal documents using GitHub as a reference point.

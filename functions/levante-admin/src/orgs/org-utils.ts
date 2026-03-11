@@ -333,8 +333,13 @@ export const getOnlyExistingOrgs = async (
   const existingOrgs = _cloneDeep(orgs);
 
   for (const [orgType, _orgs] of Object.entries(orgs)) {
-    if (_orgs.length > 0) {
-      const docRefs = _orgs.map((orgId) => db.collection(orgType).doc(orgId));
+    const validOrgIds = (Array.isArray(_orgs) ? _orgs : []).filter(
+      (id): id is string => typeof id === "string" && id.length > 0
+    );
+    if (validOrgIds.length > 0) {
+      const docRefs = validOrgIds.map((orgId) =>
+        db.collection(orgType).doc(orgId)
+      );
       const docSnapshots = await transaction.getAll(...docRefs);
       const existingOrgIds = docSnapshots
         .filter((doc) => doc.exists)

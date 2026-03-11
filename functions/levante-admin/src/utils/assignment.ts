@@ -68,6 +68,18 @@ export async function updateAssignedAssessment(
  * as already completed, even though its completedOn timestamp will be set in the transaction
  * and won't be reflected in the document snapshot we're examining.
  */
+/**
+ * Returns true if the assignment should be shown to the user.
+ * Hide "pending" and "failed" assignments; show "complete" and legacy (no syncStatus).
+ */
+export function isVisibleAssignment(
+  assignmentData: { syncStatus?: string } | null | undefined
+): boolean {
+  if (!assignmentData) return false;
+  const status = assignmentData.syncStatus;
+  return status !== "pending" && status !== "failed";
+}
+
 export function shouldCompleteAssignment(
   docSnap: DocumentSnapshot,
   currentTaskId: string

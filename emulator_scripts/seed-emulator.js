@@ -1,11 +1,14 @@
 const admin = require('firebase-admin');
+const { getSeedConfig } = require('./config');
 
-// // Point to the emulator BEFORE initializing Firebase Admin
-process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8180";
-process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9199";
+const { projectId, isEmulator } = getSeedConfig();
 
-// Initialize Firebase Admin with the emulator configuration
-const adminApp = admin.initializeApp({projectId: "demo-emulator"}, "admin-seeder");
+if (isEmulator) {
+  process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8180';
+  process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:9199';
+}
+
+const adminApp = admin.initializeApp({ projectId }, 'admin-seeder');
 
 // Import seeding modules
 const { createGroups } = require('./seeders/groups');
@@ -19,7 +22,7 @@ const { createSystemPermissions } = require('./seeders/permissions');
 
 async function seedDatabase() {
   try {
-    console.log("=== STARTING DATABASE SEEDING ===\n");
+    console.log(isEmulator ? '=== STARTING EMULATOR SEEDING ===\n' : `=== STARTING SEEDING (project: ${projectId}) ===\n`);
     
     // Step 1: Create system permissions
     console.log("Step 1: Creating system permissions...");
@@ -33,7 +36,8 @@ async function seedDatabase() {
 
     // Step 3: Create groups (districts, schools, classes, groups)
     console.log("Step 3: Creating groups...");
-    const groups = await createGroups(adminApp, users.admin.uid);
+    const adminUser = users.find(user => user.userKey === 'admin');
+    const groups = await createGroups(adminApp, adminUser.uid);
     console.log("✅ Groups created successfully\n");
     
     // Step 4: Create userClaims documents
@@ -73,8 +77,8 @@ async function seedDatabase() {
     console.log(`- Administrations: ${administrations.length}`);
     
     console.log("\nUser credentials:");
-    Object.entries(users).forEach(([type, user]) => {
-      console.log(`- ${type}: ${user.email} (password: ${user.password})`);
+    users.forEach((user) => {
+      console.log(`- ${user.userKey}: ${user.email} (password: ${user.password})`);
     });
     
     console.log("\nCreated administrations:");
@@ -82,8 +86,8 @@ async function seedDatabase() {
       console.log(`- ${admin.name} (${admin.taskCount} tasks, ${admin.sequential ? 'sequential' : 'parallel'})`);
     });
     
-    const studentCount = Object.values(users).filter(user => user.userType === 'student').length;
-    const allParticipantCount = Object.values(users).filter(user => 
+    const studentCount = users.filter(user => user.userType === 'student').length;
+    const allParticipantCount = users.filter(user => 
       ['student', 'teacher', 'parent'].includes(user.userType)
     ).length;
     console.log(`\nAssignment distribution:`);
@@ -95,6 +99,11 @@ async function seedDatabase() {
   } catch (error) {
     console.error("\n❌ SEEDING FAILED!");
     console.error("Error:", error.message);
+    if (error?.code === 'app/invalid-credential' || error?.message?.includes('metadata.google.internal') || error?.message?.includes('fetch a valid Google OAuth2 access token')) {
+      console.error("\nTo run against a live project locally, authenticate first:");
+      console.error("  gcloud auth application-default login");
+      console.error("Or set GOOGLE_APPLICATION_CREDENTIALS to the path of a service account JSON file.");
+    }
     if (error.stack) {
       console.error("Stack trace:", error.stack);
     }
