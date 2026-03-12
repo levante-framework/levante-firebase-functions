@@ -66,6 +66,10 @@ export const getSchoolsAndSubGroupsFromDistrict = async (
   }
 
   const query = schoolsCollection.where(Filter.and(...schoolFilterComponents));
+  logger.info("INDEX_QUERY: about to run", {
+    indexQueryLabel: "getSchoolsAndSubGroupsFromDistrict.schools",
+    districtId,
+  });
   const querySnapshot = await transaction.get(query);
   querySnapshot.forEach((documentSnapshot) => {
     schools = _union(schools, [documentSnapshot.id]);
@@ -82,6 +86,10 @@ export const getSchoolsAndSubGroupsFromDistrict = async (
   const subGroupQuery = groupsCollection.where(
     Filter.and(...groupFilterComponents)
   );
+  logger.info("INDEX_QUERY: about to run", {
+    indexQueryLabel: "getSchoolsAndSubGroupsFromDistrict.groups",
+    districtId,
+  });
   const subGroupQuerySnapshot = await transaction.get(subGroupQuery);
   subGroupQuerySnapshot.forEach((documentSnapshot) => {
     subGroups = _union(subGroups, [documentSnapshot.id]);
@@ -129,6 +137,10 @@ export const getClassesAndSubGroupsFromSchool = async (
   }
 
   const query = classesCollection.where(Filter.and(...classFilterComponents));
+  logger.info("INDEX_QUERY: about to run", {
+    indexQueryLabel: "getClassesAndSubGroupsFromSchool.classes",
+    schoolId,
+  });
   const querySnapshot = await transaction.get(query);
   querySnapshot.forEach((documentSnapshot) => {
     classes = _union(classes, [documentSnapshot.id]);
@@ -145,6 +157,10 @@ export const getClassesAndSubGroupsFromSchool = async (
   const subGroupQuery = groupsCollection.where(
     Filter.and(...groupFilterComponents)
   );
+  logger.info("INDEX_QUERY: about to run", {
+    indexQueryLabel: "getClassesAndSubGroupsFromSchool.groups",
+    schoolId,
+  });
   const subGroupQuerySnapshot = await transaction.get(subGroupQuery);
   subGroupQuerySnapshot.forEach((documentSnapshot) => {
     subGroups = _union(subGroups, [documentSnapshot.id]);
@@ -193,6 +209,10 @@ export const getClassesAndSubGroupsFromDistrict = async (
   }
 
   const query = classesCollection.where(Filter.and(...classFilterComponents));
+  logger.info("INDEX_QUERY: about to run", {
+    indexQueryLabel: "getClassesAndSubGroupsFromDistrict.classes",
+    districtId,
+  });
   const querySnapshot = await transaction.get(query);
   querySnapshot.forEach((documentSnapshot) => {
     classes.push(documentSnapshot.id);
@@ -211,7 +231,10 @@ export const getClassesAndSubGroupsFromDistrict = async (
     const subGroupQuery = groupsCollection.where(
       Filter.and(...groupFilterComponents)
     );
-
+    logger.info("INDEX_QUERY: about to run", {
+      indexQueryLabel: "getClassesAndSubGroupsFromDistrict.groups",
+      districtId,
+    });
     const subGroupQuerySnapshot = await transaction.get(subGroupQuery);
     subGroupQuerySnapshot.forEach((documentSnapshot) => {
       subGroups = _union(subGroups, [documentSnapshot.id]);
@@ -263,6 +286,10 @@ export const getSubGroupsFromGroup = async (
   }
 
   const query = groupsCollection.where(Filter.and(...groupQueryComponents));
+  logger.info("INDEX_QUERY: about to run", {
+    indexQueryLabel: "getSubGroupsFromGroup.groups",
+    groupId,
+  });
   const querySnapshot = await transaction.get(query);
   querySnapshot.forEach((documentSnapshot) => {
     subgroups = _union(subgroups, [documentSnapshot.id]);
@@ -310,6 +337,10 @@ export const getSubGroupsFromClass = async (
   }
 
   const query = groupsCollection.where(Filter.and(...groupQueryComponents));
+  logger.info("INDEX_QUERY: about to run", {
+    indexQueryLabel: "getSubGroupsFromClass.groups",
+    classId,
+  });
   const querySnapshot = await transaction.get(query);
   querySnapshot.forEach((documentSnapshot) => {
     subgroups = _union(subgroups, [documentSnapshot.id]);
@@ -580,6 +611,10 @@ export const getUsersFromOrgs = async ({
         .collection("users")
         .where(andFilter)
         .limit(queryLimit);
+      logger.info("INDEX_QUERY: about to run", {
+        indexQueryLabel: "getUsersFromOrgs.users",
+        orgType: _type,
+      });
       let querySnapshot = await transaction.get(firstQuery);
 
       // Write results for the first query.
@@ -596,6 +631,10 @@ export const getUsersFromOrgs = async ({
           .where(andFilter)
           .startAfter(lastVisible)
           .limit(queryLimit);
+        logger.info("INDEX_QUERY: about to run", {
+          indexQueryLabel: "getUsersFromOrgs.users.pagination",
+          orgType: _type,
+        });
         querySnapshot = await transaction.get(nextQuery);
         querySnapshot.forEach((documentSnapshot) => {
           users = _union(users, [documentSnapshot.id]);

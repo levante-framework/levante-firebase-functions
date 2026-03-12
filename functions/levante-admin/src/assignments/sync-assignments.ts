@@ -110,6 +110,12 @@ const updateAssignmentDocsSyncStatus = async (
   administrationId: string,
   syncStatus: "complete" | "failed"
 ) => {
+  const queryLabel = "collectionGroup(assignments).where(id)==administrationId";
+  logger.info("INDEX_QUERY: about to run", {
+    indexQueryLabel: queryLabel,
+    administrationId,
+    syncStatus,
+  });
   const snapshot = await db
     .collectionGroup("assignments")
     .where("id", "==", administrationId)
@@ -155,6 +161,10 @@ const recordChunkSuccess = async (
       syncStatus: "complete",
       _syncRollback: FieldValue.delete(),
       updatedAt: FieldValue.serverTimestamp(),
+    });
+    logger.info("INDEX_QUERY: about to call updateAssignmentDocsSyncStatus", {
+      indexQueryLabel: "recordChunkSuccess.beforeUpdateSyncStatus",
+      administrationId,
     });
     await updateAssignmentDocsSyncStatus(db, administrationId, "complete");
   }
@@ -251,6 +261,12 @@ export const updateAssignmentsForOrgChunkHandler = async (
       throw new Error(`Invalid mode: ${mode}. Expected 'update' or 'add'.`);
     }
 
+    logger.info("INDEX_QUERY: about to run transaction (add/update users)", {
+      indexQueryLabel: "chunkTransaction",
+      administrationId,
+      mode,
+      userIdCount: userIds.length,
+    });
     await db.runTransaction(async (transaction) => {
       if (mode === "update") {
         return updateAssignmentForUsers(
@@ -268,6 +284,10 @@ export const updateAssignmentsForOrgChunkHandler = async (
       );
     });
 
+    logger.info("INDEX_QUERY: transaction done, calling recordChunkSuccess", {
+      indexQueryLabel: "beforeRecordChunkSuccess",
+      administrationId,
+    });
     await recordChunkSuccess(db, administrationId);
   } catch (error) {
     await recordChunkFailure(
