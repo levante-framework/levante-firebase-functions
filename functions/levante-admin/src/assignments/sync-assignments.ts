@@ -225,6 +225,12 @@ export const updateAssignmentsForOrgChunkHandler = async (
   payload: AddUpdatePayload | RemovePayload
 ) => {
   const { administrationId, userIds, mode } = payload;
+  if (!userIds?.length) {
+    logger.warn("No userIds found for administration", {
+      administrationId,
+    });
+    return;
+  }
   const db = getFirestore();
   try {
     if (userIds.length > MAX_TRANSACTIONS) {
