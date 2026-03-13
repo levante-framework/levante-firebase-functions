@@ -18,6 +18,12 @@ import {
 } from "./constants.js";
 import { normalizeRoleKey } from "./role-helpers.js";
 
+function stripUndefined<T extends Record<string, any>>(obj: T): T {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined)
+  ) as T;
+}
+
 export const createPermissionsFirestoreSink = (
   loggingConfig: LoggingModeConfig
 ): PermEventSink => {
@@ -31,8 +37,9 @@ export const createPermissionsFirestoreSink = (
             .collection(FIRESTORE_SYSTEM_COLLECTION)
             .doc(FIRESTORE_PERMISSIONS_DOCUMENT)
             .collection(FIRESTORE_PERMISSIONS_LOGS_COLLECTION);
+          const eventWithUndefinedStripped = stripUndefined(event);
           await logsCollection.add({
-            ...event,
+            ...eventWithUndefinedStripped,
             expireAt: Timestamp.fromMillis(
               Date.now() + 1000 * 60 * 60 * 24 * 90 // 90 days from now. TTL is not turned on yet.
             ),

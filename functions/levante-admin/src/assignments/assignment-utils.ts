@@ -158,7 +158,7 @@ const prepareNewAssignment = async (
       const assignedAssessment = {
         taskId: assessment.taskId,
         optional: false,
-        params: assessment.params,
+        params: assessment?.params || {},
         variantId: assessment.variantId,
         variantName: assessment.variantName,
       };
@@ -592,7 +592,7 @@ export const updateAssignmentForUser = async (
           const assignedAssessment = {
             taskId: _assessment.taskId,
             optional: false,
-            params: _assessment.params,
+            params: _assessment.params || {},
             variantId: _assessment.variantId,
             variantName: _assessment.variantName,
           };
@@ -891,7 +891,7 @@ const readPhaseForUser = async (
         const assignedAssessment = {
           taskId: _assessment.taskId,
           optional: false,
-          params: _assessment.params,
+          params: _assessment.params || {},
           variantId: _assessment.variantId,
           variantName: _assessment.variantName,
         };
