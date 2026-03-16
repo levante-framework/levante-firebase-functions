@@ -62,13 +62,6 @@ export async function updateAssignedAssessment(
 }
 
 /**
- * Checks if all assessments in an assignment are completed
- *
- * Note: When checking if all assessments are completed, we need to consider the current task
- * as already completed, even though its completedOn timestamp will be set in the transaction
- * and won't be reflected in the document snapshot we're examining.
- */
-/**
  * Returns true if the assignment should be shown to the user.
  * Hide "pending" and "failed" assignments; show "complete" and legacy (no syncStatus).
  */
@@ -80,6 +73,13 @@ export function isVisibleAssignment(
   return status !== "pending" && status !== "failed";
 }
 
+/**
+ * Checks if all assessments in an assignment are completed
+ *
+ * Note: When checking if all assessments are completed, we need to consider the current task
+ * as already completed, even though its completedOn timestamp will be set in the transaction
+ * and won't be reflected in the document snapshot we're examining.
+ */
 export function shouldCompleteAssignment(
   docSnap: DocumentSnapshot,
   currentTaskId: string

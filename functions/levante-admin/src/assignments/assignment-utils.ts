@@ -1141,6 +1141,35 @@ export const updateAssignmentForUsers = async (
   }
 };
 
+/**
+ * Runs read phase for each administration then write phase, so that all
+ * transaction reads complete before any writes (required by Firestore).
+ * Use this when updating one user's assignments for multiple administrations
+ * inside a single transaction.
+ */
+export const updateAssignmentsForUserFromAdministrations = async (
+  userUid: string,
+  administrations: Array<{
+    administrationId: string;
+    administrationData: IAdministration;
+  }>,
+  transaction: Transaction
+) => {
+  const pendingWrites: PendingAssignmentWrite[] = [];
+  for (const { administrationId, administrationData } of administrations) {
+    const pending = await readPhaseForUser(
+      userUid,
+      administrationId,
+      administrationData,
+      transaction
+    );
+    pendingWrites.push(pending);
+  }
+  for (const pending of pendingWrites) {
+    await writePhaseForUser(pending, transaction);
+  }
+};
+
 export const updateAllAssignmentsInCollection = async ({
   collectionRef,
   fieldPathsAndValues,
