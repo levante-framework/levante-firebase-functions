@@ -13,7 +13,6 @@ import { logger } from "firebase-functions/v2";
 import { getFunctions } from "firebase-admin/functions";
 import _chunk from "lodash-es/chunk.js";
 import _difference from "lodash-es/difference.js";
-import _forEach from "lodash-es/forEach.js";
 import _fromPairs from "lodash-es/fromPairs.js";
 import _isEqual from "lodash-es/isEqual.js";
 import _map from "lodash-es/map.js";
@@ -32,8 +31,7 @@ import type { UpdateAction } from "../utils/transactions.js";
 import {
   removeAssignmentFromUsers,
   removeOrgsFromAssignments,
-  updateAssignmentForUser,
-  // updateAssignmentForUsers,
+  updateAssignmentsForUserFromAdministrations,
 } from "../assignments/assignment-utils.js";
 import {
   getAdministrationsFromOrgs,
@@ -342,41 +340,31 @@ export const processUserAddedOrgs = async (
       restrictToOpenAdministrations: true, // Restrict to open administrations so that the user does not get an assignment to a closed administration.
     });
 
-    const assignments = await Promise.all(
-      _map(administrations, async (administrationId) => {
-        const administrationRef = db
-          .collection("administrations")
-          .doc(administrationId);
-        const administrationDoc = await transaction.get(administrationRef);
-        if (administrationDoc.exists) {
-          const administrationData =
-            administrationDoc.data() as IAdministration;
-          const dateClosed = parseTimestamp(administrationData.dateClosed);
-          if (Number.isNaN(dateClosed.getTime()) || dateClosed <= new Date()) {
-            return [undefined, undefined];
-          }
-          // Get administrationData using transaction.get()
-          return updateAssignmentForUser(
-            roarUid,
-            administrationId,
-            administrationData,
-            transaction
-          );
-        } else {
-          return [undefined, undefined];
+    const administrationsWithData: Array<{
+      administrationId: string;
+      administrationData: IAdministration;
+    }> = [];
+    for (const administrationId of administrations) {
+      const administrationRef = db
+        .collection("administrations")
+        .doc(administrationId);
+      const administrationDoc = await transaction.get(administrationRef);
+      if (administrationDoc.exists) {
+        const administrationData =
+          administrationDoc.data() as IAdministration;
+        const dateClosed = parseTimestamp(administrationData.dateClosed);
+        if (Number.isNaN(dateClosed.getTime()) || dateClosed <= new Date()) {
+          continue;
         }
-      })
-    );
-
-    _forEach(assignments, ([assignmentRef, assignmentData]) => {
-      if (assignmentRef && assignmentData) {
-        transaction.set(assignmentRef, assignmentData, { merge: true });
-      } else if (assignmentRef) {
-        transaction.delete(assignmentRef);
-      } else {
-        transaction;
+        administrationsWithData.push({ administrationId, administrationData });
       }
-    });
+    }
+
+    await updateAssignmentsForUserFromAdministrations(
+      roarUid,
+      administrationsWithData,
+      transaction
+    );
   });
 };
 

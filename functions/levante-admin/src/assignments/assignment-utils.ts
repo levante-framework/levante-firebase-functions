@@ -158,7 +158,7 @@ const prepareNewAssignment = async (
       const assignedAssessment = {
         taskId: assessment.taskId,
         optional: false,
-        params: assessment.params,
+        params: assessment?.params || {},
         variantId: assessment.variantId,
         variantName: assessment.variantName,
       };
@@ -592,7 +592,7 @@ export const updateAssignmentForUser = async (
           const assignedAssessment = {
             taskId: _assessment.taskId,
             optional: false,
-            params: _assessment.params,
+            params: _assessment.params || {},
             variantId: _assessment.variantId,
             variantName: _assessment.variantName,
           };
@@ -891,7 +891,7 @@ const readPhaseForUser = async (
         const assignedAssessment = {
           taskId: _assessment.taskId,
           optional: false,
-          params: _assessment.params,
+          params: _assessment.params || {},
           variantId: _assessment.variantId,
           variantName: _assessment.variantName,
         };
@@ -1130,6 +1130,35 @@ export const updateAssignmentForUsers = async (
   for (const user of users) {
     const pending = await readPhaseForUser(
       user,
+      administrationId,
+      administrationData,
+      transaction
+    );
+    pendingWrites.push(pending);
+  }
+  for (const pending of pendingWrites) {
+    await writePhaseForUser(pending, transaction);
+  }
+};
+
+/**
+ * Runs read phase for each administration then write phase, so that all
+ * transaction reads complete before any writes (required by Firestore).
+ * Use this when updating one user's assignments for multiple administrations
+ * inside a single transaction.
+ */
+export const updateAssignmentsForUserFromAdministrations = async (
+  userUid: string,
+  administrations: Array<{
+    administrationId: string;
+    administrationData: IAdministration;
+  }>,
+  transaction: Transaction
+) => {
+  const pendingWrites: PendingAssignmentWrite[] = [];
+  for (const { administrationId, administrationData } of administrations) {
+    const pending = await readPhaseForUser(
+      userUid,
       administrationId,
       administrationData,
       transaction

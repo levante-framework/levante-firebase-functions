@@ -134,7 +134,10 @@ async function createUsers(adminApp) {
             tos: {}
           },
           // Initialize empty roles array - will be populated after associations
-          roles: []
+          roles: [],
+          username: userDef.email.split('@')[0],
+          birthYear: "2018",
+          birthMonth: "1",
         };
         
         // Add admin-specific data for admin users

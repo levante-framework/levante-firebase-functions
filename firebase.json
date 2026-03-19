@@ -15,7 +15,8 @@
     }
   ],
   "firestore": {
-    "rules": "functions/levante-admin/firestore.rules"
+    "rules": "functions/levante-admin/firestore.rules",
+    "indexes": "functions/levante-admin/firestore.indexes.json"
   },
   "emulators": {
     "auth": {
