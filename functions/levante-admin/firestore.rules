@@ -128,7 +128,7 @@ service cloud.firestore {
       allow read: if isAuthed() && canReadUser();
       allow update: if isAuthed() && myData()
 
-      match /surveyResponses/{responseId} { 
+      match /surveyResponses/{responseId=**} { 
         allow read: if isAuthed() && (myData() || hasAdminPermission('users', 'read', getTargetUserSites())); 
         allow create: if isAuthed() && (myData() || hasAdminPermission('users', 'read', getTargetUserSites()));
         allow update: if isAuthed() && (myData() || hasAdminPermission('users', 'read', getTargetUserSites()));
