@@ -350,8 +350,7 @@ export const processUserAddedOrgs = async (
         .doc(administrationId);
       const administrationDoc = await transaction.get(administrationRef);
       if (administrationDoc.exists) {
-        const administrationData =
-          administrationDoc.data() as IAdministration;
+        const administrationData = administrationDoc.data() as IAdministration;
         const dateClosed = parseTimestamp(administrationData.dateClosed);
         if (Number.isNaN(dateClosed.getTime()) || dateClosed <= new Date()) {
           continue;
