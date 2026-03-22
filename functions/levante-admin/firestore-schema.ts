@@ -311,6 +311,7 @@ export interface RolePermissions {
   assignments: PermissionAction[];
   users: PermissionAction[];
   admins: {
+    super_admin: PermissionAction[];
     site_admin: PermissionAction[];
     admin: PermissionAction[];
     research_assistant: PermissionAction[];

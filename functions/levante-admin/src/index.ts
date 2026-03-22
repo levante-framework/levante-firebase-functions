@@ -31,6 +31,7 @@ import {
   updateAdministratorRoles,
 } from "./users/update-administrator.js";
 import type { AdministratorRoleDefinition } from "./users/create-administrator.js";
+import { createUpdateSuperAdmin as runCreateUpdateSuperAdmin } from "./users/super-admin-mutation.js";
 import { createSoftDeleteCloudFunction } from "./utils/soft-delete.js";
 import { updateAssignmentsForOrgChunkHandler } from "./assignments/sync-assignments.js";
 import { getAdministrationsForAdministrator } from "./administrations/administration-utils.js";
@@ -303,6 +304,36 @@ export const updateAdministrator = onCall(async (request) => {
   return await updateAdministratorRoles({
     context,
     updatedRoles: sanitizedRoles,
+  });
+});
+
+export const createUpdateSuperAdmin = onCall(async (request) => {
+  const requesterAdminUid = request.auth?.uid;
+  if (!requesterAdminUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated");
+  }
+
+  const auth = getAuth();
+  const requesterRecord = await auth.getUser(requesterAdminUid);
+  const customClaims: any = requesterRecord.customClaims || {};
+  const useNewPermissions = customClaims.useNewPermissions === true;
+
+  if (!useNewPermissions) {
+    throw new HttpsError(
+      "permission-denied",
+      "New permission system must be enabled to create or update super administrators"
+    );
+  }
+
+  await ensurePermissionsLoaded();
+  return runCreateUpdateSuperAdmin({
+    requesterAdminUid,
+    requesterRecord,
+    email: request.data?.email,
+    name: request.data?.name,
+    roles: request.data?.roles ?? [],
+    isTestData: request.data?.isTestData ?? false,
+    adminUid: request.data?.adminUid,
   });
 });
 

@@ -41,6 +41,7 @@ const permissionsDocument = {
       assignments: ["create", "read", "update", "delete", "exclude"],
       users: ["create", "read", "update", "delete", "exclude"],
       admins: {
+        super_admin: ["create", "read", "update", "delete"],
         site_admin: ["create", "read", "update", "delete"],
         admin: ["create", "read", "update", "delete"],
         research_assistant: ["create", "read", "update", "delete"]
@@ -60,6 +61,7 @@ const permissionsDocument = {
       // A site admin can change an admin's role (e.g., upgrade them to a site_admin).
       // But a site_admin cannot update another admin's name or email.
       admins: {
+        super_admin: [],
         site_admin: ["create", "read"],
         admin: ["create", "read", "update", "delete", "exclude"],
         research_assistant: ["create", "read", "update", "delete"]
@@ -76,6 +78,7 @@ const permissionsDocument = {
       assignments: ["create", "read", "update", "delete"],
       users: ["create", "read", "update"],
       admins: {
+        super_admin: [],
         site_admin: ["read"],
         admin: ["read"],
         research_assistant: ["create", "read"]
@@ -92,6 +95,7 @@ const permissionsDocument = {
       assignments: ["read"],
       users: ["create", "read"],
       admins: {
+        super_admin: [],
         site_admin: ["read"],
         admin: ["read"],
         research_assistant: ["read"]
@@ -109,6 +113,7 @@ const permissionsDocument = {
       assignments: [],
       users: [],
       admins: {
+        super_admin: [],
         site_admin: [],
         admin: [],
         research_assistant: []
