@@ -22,9 +22,7 @@ import {
   getPermissionService,
 } from "../utils/permission-helpers.js";
 
-const assertSuperAdminRolesOnly = (
-  roles: ReturnType<typeof sanitizeRoles>
-) => {
+const assertSuperAdminRolesOnly = (roles: ReturnType<typeof sanitizeRoles>) => {
   const invalid = roles.filter((r) => r.role !== ROLES.SUPER_ADMIN);
   if (invalid.length > 0) {
     throw new HttpsError(
@@ -66,9 +64,7 @@ export const createUpdateSuperAdmin = async (params: {
     );
   }
 
-  const sanitizedRoles = sanitizeRoles(
-    roles as AdministratorRoleDefinition[]
-  );
+  const sanitizedRoles = sanitizeRoles(roles as AdministratorRoleDefinition[]);
   if (sanitizedRoles.length === 0) {
     throw new HttpsError(
       "invalid-argument",
@@ -81,8 +77,7 @@ export const createUpdateSuperAdmin = async (params: {
   const permissionsService = getPermissionService();
   const subResource = ADMIN_SUB_RESOURCES.SUPER_ADMIN;
 
-  const adminUid =
-    typeof adminUidRaw === "string" ? adminUidRaw.trim() : "";
+  const adminUid = typeof adminUidRaw === "string" ? adminUidRaw.trim() : "";
 
   if (adminUid.length === 0) {
     const allowed = permissionsService.canPerformGlobalAction(
