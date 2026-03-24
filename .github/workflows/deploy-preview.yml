@@ -68,4 +68,4 @@ jobs:
 
       - name: Deploy to preview (assessment-dev)
         if: github.event.inputs.action == 'both' || github.event.inputs.action == 'deploy_only'
-        run: npm run deploy:preview
+        run: npm run deploy:levante-admin:assessment-dev
