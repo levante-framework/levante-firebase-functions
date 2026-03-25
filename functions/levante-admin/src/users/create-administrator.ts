@@ -5,7 +5,7 @@ import { logger } from "firebase-functions/v2";
 import { v4 as uuidv4 } from "uuid";
 import type { IOrgsList } from "../interfaces.js";
 import { HttpsError } from "firebase-functions/v2/https";
-import { ADMINISTRATOR_STATUS } from "../utils/constants.js";
+import { ADMINISTRATOR_STATUS, ROLES } from "../utils/constants.js";
 import {
   buildRoleClaimsStructure,
   sanitizeRoles,
@@ -212,8 +212,10 @@ export const _createAdministratorWithRoles = async ({
     });
   }
 
-  // update the district docs with new administrator data
   for (const role of sanitizedRoles) {
+    if (role.role === ROLES.SUPER_ADMIN) {
+      continue;
+    }
     const districtDocRef = db.collection("districts").doc(role.siteId);
     await districtDocRef.update({
       administrators: FieldValue.arrayUnion({

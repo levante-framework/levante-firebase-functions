@@ -1,3 +1,4 @@
+import { logger } from "firebase-functions/v2";
 import { HttpsError } from "firebase-functions/v2/https";
 import type { UserRecord } from "firebase-admin/auth";
 import {
@@ -79,6 +80,13 @@ export const createUpdateSuperAdmin = async (params: {
 
   const adminUid = typeof adminUidRaw === "string" ? adminUidRaw.trim() : "";
 
+  logger.info("super-admin-mutation: validated input", {
+    requesterAdminUid,
+    roleCount: sanitizedRoles.length,
+    isCreate: adminUid.length === 0,
+    targetAdminUid: adminUid.length > 0 ? adminUid : undefined,
+  });
+
   if (adminUid.length === 0) {
     const allowed = permissionsService.canPerformGlobalAction(
       requestingUser,
@@ -101,6 +109,11 @@ export const createUpdateSuperAdmin = async (params: {
         "A valid name with first and last is required"
       );
     }
+    logger.info("super-admin-mutation: creating super administrator", {
+      requesterAdminUid,
+      email,
+      isTestData,
+    });
     return _createAdministratorWithRoles({
       email,
       name: name as AdministratorNameInput,
@@ -123,6 +136,10 @@ export const createUpdateSuperAdmin = async (params: {
     );
   }
 
+  logger.info("super-admin-mutation: updating super administrator roles", {
+    requesterAdminUid,
+    targetAdminUid: adminUid,
+  });
   const context = await loadAdministratorContext(adminUid);
   return updateAdministratorRoles({
     context,
