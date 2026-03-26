@@ -308,7 +308,7 @@ export const addAssignmentToUsers = async (
       logger.debug(`Adding new assignment at ${assignmentRef.path}`, {
         assignmentSummary: summarizeAssignmentForLog(assignmentData),
       });
-      transaction.set(assignmentRef, assignmentData, { merge: true });
+      transaction.set(assignmentRef, assignmentData);
       const userUid = assignmentRef.parent.parent?.id;
       if (userUid) {
         await syncOnAssignmentCreated(
@@ -1102,9 +1102,7 @@ const writePhaseForUser = async (
   logger.info(`Updating or creating assignment ${pending.assignmentRef.path}`, {
     assignmentSummary: summarizeAssignmentForLog(pending.assignmentData),
   });
-  transaction.set(pending.assignmentRef, pending.assignmentData, {
-    merge: true,
-  });
+  transaction.set(pending.assignmentRef, pending.assignmentData);
 };
 
 /**
