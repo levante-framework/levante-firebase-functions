@@ -47,6 +47,35 @@ import {
   parseTimestamp,
 } from "../utils/utils.js";
 
+const MAX_USERS_PER_ASSIGNMENT_CHUNK = 40;
+const MIN_USERS_PER_ASSIGNMENT_CHUNK = 5;
+const TRANSACTION_PAYLOAD_BUDGET_BYTES = 7 * 1024 * 1024;
+
+const getAdaptiveAssignmentChunkSize = (
+  administrationData: IAdministration
+): number => {
+  const assessments = administrationData.assessments ?? [];
+  const serializedAssessmentsBytes = Buffer.byteLength(
+    JSON.stringify(assessments),
+    "utf8"
+  );
+
+  // Keep per-chunk payload well below Firestore's transaction request limits.
+  const estimatedBytesPerUser = Math.max(
+    1024,
+    serializedAssessmentsBytes + 2 * 1024
+  );
+
+  const payloadBound = Math.floor(
+    TRANSACTION_PAYLOAD_BUDGET_BYTES / estimatedBytesPerUser
+  );
+
+  return Math.max(
+    MIN_USERS_PER_ASSIGNMENT_CHUNK,
+    Math.min(MAX_TRANSACTIONS, MAX_USERS_PER_ASSIGNMENT_CHUNK, payloadBound)
+  );
+};
+
 export const processRemovedAdministration = async (
   administrationId: string,
   prevOrgs: IOrgsList
@@ -129,7 +158,8 @@ export async function enqueueAddUpdateTasksForAdministration(
     });
   });
 
-  const userChunks = _chunk(usersToUpdate, MAX_TRANSACTIONS);
+  const assignmentChunkSize = getAdaptiveAssignmentChunkSize(currData);
+  const userChunks = _chunk(usersToUpdate, assignmentChunkSize);
   if (userChunks.length === 0) {
     const completeUpdate: Record<string, unknown> = {
       syncStatus: "complete",
@@ -163,6 +193,7 @@ export async function enqueueAddUpdateTasksForAdministration(
       targetUri,
       taskName,
       userCount: userIds.length,
+      chunkSize: assignmentChunkSize,
     });
     enqueues.push(
       queue.enqueue(
@@ -350,8 +381,7 @@ export const processUserAddedOrgs = async (
         .doc(administrationId);
       const administrationDoc = await transaction.get(administrationRef);
       if (administrationDoc.exists) {
-        const administrationData =
-          administrationDoc.data() as IAdministration;
+        const administrationData = administrationDoc.data() as IAdministration;
         const dateClosed = parseTimestamp(administrationData.dateClosed);
         if (Number.isNaN(dateClosed.getTime()) || dateClosed <= new Date()) {
           continue;
