@@ -3,6 +3,7 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { DEFAULT_PERMISSION_MATRIX } from "@levante-framework/permissions-core";
 
 const adminCredentialFile = process.env.LEVANTE_ADMIN_FIREBASE_CREDENTIALS;
+const projectId = process.env.LEVANTE_ADMIN_PROJECT_ID || "hs-levante-admin-dev";
 
 if (!adminCredentialFile) {
   console.error(
@@ -23,7 +24,7 @@ const adminCredentials = (
 const adminApp = admin.initializeApp(
   {
     credential: admin.cert(adminCredentials),
-    projectId: "hs-levante-admin-dev",
+    projectId,
   },
   "admin",
 );
@@ -33,7 +34,7 @@ const adminFirestore = getFirestore(adminApp);
 const permissionsDocument = {
   permissions: DEFAULT_PERMISSION_MATRIX,
   updatedAt: FieldValue.serverTimestamp(),
-  version: "1.1.0"
+  version: "1.1.0",
 };
 
 try {
