@@ -1,11 +1,12 @@
-const { DEFAULT_PERMISSION_MATRIX } = require('@levante-framework/permissions-core');
-
 /**
  * Creates the system permissions document
  * @param {admin.app.App} adminApp - The Firebase Admin app instance
  * @returns {Promise<Object>} The created permissions structure
  */
 async function createSystemPermissions(adminApp) {
+  const { DEFAULT_PERMISSION_MATRIX } = await import(
+    '@levante-framework/permissions-core'
+  );
   const db = adminApp.firestore();
   
   const permissionsDocument = {
