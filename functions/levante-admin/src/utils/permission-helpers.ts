@@ -17,6 +17,7 @@ import {
   FIRESTORE_SYSTEM_COLLECTION,
 } from "./constants.js";
 import { normalizeRoleKey } from "./role-helpers.js";
+import { logger } from "firebase-functions/v2";
 
 function stripUndefined<T extends Record<string, any>>(obj: T): T {
   return Object.fromEntries(
@@ -74,6 +75,7 @@ export const ensurePermissionsLoaded = async () => {
       .collection("system")
       .doc("permissions")
       .get();
+    logger.info("Permissions document loaded", { permissionsDoc: permissionsDoc.data() });
     const data = permissionsDoc.data();
     if (!data)
       throw new Error("Permissions document not found at system/permissions");
