@@ -75,7 +75,9 @@ export const ensurePermissionsLoaded = async () => {
       .collection("system")
       .doc("permissions")
       .get();
-    logger.info("Permissions document loaded", { permissionsDoc: permissionsDoc.data() });
+    logger.info("Permissions document loaded", {
+      permissionsDoc: permissionsDoc.data(),
+    });
     const data = permissionsDoc.data();
     if (!data)
       throw new Error("Permissions document not found at system/permissions");
