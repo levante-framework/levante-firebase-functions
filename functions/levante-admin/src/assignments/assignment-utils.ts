@@ -30,7 +30,9 @@ import {
   summarizeAssessmentsForLog,
   summarizeIdListForLog,
 } from "../utils/logging.js";
+import type { AdminStatsBuffer } from "./assignment-sync-in-transaction.js";
 import {
+  AdminStatsBufferRegistry,
   syncOnAssignmentCreated,
   syncOnAssignmentDeleted,
   syncOnAssignmentUpdated,
@@ -52,7 +54,8 @@ import {
 const removeAssignmentFromUser = async (
   userUid: string,
   administrationId: string,
-  transaction: Transaction
+  transaction: Transaction,
+  statsBuffer: AdminStatsBuffer
 ) => {
   const db = getFirestore();
   const assignmentRef = db
@@ -64,11 +67,18 @@ const removeAssignmentFromUser = async (
   const assignmentDoc = await transaction.get(assignmentRef);
   if (assignmentDoc.exists) {
     const prevData = assignmentDoc.data();
-    await syncOnAssignmentDeleted(db, transaction, userUid, administrationId, {
-      assigningOrgs: prevData?.assigningOrgs,
-      assessments: prevData?.assessments,
-      completed: prevData?.completed,
-    });
+    await syncOnAssignmentDeleted(
+      db,
+      transaction,
+      userUid,
+      administrationId,
+      {
+        assigningOrgs: prevData?.assigningOrgs,
+        assessments: prevData?.assessments,
+        completed: prevData?.completed,
+      },
+      statsBuffer
+    );
   }
 
   logger.debug(`Removing assignment ${administrationId} from user ${userUid}`);
@@ -86,7 +96,8 @@ const removeAssignmentFromUser = async (
 export const removeAssignmentFromUsers = async (
   users: string[],
   administrationId: string,
-  transaction: Transaction
+  transaction: Transaction,
+  statsRegistry: AdminStatsBufferRegistry
 ) => {
   if (!users.length) {
     return [];
@@ -96,9 +107,11 @@ export const removeAssignmentFromUsers = async (
     userSummary: summarizeIdListForLog(users),
   });
 
+  const statsBuffer = statsRegistry.forAdministration(administrationId);
+
   return Promise.all(
     _map(users, (user) =>
-      removeAssignmentFromUser(user, administrationId, transaction)
+      removeAssignmentFromUser(user, administrationId, transaction, statsBuffer)
     )
   );
 };
@@ -289,9 +302,11 @@ export const addAssignmentToUsers = async (
   users: string[],
   administrationId: string,
   administrationData: IAdministration,
-  transaction: Transaction
+  transaction: Transaction,
+  statsRegistry: AdminStatsBufferRegistry
 ) => {
   const db = getFirestore();
+  const statsBuffer = statsRegistry.forAdministration(administrationId);
   const assignments = await Promise.all(
     _map(users, (user) =>
       prepareNewAssignment(
@@ -302,6 +317,31 @@ export const addAssignmentToUsers = async (
       )
     )
   );
+
+  const administrationAssessmentCount = _get(
+    administrationData,
+    "assessments",
+    []
+  ).length;
+  let maxAssessmentsOnPreparedDoc = 0;
+  let preparedAssignmentCount = 0;
+  for (const [, assignmentData] of assignments) {
+    if (assignmentData) {
+      preparedAssignmentCount += 1;
+      const n =
+        (assignmentData.assessments as unknown[] | undefined)?.length ?? 0;
+      if (n > maxAssessmentsOnPreparedDoc) {
+        maxAssessmentsOnPreparedDoc = n;
+      }
+    }
+  }
+  logger.info("DIAG_ADD_ASSIGNMENTS: after prepareNewAssignment", {
+    administrationId,
+    userIdCount: users.length,
+    preparedAssignmentCount,
+    administrationAssessmentCount,
+    maxAssessmentsOnPreparedDoc,
+  });
 
   for (const [assignmentRef, assignmentData] of assignments) {
     if (assignmentRef && assignmentData) {
@@ -320,7 +360,8 @@ export const addAssignmentToUsers = async (
             assigningOrgs: assignmentData.assigningOrgs,
             assessments: assignmentData.assessments,
             dateAssigned: assignmentData.dateAssigned,
-          }
+          },
+          statsBuffer
         );
       }
     }
@@ -400,7 +441,8 @@ export const removeOrgsFromAssignments = async (
   users: string[],
   administrationIds: string[],
   orgsToRemove: IOrgsList,
-  transaction: Transaction
+  transaction: Transaction,
+  statsRegistry: AdminStatsBufferRegistry
 ) => {
   const db = getFirestore();
   const assignments = await Promise.all(
@@ -427,6 +469,7 @@ export const removeOrgsFromAssignments = async (
     if (assignmentRef && prevData) {
       const userUid = assignmentRef.parent.parent?.id;
       const administrationId = assignmentRef.id;
+      const statsBuffer = statsRegistry.forAdministration(administrationId);
       if (assigningOrgs) {
         await syncOnAssignmentUpdated(
           db,
@@ -444,7 +487,8 @@ export const removeOrgsFromAssignments = async (
             assessments: prevData.assessments,
             started: prevData.started,
             completed: prevData.completed,
-          }
+          },
+          statsBuffer
         );
         transaction.update(assignmentRef, {
           id: assignmentRef.id,
@@ -461,7 +505,8 @@ export const removeOrgsFromAssignments = async (
             assigningOrgs: prevData.assigningOrgs as IOrgsList,
             assessments: prevData.assessments,
             completed: prevData.completed,
-          }
+          },
+          statsBuffer
         );
         logger.debug(`Removing assignment ${assignmentRef.path}`);
         transaction.delete(assignmentRef);
@@ -487,7 +532,8 @@ export const updateAssignmentForUser = async (
   userUid: string,
   administrationId: string,
   administrationData: IAdministration,
-  transaction: Transaction
+  transaction: Transaction,
+  statsBuffer: AdminStatsBuffer
 ) => {
   const db = getFirestore();
   const userRef = db.collection("users").doc(userUid);
@@ -528,7 +574,8 @@ export const updateAssignmentForUser = async (
             assigningOrgs: prevData.assigningOrgs,
             assessments: prevData.assessments,
             completed: prevData.completed,
-          }
+          },
+          statsBuffer
         );
         return [assignmentRef, undefined];
       }
@@ -647,7 +694,8 @@ export const updateAssignmentForUser = async (
             assigningOrgs: prevData.assigningOrgs,
             assessments: prevData.assessments,
             completed: prevData.completed,
-          }
+          },
+          statsBuffer
         );
         return [assignmentRef, undefined];
       }
@@ -724,7 +772,8 @@ export const updateAssignmentForUser = async (
           assessments: cleanedAssessments,
           started: assignmentData.started,
           completed: assignmentData.completed,
-        }
+        },
+        statsBuffer
       );
 
       return [assignmentRef, assignmentData] as [
@@ -751,7 +800,8 @@ export const updateAssignmentForUser = async (
           assigningOrgs: assignmentData.assigningOrgs,
           assessments: assignmentData.assessments,
           dateAssigned: assignmentData.dateAssigned,
-        }
+        },
+        statsBuffer
       );
     }
     return [assignmentRef, assignmentData] as [
@@ -1030,10 +1080,14 @@ const readPhaseForUser = async (
 
 const writePhaseForUser = async (
   pending: PendingAssignmentWrite,
-  transaction: Transaction
+  transaction: Transaction,
+  statsRegistry: AdminStatsBufferRegistry
 ) => {
   const db = getFirestore();
   if (pending.action === "skip") return;
+  const statsBuffer = statsRegistry.forAdministration(
+    pending.syncData.assignmentUid
+  );
   if (pending.action === "delete") {
     await syncOnAssignmentDeleted(
       db,
@@ -1048,7 +1102,8 @@ const writePhaseForUser = async (
           completedOn?: unknown;
         }>;
         completed?: boolean;
-      }
+      },
+      statsBuffer
     );
     transaction.delete(pending.assignmentRef);
     return;
@@ -1067,7 +1122,8 @@ const writePhaseForUser = async (
           completedOn?: unknown;
         }>;
         dateAssigned?: Date;
-      }
+      },
+      statsBuffer
     );
   } else {
     const prevData = pending.syncData.prevData as {
@@ -1096,7 +1152,8 @@ const writePhaseForUser = async (
       pending.syncData.roarUid,
       pending.syncData.assignmentUid,
       prevData,
-      currData
+      currData,
+      statsBuffer
     );
   }
   logger.info(`Updating or creating assignment ${pending.assignmentRef.path}`, {
@@ -1122,7 +1179,8 @@ export const updateAssignmentForUsers = async (
   users: string[],
   administrationId: string,
   administrationData: IAdministration,
-  transaction: Transaction
+  transaction: Transaction,
+  statsRegistry: AdminStatsBufferRegistry
 ) => {
   const pendingWrites: PendingAssignmentWrite[] = [];
   for (const user of users) {
@@ -1135,7 +1193,7 @@ export const updateAssignmentForUsers = async (
     pendingWrites.push(pending);
   }
   for (const pending of pendingWrites) {
-    await writePhaseForUser(pending, transaction);
+    await writePhaseForUser(pending, transaction, statsRegistry);
   }
 };
 
@@ -1151,7 +1209,8 @@ export const updateAssignmentsForUserFromAdministrations = async (
     administrationId: string;
     administrationData: IAdministration;
   }>,
-  transaction: Transaction
+  transaction: Transaction,
+  statsRegistry: AdminStatsBufferRegistry
 ) => {
   const pendingWrites: PendingAssignmentWrite[] = [];
   for (const { administrationId, administrationData } of administrations) {
@@ -1164,7 +1223,7 @@ export const updateAssignmentsForUserFromAdministrations = async (
     pendingWrites.push(pending);
   }
   for (const pending of pendingWrites) {
-    await writePhaseForUser(pending, transaction);
+    await writePhaseForUser(pending, transaction, statsRegistry);
   }
 };
 

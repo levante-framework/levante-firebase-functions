@@ -30,9 +30,9 @@ import {
 import type { UpdateAction } from "../utils/transactions.js";
 import {
   removeAssignmentFromUsers,
-  removeOrgsFromAssignments,
   updateAssignmentsForUserFromAdministrations,
 } from "../assignments/assignment-utils.js";
+import { AdminStatsBufferRegistry } from "../assignments/assignment-sync-in-transaction.js";
 import {
   getAdministrationsFromOrgs,
   standardizeAdministrationOrgs,
@@ -78,12 +78,15 @@ export const processRemovedAdministration = async (
     });
 
     if (prevUsers.length <= MAX_TRANSACTIONS) {
-      // If the number of users is small enough, remove them in this transaction.
-      return removeAssignmentFromUsers(
+      const statsRegistry = new AdminStatsBufferRegistry(db);
+      await removeAssignmentFromUsers(
         prevUsers,
         administrationId,
-        transaction
+        transaction,
+        statsRegistry
       );
+      statsRegistry.flush(transaction);
+      return;
     } else {
       // Otherwise, just save for the next loop over user chunks.
       remainingUsers = prevUsers;
@@ -95,11 +98,14 @@ export const processRemovedAdministration = async (
   // and the entire loop below is a no-op.
   for (const _userChunk of _chunk(remainingUsers, MAX_TRANSACTIONS)) {
     await db.runTransaction(async (transaction) => {
-      return removeAssignmentFromUsers(
+      const statsRegistry = new AdminStatsBufferRegistry(db);
+      await removeAssignmentFromUsers(
         _userChunk,
         administrationId,
-        transaction
+        transaction,
+        statsRegistry
       );
+      statsRegistry.flush(transaction);
     });
   }
 
@@ -328,6 +334,7 @@ export const processUserAddedOrgs = async (
   });
   const db = getFirestore();
   await db.runTransaction(async (transaction) => {
+    const statsRegistry = new AdminStatsBufferRegistry(db);
     const addedExhaustiveOrgs = await getExhaustiveOrgs({
       orgs: addedOrgs,
       transaction,
@@ -362,8 +369,10 @@ export const processUserAddedOrgs = async (
     await updateAssignmentsForUserFromAdministrations(
       roarUid,
       administrationsWithData,
-      transaction
+      transaction,
+      statsRegistry
     );
+    statsRegistry.flush(transaction);
   });
 };
 

@@ -3,11 +3,13 @@
  * Replaces event-driven onDocumentCreated/Updated/Deleted triggers with
  * atomic, inline sync that fails with the calling transaction.
  */
-import { getFirestore, FieldValue, FieldPath } from "firebase-admin/firestore";
+import { logger } from "firebase-functions/v2";
 import type {
   CollectionReference,
+  Firestore,
   Transaction,
 } from "firebase-admin/firestore";
+import { getFirestore, FieldValue, FieldPath } from "firebase-admin/firestore";
 import _reduce from "lodash-es/reduce.js";
 import _without from "lodash-es/without.js";
 import type { IOrgsList } from "../interfaces.js";
@@ -19,36 +21,172 @@ interface AssignmentData {
   assessments?: Array<{
     taskId: string;
     startedOn?: Date | unknown;
-    completedOn?: Date | unknown;
+    completedOn?: unknown;
   }>;
   dateAssigned?: Date;
   started?: boolean;
   completed?: boolean;
 }
 
-const incrementCompletionStatus = (
-  orgList: string[],
-  status: Status,
-  taskIds: string[],
-  completionCollectionRef: CollectionReference,
-  transaction: Transaction,
-  incrementBy: number,
-  updateAssignmentTotal: boolean
-) => {
-  for (const org of orgList) {
-    const completionDocRef = completionCollectionRef.doc(org);
-    const data: Record<string, unknown> = {
-      updatedAt: FieldValue.serverTimestamp(),
-    };
-    if (updateAssignmentTotal) {
-      data.assignment = { [status]: FieldValue.increment(incrementBy) };
-    }
-    for (const taskId of taskIds) {
-      data[taskId] = { [status]: FieldValue.increment(incrementBy) };
-    }
-    transaction.set(completionDocRef, data, { merge: true });
-  }
+type OrgDelta = {
+  assignment: Partial<Record<Status, number>>;
+  tasks: Map<string, Partial<Record<Status, number>>>;
 };
+
+export type AdminStatsBuffer = {
+  recordIncrements: (
+    orgList: string[],
+    status: Status,
+    taskIds: string[],
+    incrementBy: number,
+    updateAssignmentTotal: boolean
+  ) => void;
+  flush: (transaction: Transaction) => void;
+};
+
+export function createAdminStatsBuffer(
+  completionCollectionRef: CollectionReference
+): AdminStatsBuffer {
+  const byOrg = new Map<string, OrgDelta>();
+
+  const getOrgDelta = (org: string): OrgDelta => {
+    let d = byOrg.get(org);
+    if (!d) {
+      d = { assignment: {}, tasks: new Map() };
+      byOrg.set(org, d);
+    }
+    return d;
+  };
+
+  return {
+    recordIncrements(
+      orgList: string[],
+      status: Status,
+      taskIds: string[],
+      incrementBy: number,
+      updateAssignmentTotal: boolean
+    ) {
+      for (const org of orgList) {
+        const orgDelta = getOrgDelta(org);
+        if (updateAssignmentTotal) {
+          orgDelta.assignment[status] =
+            (orgDelta.assignment[status] ?? 0) + incrementBy;
+        }
+        for (const taskId of taskIds) {
+          let taskDelta = orgDelta.tasks.get(taskId);
+          if (!taskDelta) {
+            taskDelta = {};
+            orgDelta.tasks.set(taskId, taskDelta);
+          }
+          taskDelta[status] = (taskDelta[status] ?? 0) + incrementBy;
+        }
+      }
+    },
+
+    flush(transaction: Transaction) {
+      for (const [org, delta] of byOrg) {
+        const data: Record<string, unknown> = {};
+        let hasIncrement = false;
+
+        const assignmentPayload: Record<string, unknown> = {};
+        for (const s of ["assigned", "started", "completed"] as const) {
+          const n = delta.assignment[s];
+          if (n !== undefined && n !== 0) {
+            assignmentPayload[s] = FieldValue.increment(n);
+            hasIncrement = true;
+          }
+        }
+        if (Object.keys(assignmentPayload).length > 0) {
+          data.assignment = assignmentPayload;
+        }
+
+        for (const [taskId, taskDelta] of delta.tasks) {
+          const taskPayload: Record<string, unknown> = {};
+          for (const s of ["assigned", "started", "completed"] as const) {
+            const n = taskDelta[s];
+            if (n !== undefined && n !== 0) {
+              taskPayload[s] = FieldValue.increment(n);
+              hasIncrement = true;
+            }
+          }
+          if (Object.keys(taskPayload).length > 0) {
+            data[taskId] = taskPayload;
+          }
+        }
+
+        if (!hasIncrement) {
+          continue;
+        }
+
+        data.updatedAt = FieldValue.serverTimestamp();
+        const completionDocRef = completionCollectionRef.doc(org);
+        const topLevelKeys = Object.keys(data);
+        const taskKeyCount = [...delta.tasks.keys()].filter((tid) => {
+          const td = delta.tasks.get(tid);
+          return (
+            td && Object.values(td).some((v) => v !== undefined && v !== 0)
+          );
+        }).length;
+        const estimatedTransforms =
+          1 +
+          Object.keys(assignmentPayload).length +
+          [...delta.tasks.values()].reduce(
+            (acc, td) =>
+              acc +
+              (["assigned", "started", "completed"] as const).filter(
+                (s) => td[s] !== undefined && td[s] !== 0
+              ).length,
+            0
+          );
+        if (org === "total" || taskKeyCount >= 200) {
+          logger.info(
+            "DIAG_STATS_MERGE: transaction.set merge on completion doc",
+            {
+              completionDocPath: completionDocRef.path,
+              org,
+              aggregatedFlush: true,
+              taskKeyCount,
+              topLevelFieldCount: topLevelKeys.length,
+              estimatedFieldTransformsLowerBound: estimatedTransforms,
+              firestoreFieldTransformLimit: 500,
+            }
+          );
+        }
+
+        transaction.set(completionDocRef, data, { merge: true });
+      }
+    },
+  };
+}
+
+export class AdminStatsBufferRegistry {
+  private readonly db: Firestore;
+  private readonly map = new Map<string, AdminStatsBuffer>();
+
+  constructor(db: Firestore) {
+    this.db = db;
+  }
+
+  forAdministration(administrationId: string): AdminStatsBuffer {
+    let b = this.map.get(administrationId);
+    if (!b) {
+      b = createAdminStatsBuffer(
+        this.db
+          .collection("administrations")
+          .doc(administrationId)
+          .collection("stats")
+      );
+      this.map.set(administrationId, b);
+    }
+    return b;
+  }
+
+  flush(transaction: Transaction): void {
+    for (const b of this.map.values()) {
+      b.flush(transaction);
+    }
+  }
+}
 
 const getOrgList = (assigningOrgs: IOrgsList | undefined): string[] => {
   if (!assigningOrgs) return [];
@@ -73,7 +211,8 @@ export const syncOnAssignmentCreated = async (
   transaction: Transaction,
   roarUid: string,
   assignmentUid: string,
-  assignmentData: AssignmentData
+  assignmentData: AssignmentData,
+  statsBuffer: AdminStatsBuffer
 ) => {
   const userDocRef = db.collection("users").doc(roarUid);
   const fieldPathDate = new FieldPath("assignmentsAssigned", assignmentUid);
@@ -88,22 +227,10 @@ export const syncOnAssignmentCreated = async (
     FieldValue.arrayUnion(assignmentUid)
   );
 
-  const completionCollectionRef = db
-    .collection("administrations")
-    .doc(assignmentUid)
-    .collection("stats");
   const orgList = getOrgList(assignmentData.assigningOrgs);
   const taskIds = (assignmentData.assessments ?? []).map((a) => a.taskId);
 
-  await incrementCompletionStatus(
-    orgList,
-    "assigned",
-    taskIds,
-    completionCollectionRef,
-    transaction,
-    1,
-    true
-  );
+  statsBuffer.recordIncrements(orgList, "assigned", taskIds, 1, true);
 };
 
 /**
@@ -115,50 +242,29 @@ export const syncOnAssignmentDeleted = async (
   transaction: Transaction,
   roarUid: string,
   assignmentUid: string,
-  prevData: AssignmentData
+  prevData: AssignmentData,
+  statsBuffer: AdminStatsBuffer
 ) => {
-  const completionCollectionRef = db
-    .collection("administrations")
-    .doc(assignmentUid)
-    .collection("stats");
   const orgList = getOrgList(prevData.assigningOrgs);
   const taskIds = (prevData.assessments ?? []).map((a) => a.taskId);
 
-  await incrementCompletionStatus(
-    orgList,
-    "assigned",
-    taskIds,
-    completionCollectionRef,
-    transaction,
-    -1,
-    true
-  );
+  statsBuffer.recordIncrements(orgList, "assigned", taskIds, -1, true);
 
   const startedTasks = (prevData.assessments ?? [])
     .filter((a) => a.startedOn)
     .map((a) => a.taskId);
   if (startedTasks.length > 0) {
-    await incrementCompletionStatus(
-      orgList,
-      "started",
-      startedTasks,
-      completionCollectionRef,
-      transaction,
-      -1,
-      true
-    );
+    statsBuffer.recordIncrements(orgList, "started", startedTasks, -1, true);
   }
 
   const completedTasks = (prevData.assessments ?? [])
     .filter((a) => a.completedOn)
     .map((a) => a.taskId);
   if (completedTasks.length > 0) {
-    await incrementCompletionStatus(
+    statsBuffer.recordIncrements(
       orgList,
       "completed",
       completedTasks,
-      completionCollectionRef,
-      transaction,
       -1,
       !!prevData.completed
     );
@@ -201,7 +307,8 @@ export const syncOnAssignmentUpdated = async (
   roarUid: string,
   assignmentUid: string,
   prevData: AssignmentData,
-  currData: AssignmentData
+  currData: AssignmentData,
+  statsBuffer: AdminStatsBuffer
 ) => {
   const userDocRef = db.collection("users").doc(roarUid);
   const assignmentStatusFieldPaths = {
@@ -210,11 +317,6 @@ export const syncOnAssignmentUpdated = async (
     startedList: new FieldPath("assignments", "started"),
     completedList: new FieldPath("assignments", "completed"),
   };
-
-  const completionCollectionRef = db
-    .collection("administrations")
-    .doc(assignmentUid)
-    .collection("stats");
 
   const orgList = getOrgList(currData.assigningOrgs);
   const prevOrgList = getOrgList(prevData.assigningOrgs);
@@ -239,33 +341,27 @@ export const syncOnAssignmentUpdated = async (
   unchangedOrgs.push("total");
 
   if (removedOrgs.length > 0) {
-    await incrementCompletionStatus(
+    statsBuffer.recordIncrements(
       removedOrgs,
       "assigned",
       prevTaskIds,
-      completionCollectionRef,
-      transaction,
       -1,
       true
     );
     if (prevStartedTasks.length > 0) {
-      await incrementCompletionStatus(
+      statsBuffer.recordIncrements(
         removedOrgs,
         "started",
         prevStartedTasks,
-        completionCollectionRef,
-        transaction,
         -1,
         true
       );
     }
     if (prevCompletedTasks.length > 0) {
-      await incrementCompletionStatus(
+      statsBuffer.recordIncrements(
         removedOrgs,
         "completed",
         prevCompletedTasks,
-        completionCollectionRef,
-        transaction,
         -1,
         !!prevData.completed
       );
@@ -273,33 +369,21 @@ export const syncOnAssignmentUpdated = async (
   }
 
   if (addedOrgs.length > 0) {
-    await incrementCompletionStatus(
-      addedOrgs,
-      "assigned",
-      currTaskIds,
-      completionCollectionRef,
-      transaction,
-      1,
-      true
-    );
+    statsBuffer.recordIncrements(addedOrgs, "assigned", currTaskIds, 1, true);
     if (currStartedTasks.length > 0) {
-      await incrementCompletionStatus(
+      statsBuffer.recordIncrements(
         addedOrgs,
         "started",
         currStartedTasks,
-        completionCollectionRef,
-        transaction,
         1,
         true
       );
     }
     if (currCompletedTasks.length > 0) {
-      await incrementCompletionStatus(
+      statsBuffer.recordIncrements(
         addedOrgs,
         "completed",
         currCompletedTasks,
-        completionCollectionRef,
-        transaction,
         1,
         !!currData.completed
       );
@@ -308,24 +392,20 @@ export const syncOnAssignmentUpdated = async (
 
   const addedStartedTasks = _without(currStartedTasks, ...prevStartedTasks);
   if (addedStartedTasks.length > 0) {
-    await incrementCompletionStatus(
+    statsBuffer.recordIncrements(
       unchangedOrgs,
       "started",
       addedStartedTasks,
-      completionCollectionRef,
-      transaction,
       1,
       !!currData.started && !prevData.started
     );
   }
   const removedStartedTasks = _without(prevStartedTasks, ...currStartedTasks);
   if (removedStartedTasks.length > 0) {
-    await incrementCompletionStatus(
+    statsBuffer.recordIncrements(
       unchangedOrgs,
       "started",
       removedStartedTasks,
-      completionCollectionRef,
-      transaction,
       -1,
       !currData.started && !!prevData.started
     );
@@ -336,12 +416,10 @@ export const syncOnAssignmentUpdated = async (
     ...prevCompletedTasks
   );
   if (addedCompletedTasks.length > 0) {
-    await incrementCompletionStatus(
+    statsBuffer.recordIncrements(
       unchangedOrgs,
       "completed",
       addedCompletedTasks,
-      completionCollectionRef,
-      transaction,
       1,
       !!currData.completed && !prevData.completed
     );
@@ -351,12 +429,10 @@ export const syncOnAssignmentUpdated = async (
     ...currCompletedTasks
   );
   if (removedCompletedTasks.length > 0) {
-    await incrementCompletionStatus(
+    statsBuffer.recordIncrements(
       unchangedOrgs,
       "completed",
       removedCompletedTasks,
-      completionCollectionRef,
-      transaction,
       -1,
       !currData.completed && !!prevData.completed
     );

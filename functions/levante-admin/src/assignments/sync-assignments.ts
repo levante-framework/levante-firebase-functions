@@ -22,6 +22,7 @@ import {
   removeOrgsFromAssignments,
   updateAssignmentForUsers,
 } from "./assignment-utils.js";
+import { AdminStatsBufferRegistry } from "./assignment-sync-in-transaction.js";
 import {
   summarizeIdListForLog,
   summarizeOrgsForLog,
@@ -243,12 +244,15 @@ export const updateAssignmentsForOrgChunkHandler = async (
       const { removedExhaustiveOrgs, isLastRemovalChunk, currData, prevData } =
         payload;
       await db.runTransaction(async (transaction) => {
-        return removeOrgsFromAssignments(
+        const statsRegistry = new AdminStatsBufferRegistry(db);
+        await removeOrgsFromAssignments(
           userIds,
           [administrationId],
           removedExhaustiveOrgs,
-          transaction
+          transaction,
+          statsRegistry
         );
+        statsRegistry.flush(transaction);
       });
       if (isLastRemovalChunk && currData && prevData) {
         const adminRef = db.collection("administrations").doc(administrationId);
@@ -267,27 +271,43 @@ export const updateAssignmentsForOrgChunkHandler = async (
       throw new Error(`Invalid mode: ${mode}. Expected 'update' or 'add'.`);
     }
 
+    const administrationAssessmentCount = Array.isArray(
+      administrationData.assessments
+    )
+      ? administrationData.assessments.length
+      : 0;
     logger.info("INDEX_QUERY: about to run transaction (add/update users)", {
       indexQueryLabel: "chunkTransaction",
       administrationId,
       mode,
       userIdCount: userIds.length,
     });
+    logger.info("DIAG_CHUNK: transaction boundary", {
+      administrationId,
+      mode,
+      userIdCount: userIds.length,
+      administrationAssessmentCount,
+    });
     await db.runTransaction(async (transaction) => {
+      const statsRegistry = new AdminStatsBufferRegistry(db);
       if (mode === "update") {
-        return updateAssignmentForUsers(
+        await updateAssignmentForUsers(
           userIds,
           administrationId,
           administrationData,
-          transaction
+          transaction,
+          statsRegistry
+        );
+      } else {
+        await addAssignmentToUsers(
+          userIds,
+          administrationId,
+          administrationData,
+          transaction,
+          statsRegistry
         );
       }
-      return addAssignmentToUsers(
-        userIds,
-        administrationId,
-        administrationData,
-        transaction
-      );
+      statsRegistry.flush(transaction);
     });
 
     logger.info("INDEX_QUERY: transaction done, calling recordChunkSuccess", {
