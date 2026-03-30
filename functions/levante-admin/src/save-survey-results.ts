@@ -5,7 +5,10 @@ import {
   getAssignmentDocRef,
   getAssignmentDoc,
 } from "./utils/assignment.js";
-import { syncOnAssignmentUpdated } from "./assignments/assignment-sync-in-transaction.js";
+import {
+  AdminStatsBufferRegistry,
+  syncOnAssignmentUpdated,
+} from "./assignments/assignment-sync-in-transaction.js";
 
 type Response = {
   responseTime: string;
@@ -75,6 +78,7 @@ export async function writeSurveyResponses(
 
     // Use a transaction to ensure atomicity between survey responses and assignment updates
     await db.runTransaction(async (transaction) => {
+      const statsRegistry = new AdminStatsBufferRegistry(db);
       // Check if the survey response document already exists
       const existingDocQuery = surveyResponsesCollection
         .where("administrationId", "==", administrationId)
@@ -227,7 +231,8 @@ export async function writeSurveyResponses(
               requesterUid,
               administrationId,
               prevData,
-              currData
+              currData,
+              statsRegistry.forAdministration(administrationId)
             );
             transaction.set(assignmentRef, updates, { merge: true });
           }
@@ -240,6 +245,7 @@ export async function writeSurveyResponses(
 
       // Write survey responses
       transaction.set(surveyRef, updateData, { merge: true });
+      statsRegistry.flush(transaction);
     });
 
     returnObj.success = true;
