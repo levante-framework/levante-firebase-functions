@@ -36,6 +36,14 @@ const GROUP_TYPES: Array<keyof IOrgsList> = [
   "groups",
 ];
 
+const EMPTY_USER_CLAIMS_ADMIN_ORGS = {
+  districts: [] as string[],
+  schools: [] as string[],
+  classes: [] as string[],
+  families: [] as string[],
+  groups: [] as string[],
+};
+
 const buildGroupStructure = (groupIds?: string[]) => {
   if (!groupIds || groupIds.length === 0) {
     return {
@@ -93,6 +101,12 @@ export const _createAdministratorWithRoles = async ({
     );
   }
 
+  const superAdminRoles = sanitizedRoles.filter(
+    (role) => role.role === ROLES.SUPER_ADMIN
+  );
+  const hasSuperAdminRole = superAdminRoles.length > 0;
+  const finalRoles = hasSuperAdminRole ? [superAdminRoles[0]] : sanitizedRoles;
+
   const auth = getAuth();
   const db = getFirestore();
 
@@ -123,7 +137,8 @@ export const _createAdministratorWithRoles = async ({
     logger.debug("Appending roles to existing administrator", {
       requesterAdminUid,
       existingAdminUid: adminUid,
-      roles: sanitizedRoles,
+      roles: finalRoles,
+      hasSuperAdminRole,
     });
 
     const currentClaims =
@@ -131,22 +146,32 @@ export const _createAdministratorWithRoles = async ({
     const { claims: normalizedClaims } =
       mergeRoleClaimsIntoClaims(currentClaims);
 
-    const mergedRoleDefinitions = sanitizeRoles([
-      ...normalizedClaims.roles,
-      ...sanitizedRoles,
-    ]);
-
-    roleClaims = buildRoleClaimsStructure(mergedRoleDefinitions);
-
-    const updatedClaims: Record<string, unknown> = {
-      ...normalizedClaims,
-      ...roleClaims,
-      roles: roleClaims.roles,
-      useNewPermissions: true,
-      adminUid,
-    };
-
-    await auth.setCustomUserClaims(adminUid, updatedClaims);
+    if (hasSuperAdminRole) {
+      roleClaims = buildRoleClaimsStructure(finalRoles);
+      const updatedClaims: Record<string, unknown> = {
+        ...normalizedClaims,
+        ...roleClaims,
+        roles: roleClaims.roles,
+        useNewPermissions: true,
+        adminUid,
+        super_admin: true,
+      };
+      await auth.setCustomUserClaims(adminUid, updatedClaims);
+    } else {
+      const mergedRoleDefinitions = sanitizeRoles([
+        ...normalizedClaims.roles,
+        ...finalRoles,
+      ]);
+      roleClaims = buildRoleClaimsStructure(mergedRoleDefinitions);
+      const updatedClaims: Record<string, unknown> = {
+        ...normalizedClaims,
+        ...roleClaims,
+        roles: roleClaims.roles,
+        useNewPermissions: true,
+        adminUid,
+      };
+      await auth.setCustomUserClaims(adminUid, updatedClaims);
+    }
   } else {
     const createdUser = await auth.createUser({
       email,
@@ -160,16 +185,20 @@ export const _createAdministratorWithRoles = async ({
     logger.debug("Creating administrator with roles", {
       requesterAdminUid,
       newAdminUid: adminUid,
-      roles: sanitizedRoles,
+      roles: finalRoles,
+      hasSuperAdminRole,
     });
 
-    roleClaims = buildRoleClaimsStructure(sanitizedRoles);
+    roleClaims = buildRoleClaimsStructure(finalRoles);
 
     const newClaims: Record<string, unknown> = {
       ...roleClaims,
       useNewPermissions: true,
       adminUid,
     };
+    if (hasSuperAdminRole) {
+      newClaims.super_admin = true;
+    }
 
     await auth.setCustomUserClaims(adminUid, newClaims);
   }
@@ -177,6 +206,7 @@ export const _createAdministratorWithRoles = async ({
   logger.info("roleClaims: ", roleClaims);
 
   const adminUserDocRef = db.collection("users").doc(adminUid);
+  const userClaimsDocRef = db.collection("userClaims").doc(adminUid);
 
   if (isExistingUser) {
     const adminDocUpdates: Record<string, unknown> = {
@@ -185,6 +215,20 @@ export const _createAdministratorWithRoles = async ({
     };
 
     await adminUserDocRef.set(adminDocUpdates, { merge: true });
+
+    if (hasSuperAdminRole) {
+      await userClaimsDocRef.set(
+        {
+          claims: {
+            super_admin: true,
+            useNewPermissions: true,
+            adminUid,
+            adminOrgs: EMPTY_USER_CLAIMS_ADMIN_ORGS,
+          },
+        },
+        { merge: true }
+      );
+    }
   } else {
     const adminDocData: Record<string, unknown> = {
       userType: "admin",
@@ -203,16 +247,19 @@ export const _createAdministratorWithRoles = async ({
 
     await adminUserDocRef.set(adminDocData);
 
-    const userClaimsDocRef = db.collection("userClaims").doc(adminUid);
     await userClaimsDocRef.set({
       claims: {
         useNewPermissions: true,
         adminUid,
+        super_admin: hasSuperAdminRole,
+        ...(hasSuperAdminRole
+          ? { adminOrgs: EMPTY_USER_CLAIMS_ADMIN_ORGS }
+          : {}),
       },
     });
   }
 
-  for (const role of sanitizedRoles) {
+  for (const role of finalRoles) {
     if (role.role === ROLES.SUPER_ADMIN) {
       continue;
     }
