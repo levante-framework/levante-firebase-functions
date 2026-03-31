@@ -22,12 +22,12 @@
     "node": "20"
   },
   "license": "Stanford Academic Software License for LEVANTE",
-  "main": "lib/src/index.js",
+  "main": "lib/index.js",
   "dependencies": {
     "@bdelab/roar-utils": "^1.1.0",
     "@firebase/logger": "^0.4.4",
     "@google-cloud/secret-manager": "^4.2.2",
-    "@levante-framework/permissions-core": "^1.1.2",
+    "@levante-framework/permissions-core": "^1.2.1",
     "axios": "^1.4.0",
     "axios-oauth-1.0a": "^0.3.6",
     "bcrypt": "^5.1.1",

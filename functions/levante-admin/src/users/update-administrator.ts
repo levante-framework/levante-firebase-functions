@@ -11,7 +11,7 @@ import {
   sanitizeRoles,
   type RoleDefinition,
 } from "../utils/role-helpers.js";
-import { ADMINISTRATOR_STATUS } from "../utils/constants.js";
+import { ADMINISTRATOR_STATUS, ROLES } from "../utils/constants.js";
 
 type AdministratorRoleDefinition = RoleDefinition;
 
@@ -107,7 +107,7 @@ export const updateAdministratorRoles = async ({
 
     for (const siteId of siteIdsToUpdate) {
       const role = mergedRolesMap.get(siteId);
-      if (!role) {
+      if (!role || role.role === ROLES.SUPER_ADMIN) {
         continue;
       }
 
@@ -218,51 +218,55 @@ export const removeAdministratorRoles = async ({
       currentRoles.filter((role) => role.siteId !== siteId)
     );
 
-    const districtDocRef = db.collection("districts").doc(siteId);
-    const districtSnapshot = await transaction.get(districtDocRef);
-
-    if (!districtSnapshot.exists) {
-      throw new HttpsError(
-        "not-found",
-        `District document ${siteId} not found`
-      );
-    }
-
-    const administrators = districtSnapshot.data()?.administrators ?? [];
-
-    const existingEntry = administrators.find(
-      (entry) =>
-        entry?.adminUid === context.adminUid && entry?.siteId === siteId
-    );
-
-    const otherAdministrators = administrators.filter(
-      (entry) => entry?.adminUid !== context.adminUid || entry.siteId !== siteId
-    );
-
-    const updatedAdministrators = existingEntry
-      ? [
-          ...otherAdministrators,
-          {
-            ...existingEntry,
-            adminUid: context.adminUid,
-            siteId,
-            status: ADMINISTRATOR_STATUS.INACTIVE,
-            role: existingEntry.role,
-            name: context.targetRecord.displayName,
-          },
-        ]
-      : otherAdministrators;
-
+    const roleRemoved = currentRoles.find((r) => r.siteId === siteId);
     const now = FieldValue.serverTimestamp();
     transaction.update(context.adminUserDocRef, {
       roles: remainingRoles,
       updatedAt: now,
     });
 
-    transaction.update(districtDocRef, {
-      administrators: updatedAdministrators,
-      updatedAt: now,
-    });
+    if (roleRemoved?.role !== ROLES.SUPER_ADMIN) {
+      const districtDocRef = db.collection("districts").doc(siteId);
+      const districtSnapshot = await transaction.get(districtDocRef);
+
+      if (!districtSnapshot.exists) {
+        throw new HttpsError(
+          "not-found",
+          `District document ${siteId} not found`
+        );
+      }
+
+      const administrators = districtSnapshot.data()?.administrators ?? [];
+
+      const existingEntry = administrators.find(
+        (entry) =>
+          entry?.adminUid === context.adminUid && entry?.siteId === siteId
+      );
+
+      const otherAdministrators = administrators.filter(
+        (entry) =>
+          entry?.adminUid !== context.adminUid || entry.siteId !== siteId
+      );
+
+      const updatedAdministrators = existingEntry
+        ? [
+            ...otherAdministrators,
+            {
+              ...existingEntry,
+              adminUid: context.adminUid,
+              siteId,
+              status: ADMINISTRATOR_STATUS.INACTIVE,
+              role: existingEntry.role,
+              name: context.targetRecord.displayName,
+            },
+          ]
+        : otherAdministrators;
+
+      transaction.update(districtDocRef, {
+        administrators: updatedAdministrators,
+        updatedAt: now,
+      });
+    }
 
     return { remainingRoles };
   });

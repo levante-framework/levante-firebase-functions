@@ -73,11 +73,11 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
 
   console.log('  Creating administrations...');
 
-  // Create organization references using the generated IDs
+  // Create organization references using the generated IDs (both classes; site has all users)
   const testOrgs = {
     districts: [groups.districts[0].id],
     schools: [groups.schools[0].id],
-    classes: [groups.classes[0].id],
+    classes: groups.classes.map((c) => c.id),
     groups: [groups.groups[0].id],
     families: [],
   };
@@ -89,7 +89,7 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
   });
 
   // Get participant users (excluding admin users)
-  const participantUsers = Object.entries(users).filter(([userKey, user]) =>
+  const participantUsers = users.filter((user) =>
     ['student', 'parent', 'teacher'].includes(user.userType),
   );
 
@@ -117,13 +117,14 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
           variantName: getVariantNameForTask(taskId),
         };
       });
+      const adminUser = users.find(user => user.userKey === 'admin');
 
       // Create administration document
       const administrationData = {
         assessments: assessments,
         classes: testOrgs.classes,
-        createdBy: users.admin.uid,
-        creatorName: users.admin.displayName,
+        createdBy: adminUser.uid,
+        creatorName: adminUser.displayName,
         dateClosed: admin.firestore.Timestamp.fromDate(closeDate),
         dateCreated: admin.firestore.FieldValue.serverTimestamp(),
         dateOpened: admin.firestore.Timestamp.fromDate(now),
@@ -294,7 +295,7 @@ async function createUserAssignments(
   };
 
   // Filter users based on administration's target user types
-  const eligibleUsers = participantUsers.filter(([userKey, user]) => {
+  const eligibleUsers = participantUsers.filter((user) => {
     if (template.userTypes) {
       // If administration specifies user types, only assign to those types
       return template.userTypes.includes(user.userType);
@@ -309,7 +310,7 @@ async function createUserAssignments(
     return;
   }
 
-  for (const [userKey, user] of eligibleUsers) {
+  for (const user of eligibleUsers) {
     try {
       // Build assessments array for assignment document.
       const assessments = template.taskIds.map((taskId) => ({
@@ -356,9 +357,9 @@ async function createUserAssignments(
         .doc(administrationId);
       await assignmentRef.set(assignmentData);
 
-      console.log(`        ✅ Created assignment for ${userKey} (${user.email})`);
+      console.log(`        ✅ Created assignment for ${user.userKey} (${user.email})`);
     } catch (error) {
-      console.error(`        ❌ Failed to create assignment for ${userKey}:`, error.message);
+      console.error(`        ❌ Failed to create assignment for ${user.email}:`, error.message);
       throw error;
     }
   }

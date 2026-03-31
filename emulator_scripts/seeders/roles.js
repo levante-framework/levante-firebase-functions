@@ -13,14 +13,14 @@ async function updateUserRoles(adminApp, users, organizations) {
     return acc;
   }, {});
   
-  for (const [userKey, user] of Object.entries(users)) {
+  for (const user of users) {
     try {
-      console.log(`    Updating roles for ${userKey}...`);
+      console.log(`    Updating roles for ${user.email}...`);
       
       const roles = [];
       
       if (user.userType === 'admin') {
-        if (userKey === 'superAdmin') {
+        if (user.userKey === 'superAdmin') {
           // Super admin gets special "any" siteId
           roles.push({
             siteId: "any",
@@ -28,7 +28,7 @@ async function updateUserRoles(adminApp, users, organizations) {
             role: "super_admin"
           });
           console.log(`      - Added super_admin role with siteId: any`);
-        } else if (userKey === 'admin') {
+        } else if (user.userKey === 'admin') {
           // Regular admin - has access to all districts in the emulator
           // This matches what we set in userClaims.js
           for (const districtId of districtIds) {
@@ -39,7 +39,7 @@ async function updateUserRoles(adminApp, users, organizations) {
             });
             console.log(`      - Added admin role with siteId: ${districtId}`);
           }
-        } else if (userKey === 'siteAdmin') {
+        } else if (user.userKey === 'siteAdmin') {
           // Site admin - has site_admin role for all districts in the emulator
           for (const districtId of districtIds) {
             roles.push({
@@ -49,7 +49,7 @@ async function updateUserRoles(adminApp, users, organizations) {
             });
             console.log(`      - Added site_admin role with siteId: ${districtId}`);
           }
-        } else if (userKey === 'researchAssistant') {
+        } else if (user.userKey === 'researchAssistant') {
           // Research assistant - has research_assistant role for all districts in the emulator
           for (const districtId of districtIds) {
             roles.push({
@@ -76,20 +76,20 @@ async function updateUserRoles(adminApp, users, organizations) {
       // Always update roles in user doc and Auth custom claims
       // 1) Update user doc roles array (empty array is valid)
       await db.collection('users').doc(user.uid).update({ roles });
-      console.log(`      ✅ Updated ${userKey} user doc with ${roles.length} role(s)`);
+      console.log(`      ✅ Updated ${user.email} user doc with ${roles.length} role(s)`);
 
       // 2) Merge roles into Auth custom claims (ensure roles property exists for all users)
       try {
-        const baseAuthClaims = (users[userKey] && users[userKey].authClaims) || {};
+        const baseAuthClaims = (user?.authClaims) || {};
         const newAuthClaims = { ...baseAuthClaims, roles };
         await auth.setCustomUserClaims(user.uid, newAuthClaims);
-        console.log(`      ✅ Set Auth custom claims roles for ${userKey}`);
+        console.log(`      ✅ Set Auth custom claims roles for ${user.email}`);
       } catch (e) {
-        console.warn(`      ⚠️  Failed to set Auth claims for ${userKey}:`, e.message || e);
+        console.warn(`      ⚠️  Failed to set Auth claims for ${user.email}:`, e.message || e);
       }
       
     } catch (error) {
-      console.error(`      ❌ Failed to update roles for ${userKey}:`, error.message);
+      console.error(`      ❌ Failed to update roles for ${user.email}:`, error.message);
       throw error;
     }
   }

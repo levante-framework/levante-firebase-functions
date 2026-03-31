@@ -12,8 +12,9 @@ async function createGroups(adminApp, createdBy) {
   // Generate school ID
   const schoolId = db.collection('schools').doc().id;
   
-  // Generate class ID  
+  // Generate class IDs (original + second class for ~100 students + 1 parent)
   const classId = db.collection('classes').doc().id;
+  const classId2 = db.collection('classes').doc().id;
   
   // Generate group ID
   const groupId = db.collection('groups').doc().id;
@@ -36,10 +37,10 @@ async function createGroups(adminApp, createdBy) {
   console.log(`    ✅ Created district: ${districtId}`);
   console.log('  Creating schools...');
 
-  // Create test school
+  // Create test school (both classes in same school)
   const schoolData = {
     archived: false,
-    classes: [classId],
+    classes: [classId, classId2],
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
     updatedAt: admin.firestore.FieldValue.serverTimestamp(),
     createdBy: createdBy,
@@ -72,6 +73,23 @@ async function createGroups(adminApp, createdBy) {
   await classRef.set(classData);
   console.log(`    ✅ Created class: ${classId}`);
 
+  // Create second class (for ~100 students + 1 parent)
+  const classData2 = {
+    archived: false,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    createdBy: createdBy,
+    districtId: districtId,
+    id: classId2,
+    name: '4th Grade - Room 102',
+    normalizedName: normalizeToLowercase('4th Grade - Room 102'),
+    schoolId: schoolId,
+  };
+
+  const classRef2 = db.collection('classes').doc(classId2);
+  await classRef2.set(classData2);
+  console.log(`    ✅ Created class: ${classId2}`);
+
   console.log('  Creating groups...');
 
   // Create test group (cohort)
@@ -96,6 +114,7 @@ async function createGroups(adminApp, createdBy) {
     schools: [{ id: schoolId, name: 'Test Elementary School', districtId: districtId }],
     classes: [
       { id: classId, name: '3rd Grade - Room 101', schoolId: schoolId, districtId: districtId },
+      { id: classId2, name: '4th Grade - Room 102', schoolId: schoolId, districtId: districtId },
     ],
     groups: [{ id: groupId, name: 'Reading Intervention Cohort', parentOrgId: districtId }],
   };

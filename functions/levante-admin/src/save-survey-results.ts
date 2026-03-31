@@ -5,6 +5,10 @@ import {
   getAssignmentDocRef,
   getAssignmentDoc,
 } from "./utils/assignment.js";
+import {
+  AdminStatsBufferRegistry,
+  syncOnAssignmentUpdated,
+} from "./assignments/assignment-sync-in-transaction.js";
 
 type Response = {
   responseTime: string;
@@ -21,7 +25,17 @@ interface SurveyData {
   userType: string;
 }
 
-export async function writeSurveyResponses(requesterUid, data) {
+interface SurveyResponsesInput {
+  surveyResponses: {
+    administrationId: string;
+    surveyData: SurveyData;
+  };
+}
+
+export async function writeSurveyResponses(
+  requesterUid: string,
+  data: SurveyResponsesInput
+) {
   const db = getFirestore();
 
   // write or update survey responses as subcollection of user document
@@ -64,6 +78,7 @@ export async function writeSurveyResponses(requesterUid, data) {
 
     // Use a transaction to ensure atomicity between survey responses and assignment updates
     await db.runTransaction(async (transaction) => {
+      const statsRegistry = new AdminStatsBufferRegistry(db);
       // Check if the survey response document already exists
       const existingDocQuery = surveyResponsesCollection
         .where("administrationId", "==", administrationId)
@@ -205,6 +220,20 @@ export async function writeSurveyResponses(requesterUid, data) {
 
           // Apply updates if any exist
           if (Object.keys(updates).length > 0) {
+            const prevData = assignmentData;
+            if (!prevData) {
+              throw new Error("Assignment data is missing");
+            }
+            const currData = { ...prevData, ...updates };
+            await syncOnAssignmentUpdated(
+              db,
+              transaction,
+              requesterUid,
+              administrationId,
+              prevData,
+              currData,
+              statsRegistry.forAdministration(administrationId)
+            );
             transaction.set(assignmentRef, updates, { merge: true });
           }
         }
@@ -216,6 +245,7 @@ export async function writeSurveyResponses(requesterUid, data) {
 
       // Write survey responses
       transaction.set(surveyRef, updateData, { merge: true });
+      statsRegistry.flush(transaction);
     });
 
     returnObj.success = true;

@@ -74,6 +74,8 @@ export interface IAdministration extends IOrgsList {
   testData?: boolean;
   /* A boolean indicating whether the administration contains demo data. */
   demoData?: boolean;
+  /* Sync status when creating/updating assignments. */
+  syncStatus?: "pending" | "complete" | "failed";
 }
 
 /**
