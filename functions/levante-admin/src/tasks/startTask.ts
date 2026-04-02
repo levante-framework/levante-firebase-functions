@@ -46,7 +46,14 @@ async function getMyData(
   let userData: IUserData;
 
   if (userDocSnap.exists) {
-    userData = userDocSnap.data() as IUserData;
+    const data = userDocSnap.data() as IUserData;
+
+    // Temporary fix for "parent" users
+    if (data?.userType?.toLowerCase() === "parent") {
+      data.userType = "caregiver";
+    }
+
+    userData = data;
   } else {
     userData = {
       userType: "guest",
