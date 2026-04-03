@@ -58,12 +58,13 @@ jobs:
           npm install -g firebase-tools
         shell: bash
 
-      - name: Authenticate with GCP
+      # Indexes are always compared against dev; prod SA cannot read dev Firestore.
+      - name: Authenticate with GCP (dev — export indexes)
         uses: google-github-actions/auth@v2
         with:
-          project_id: ${{ github.event.inputs.environment == 'prod' && 'hs-levante-admin-prod' || 'hs-levante-admin-dev' }}
-          credentials_json: ${{ github.event.inputs.environment == 'prod' && secrets.GCP_SA_CREDENTIALS_PROD || secrets.GCP_SA_CREDENTIALS_DEV }}
-          request_reason: 'levante-firebase-functions/deploy run ${{ github.run_id }}'
+          project_id: hs-levante-admin-dev
+          credentials_json: ${{ secrets.GCP_SA_CREDENTIALS_DEV }}
+          request_reason: 'levante-firebase-functions/deploy run ${{ github.run_id }} (dev indexes)'
           access_token_scopes: 'email,openid,https://www.googleapis.com/auth/cloudplatformprojects.readonly,https://www.googleapis.com/auth/firebase,https://www.googleapis.com/auth/cloud-platform'
 
       - name: Check Firestore rules file exists
@@ -84,6 +85,14 @@ jobs:
           cd functions/levante-admin
           firebase firestore:indexes --project dev > current-indexes.json
         shell: bash
+
+      - name: Authenticate with GCP (deploy target)
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ github.event.inputs.environment == 'prod' && 'hs-levante-admin-prod' || 'hs-levante-admin-dev' }}
+          credentials_json: ${{ github.event.inputs.environment == 'prod' && secrets.GCP_SA_CREDENTIALS_PROD || secrets.GCP_SA_CREDENTIALS_DEV }}
+          request_reason: 'levante-firebase-functions/deploy run ${{ github.run_id }}'
+          access_token_scopes: 'email,openid,https://www.googleapis.com/auth/cloudplatformprojects.readonly,https://www.googleapis.com/auth/firebase,https://www.googleapis.com/auth/cloud-platform'
 
       - name: Check if indexes have changed
         id: check-changes
