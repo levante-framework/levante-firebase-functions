@@ -134,22 +134,13 @@ jobs:
           current_version=$(node -p "require('./package.json').version")
           echo "Current version: $current_version"
           
-          # Bump version based on input
+          # Bump version (updates package.json; stdout is noisy — read version from file after)
           bump_type="${{ github.event.inputs.version_bump }}"
-          new_version=$(npm version $bump_type --no-git-tag-version)
-          
-          # Remove the 'v' prefix that npm version adds
-          new_version=${new_version#v}
+          npm version "$bump_type" --no-git-tag-version
+          new_version=$(node -p "require('./package.json').version")
           
           echo "New version: $new_version"
           echo "new-version=$new_version" >> $GITHUB_OUTPUT
-          
-          # Update package.json with the new version
-          node -e "
-            const pkg = require('./package.json');
-            pkg.version = '$new_version';
-            require('fs').writeFileSync('./package.json', JSON.stringify(pkg, null, 2) + '\n');
-          "
         shell: bash
 
       - name: Configure Git
