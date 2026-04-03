@@ -58,15 +58,6 @@ jobs:
           npm install -g firebase-tools
         shell: bash
 
-      # Indexes are always compared against dev; prod SA cannot read dev Firestore.
-      - name: Authenticate with GCP (dev — export indexes)
-        uses: google-github-actions/auth@v2
-        with:
-          project_id: hs-levante-admin-dev
-          credentials_json: ${{ secrets.GCP_SA_CREDENTIALS_DEV }}
-          request_reason: 'levante-firebase-functions/deploy run ${{ github.run_id }} (dev indexes)'
-          access_token_scopes: 'email,openid,https://www.googleapis.com/auth/cloudplatformprojects.readonly,https://www.googleapis.com/auth/firebase,https://www.googleapis.com/auth/cloud-platform'
-
       - name: Check Firestore rules file exists
         id: check-rules
         run: |
@@ -80,10 +71,25 @@ jobs:
           fi
         shell: bash
 
+      # Self-contained: prod deploy auth must not affect this step. Some runners/repos
+      # also leave GOOGLE_CLOUD_PROJECT=prod, which breaks `firebase ... --project dev`.
       - name: Export current Firestore indexes from Dev
+        env:
+          DEV_CREDENTIALS_JSON: ${{ secrets.GCP_SA_CREDENTIALS_DEV }}
         run: |
+          set -euo pipefail
+          dev_keyfile="${RUNNER_TEMP}/levante-dev-indexes-export-sa.json"
+          printf '%s' "$DEV_CREDENTIALS_JSON" > "$dev_keyfile"
+          export GOOGLE_APPLICATION_CREDENTIALS="$dev_keyfile"
+          export CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE="$dev_keyfile"
+          export CLOUDSDK_CORE_PROJECT=hs-levante-admin-dev
+          export CLOUDSDK_PROJECT=hs-levante-admin-dev
+          export GCLOUD_PROJECT=hs-levante-admin-dev
+          export GCP_PROJECT=hs-levante-admin-dev
+          export GOOGLE_CLOUD_PROJECT=hs-levante-admin-dev
           cd functions/levante-admin
-          firebase firestore:indexes --project dev > current-indexes.json
+          firebase firestore:indexes --project hs-levante-admin-dev > current-indexes.json
+          rm -f "$dev_keyfile"
         shell: bash
 
       - name: Authenticate with GCP (deploy target)
