@@ -261,7 +261,11 @@ export async function getAdministrationOrgProgressHandler(
     }[];
   };
 
-  await assertCallerMayAccessAdministration(db, requestingUid, adminData.siteId);
+  await assertCallerMayAccessAdministration(
+    db,
+    requestingUid,
+    adminData.siteId
+  );
 
   const taskDefinitions = adminData.assessments ?? [];
   if (taskDefinitions.length === 0) {
@@ -294,37 +298,34 @@ export async function getAdministrationOrgProgressHandler(
   }
   const userById = new Map(userSnaps.map((s) => [s.id, s]));
 
-  const assignedUserIds = userIds.filter((uid) =>
-    assignmentByUserId.get(uid)?.exists
+  const assignedUserIds = userIds.filter(
+    (uid) => assignmentByUserId.get(uid)?.exists
   );
 
-  const taskProgress: TaskProgressBreakdown[] = taskDefinitions.map(
-    (def) => ({
-      taskId: def.taskId,
-      variantId: def.variantId,
-      variantName: def.variantName,
-      counts: {
-        notAssigned: 0,
-        notStarted: 0,
-        started: 0,
-        completed: 0,
-      },
-      userIds: {
-        notAssigned: [] as string[],
-        notStarted: [] as string[],
-        started: [] as string[],
-        completed: [] as string[],
-      },
-    })
-  );
+  const taskProgress: TaskProgressBreakdown[] = taskDefinitions.map((def) => ({
+    taskId: def.taskId,
+    variantId: def.variantId,
+    variantName: def.variantName,
+    counts: {
+      notAssigned: 0,
+      notStarted: 0,
+      started: 0,
+      completed: 0,
+    },
+    userIds: {
+      notAssigned: [] as string[],
+      notStarted: [] as string[],
+      started: [] as string[],
+      completed: [] as string[],
+    },
+  }));
 
   const users: UserAdministrationProgressRow[] = [];
 
   for (const uid of assignedUserIds) {
     const userSnap = userById.get(uid);
     const userData = userSnap?.data();
-    const email =
-      typeof userData?.email === "string" ? userData.email : null;
+    const email = typeof userData?.email === "string" ? userData.email : null;
     const userType = (userData?.userType as string) || "unknown";
     const role = pickRoleForSite(
       userData?.roles as { siteId: string; role: string }[] | undefined,
