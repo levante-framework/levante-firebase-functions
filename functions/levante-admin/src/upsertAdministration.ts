@@ -3,7 +3,9 @@ import {
   FieldValue,
   Timestamp,
   type DocumentReference,
+  type Firestore,
 } from "firebase-admin/firestore";
+import _chunk from "lodash-es/chunk.js";
 import _pick from "lodash-es/pick.js";
 import type { IAdministration } from "./interfaces.js";
 import { ORG_NAMES } from "./interfaces.js";
@@ -59,6 +61,49 @@ interface IAdministrationDoc {
   createdAt: Timestamp;
   updatedAt: Timestamp;
   creatorName: string;
+}
+
+type OrgCollectionId = (typeof ORG_NAMES)[number];
+
+async function validateSanitizedOrganizationsExist(
+  sanitizedOrgs: IOrgsList,
+  db: Firestore
+): Promise<void> {
+  const entries: { collectionId: OrgCollectionId; orgId: string }[] = [];
+  for (const collectionId of ORG_NAMES) {
+    for (const orgId of sanitizedOrgs[collectionId] ?? []) {
+      entries.push({ collectionId, orgId });
+    }
+  }
+
+  if (entries.length === 0) {
+    throw new HttpsError(
+      "invalid-argument",
+      "At least one organization (district, school, class, or group) is required."
+    );
+  }
+
+  const missing: string[] = [];
+  for (const chunk of _chunk(entries, 30)) {
+    const snapshots = await db.getAll(
+      ...chunk.map(({ collectionId, orgId }) =>
+        db.collection(collectionId).doc(orgId)
+      )
+    );
+    snapshots.forEach((snap, index) => {
+      if (!snap.exists) {
+        const { collectionId, orgId } = chunk[index];
+        missing.push(`${collectionId}/${orgId}`);
+      }
+    });
+  }
+
+  if (missing.length > 0) {
+    throw new HttpsError(
+      "invalid-argument",
+      `The following organizations do not exist: ${missing.join(", ")}`
+    );
+  }
 }
 
 export const upsertAdministrationHandler = async (
@@ -134,6 +179,8 @@ export const upsertAdministrationHandler = async (
     classes: sanitizeOrgIds(orgs.classes),
     groups: sanitizeOrgIds(orgs.groups),
   };
+
+  await validateSanitizedOrganizationsExist(sanitizedOrgs, db);
 
   let newAdministrationId: string | undefined;
   try {
