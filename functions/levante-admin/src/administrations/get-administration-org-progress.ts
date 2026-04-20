@@ -1,4 +1,3 @@
-import { getAuth } from "firebase-admin/auth";
 import {
   getFirestore,
   Timestamp,
@@ -12,34 +11,30 @@ import _chunk from "lodash-es/chunk.js";
 import type { IOrgsList } from "../interfaces.js";
 import { getAssignmentDocRef } from "../utils/assignment.js";
 import { getUsersFromOrgs } from "../orgs/org-utils.js";
-import { getAdministrationsForAdministrator } from "./administration-utils.js";
-import {
-  ACTIONS,
-  RESOURCES,
-} from "@levante-framework/permissions-core";
-import {
-  ensurePermissionsLoaded,
-  buildPermissionsUserFromAuthRecord,
-  filterSitesByPermission,
-} from "../utils/permission-helpers.js";
 
 export type OrgCollectionKey = keyof Pick<
   IOrgsList,
   "districts" | "schools" | "classes" | "groups"
 >;
 
-export type AssignmentRollupStatus = "notStarted" | "started" | "completed";
+export type AssignmentRollupStatus =
+  | "notStarted"
+  | "started"
+  | "completed"
+  | "notAssigned";
 
 export interface TaskProgressBreakdown {
   taskId: string;
   variantId: string;
   variantName: string;
   counts: {
+    notAssigned: number;
     notStarted: number;
     started: number;
     completed: number;
   };
   userIds: {
+    notAssigned: string[];
     notStarted: string[];
     started: string[];
     completed: string[];
@@ -50,6 +45,7 @@ export interface TaskProgressSummaryRow {
   taskId: string;
   variantId: string;
   variantName: string;
+  notAssigned: number;
   notStarted: number;
   started: number;
   completed: number;
@@ -131,6 +127,26 @@ type AssessmentRow = {
   runId?: string;
 };
 
+function missingAnyAssessmentRow(
+  taskDefinitions: { taskId: string }[],
+  assessments: AssessmentRow[]
+): boolean {
+  return taskDefinitions.some(
+    (def) => !assessments.some((a) => a.taskId === def.taskId)
+  );
+}
+
+function classifyTaskForUser(
+  assessments: AssessmentRow[],
+  taskId: string
+): "notAssigned" | "notStarted" | "started" | "completed" {
+  const a = assessments.find((x) => x.taskId === taskId);
+  if (!a) return "notAssigned";
+  if (a.completedOn) return "completed";
+  if (a.startedOn || a.runId) return "started";
+  return "notStarted";
+}
+
 async function chunkedGetAll(
   db: Firestore,
   refs: DocumentReference[]
@@ -144,55 +160,50 @@ async function chunkedGetAll(
 }
 
 async function assertCallerMayAccessAdministration(
+  db: Firestore,
   requestingUid: string,
-  administrationId: string,
   siteId: string | undefined
 ) {
-  const auth = getAuth();
-  const userRecord = await auth.getUser(requestingUid);
-  const customClaims: Record<string, unknown> = userRecord.customClaims || {};
-  const useNewPermissions = customClaims.useNewPermissions === true;
+  const userSnap = await db.collection("users").doc(requestingUid).get();
+  if (!userSnap.exists) {
+    throw new HttpsError("permission-denied", "User profile not found");
+  }
 
-  if (useNewPermissions) {
-    await ensurePermissionsLoaded();
-    const user = buildPermissionsUserFromAuthRecord(userRecord);
-    if (!siteId) {
-      throw new HttpsError(
-        "failed-precondition",
-        "Administration is missing siteId; cannot verify permissions"
-      );
-    }
-    const allowed =
-      filterSitesByPermission(user, [siteId], {
-        resource: RESOURCES.ASSIGNMENTS,
-        action: ACTIONS.UPDATE,
-      }).length > 0;
-    if (!allowed) {
-      throw new HttpsError(
-        "permission-denied",
-        `You do not have permission to view administration progress for site ${siteId}`
-      );
-    }
-  } else {
-    let administrationIds: string[];
-    try {
-      administrationIds = (await getAdministrationsForAdministrator({
-        adminUid: requestingUid,
-        restrictToOpenAdministrations: false,
-        idsOnly: true,
-      })) as string[];
-    } catch {
-      throw new HttpsError(
-        "permission-denied",
-        "You do not have access to this administration"
-      );
-    }
-    if (!administrationIds.includes(administrationId)) {
-      throw new HttpsError(
-        "permission-denied",
-        "You do not have access to this administration"
-      );
-    }
+  const userData = userSnap.data() as {
+    userType?: string;
+    archived?: boolean;
+    roles?: { siteId: string; role: string; siteName?: string }[];
+  };
+
+  if (userData.archived) {
+    throw new HttpsError("permission-denied", "Account is archived");
+  }
+
+  if (userData.userType !== "admin") {
+    throw new HttpsError(
+      "permission-denied",
+      "Only administrators may access this function"
+    );
+  }
+
+  const roles = userData.roles ?? [];
+  if (roles.some((r) => r.role === "super_admin")) {
+    return;
+  }
+
+  if (!siteId) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Administration is missing siteId; cannot verify site access"
+    );
+  }
+
+  const assignedToSite = roles.some((r) => r.siteId === siteId);
+  if (!assignedToSite) {
+    throw new HttpsError(
+      "permission-denied",
+      "You do not have access to administrations for this site"
+    );
   }
 }
 
@@ -250,11 +261,7 @@ export async function getAdministrationOrgProgressHandler(
     }[];
   };
 
-  await assertCallerMayAccessAdministration(
-    requestingUid,
-    administrationId,
-    adminData.siteId
-  );
+  await assertCallerMayAccessAdministration(db, requestingUid, adminData.siteId);
 
   const taskDefinitions = adminData.assessments ?? [];
   if (taskDefinitions.length === 0) {
@@ -281,24 +288,39 @@ export async function getAdministrationOrgProgressHandler(
     chunkedGetAll(db, userRefs),
   ]);
 
-  const assignmentByUserId = new Map(
-    assignmentSnaps.map((s) => [s.id, s])
-  );
+  const assignmentByUserId = new Map<string, DocumentSnapshot>();
+  for (let i = 0; i < userIds.length; i++) {
+    assignmentByUserId.set(userIds[i]!, assignmentSnaps[i]!);
+  }
   const userById = new Map(userSnaps.map((s) => [s.id, s]));
+
+  const assignedUserIds = userIds.filter((uid) =>
+    assignmentByUserId.get(uid)?.exists
+  );
 
   const taskProgress: TaskProgressBreakdown[] = taskDefinitions.map(
     (def) => ({
       taskId: def.taskId,
       variantId: def.variantId,
       variantName: def.variantName,
-      counts: { notStarted: 0, started: 0, completed: 0 },
-      userIds: { notStarted: [] as string[], started: [] as string[], completed: [] as string[] },
+      counts: {
+        notAssigned: 0,
+        notStarted: 0,
+        started: 0,
+        completed: 0,
+      },
+      userIds: {
+        notAssigned: [] as string[],
+        notStarted: [] as string[],
+        started: [] as string[],
+        completed: [] as string[],
+      },
     })
   );
 
   const users: UserAdministrationProgressRow[] = [];
 
-  for (const uid of userIds) {
+  for (const uid of assignedUserIds) {
     const userSnap = userById.get(uid);
     const userData = userSnap?.data();
     const email =
@@ -309,37 +331,37 @@ export async function getAdministrationOrgProgressHandler(
       adminData.siteId
     );
 
-    const assignmentSnap = assignmentByUserId.get(uid);
-    const assignmentData = assignmentSnap?.exists ? assignmentSnap.data() : null;
-    const assessments = (assignmentData?.assessments || []) as AssessmentRow[];
+    const assignmentSnap = assignmentByUserId.get(uid)!;
+    const assignmentData = assignmentSnap.data() ?? {};
+    const assessments = (assignmentData.assessments || []) as AssessmentRow[];
 
     let rollup: AssignmentRollupStatus = "notStarted";
     let startedAt: string | null = null;
     let completedAt: string | null = null;
 
-    if (assignmentData) {
-      const startedOns = assessments
-        .map((a) => toIso(a.startedOn))
-        .filter((x): x is string => Boolean(x));
-      const completedOns = assessments
-        .map((a) => toIso(a.completedOn))
-        .filter((x): x is string => Boolean(x));
+    const startedOns = assessments
+      .map((a) => toIso(a.startedOn))
+      .filter((x): x is string => Boolean(x));
+    const completedOns = assessments
+      .map((a) => toIso(a.completedOn))
+      .filter((x): x is string => Boolean(x));
 
-      if (startedOns.length > 0) {
-        startedAt = startedOns.sort()[0]!;
-      }
-      if (completedOns.length > 0) {
-        completedAt = completedOns.sort().at(-1)!;
-      }
+    if (startedOns.length > 0) {
+      startedAt = startedOns.sort()[0]!;
+    }
+    if (completedOns.length > 0) {
+      completedAt = completedOns.sort().at(-1)!;
+    }
 
-      if (assignmentData.completed === true) {
-        rollup = "completed";
-      } else if (
-        assignmentData.started === true ||
-        assessments.some((a) => a.startedOn || a.runId)
-      ) {
-        rollup = "started";
-      }
+    if (assignmentData.completed === true) {
+      rollup = "completed";
+    } else if (
+      assignmentData.started === true ||
+      assessments.some((a) => a.startedOn || a.runId)
+    ) {
+      rollup = "started";
+    } else if (missingAnyAssessmentRow(taskDefinitions, assessments)) {
+      rollup = "notAssigned";
     }
 
     users.push({
@@ -355,13 +377,7 @@ export async function getAdministrationOrgProgressHandler(
     for (let i = 0; i < taskDefinitions.length; i++) {
       const def = taskDefinitions[i]!;
       const row = taskProgress[i]!;
-      const a = assessments.find((x) => x.taskId === def.taskId);
-      let cell: "notStarted" | "started" | "completed" = "notStarted";
-      if (a?.completedOn) {
-        cell = "completed";
-      } else if (a?.startedOn || a?.runId) {
-        cell = "started";
-      }
+      const cell = classifyTaskForUser(assessments, def.taskId);
       row.counts[cell] += 1;
       row.userIds[cell].push(uid);
     }
@@ -371,6 +387,7 @@ export async function getAdministrationOrgProgressHandler(
     taskId: t.taskId,
     variantId: t.variantId,
     variantName: t.variantName,
+    notAssigned: t.counts.notAssigned,
     notStarted: t.counts.notStarted,
     started: t.counts.started,
     completed: t.counts.completed,
