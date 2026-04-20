@@ -449,7 +449,13 @@ export const createUsers = onCall(
 );
 
 export const createUsersWithEmailExport = onCall(
-  { memory: "512MiB", timeoutSeconds: 120 },
+  {
+    memory: "512MiB",
+    timeoutSeconds: 120,
+    // Same secret as the task: emulator runs the job inline in this function, so
+    // it must be bound here for local SMTP tests (.secret.local).
+    secrets: [createUsersExportSmtpPass],
+  },
   async (request) => {
     return await handleCreateUsersWithEmailExportRequest(request);
   }

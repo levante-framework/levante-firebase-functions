@@ -9,3 +9,8 @@ typings/
 node_modules/
 .DS_Store
 credentials/
+
+# Local Firebase params / secrets (never commit). Use **/ so paths under src/ are
+# ignored too if someone copies the files into the wrong folder.
+**/.env.local
+**/.secret.local
