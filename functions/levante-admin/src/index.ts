@@ -35,6 +35,7 @@ import { createUpdateSuperAdmin as runCreateUpdateSuperAdmin } from "./users/sup
 import { createSoftDeleteCloudFunction } from "./utils/soft-delete.js";
 import { updateAssignmentsForOrgChunkHandler } from "./assignments/sync-assignments.js";
 import { getAdministrationsForAdministrator } from "./administrations/administration-utils.js";
+import { getAdministrationOrgProgressHandler } from "./administrations/get-administration-org-progress.js";
 import { _deleteAdministration } from "./administrations/delete-administration.js";
 import { unenrollOrg } from "./orgs/org-utils.js";
 import { deleteOrg } from "./orgs/delete-org.js";
@@ -562,6 +563,30 @@ export const getAdministrations = onCall(async (request) => {
 
   return { status: "ok", data: administrations };
 });
+
+export const getAdministrationOrgProgress = onCall(
+  { memory: "1GiB", timeoutSeconds: 300 },
+  async (request) => {
+    const requestingUid = request.auth?.uid;
+    if (!requestingUid) {
+      throw new HttpsError("unauthenticated", "User must be authenticated");
+    }
+    try {
+      const data = await getAdministrationOrgProgressHandler(
+        requestingUid,
+        request.data
+      );
+      return { status: "ok", data };
+    } catch (err) {
+      if (err instanceof HttpsError) throw err;
+      logger.error("getAdministrationOrgProgress failed", { err });
+      throw new HttpsError(
+        "internal",
+        (err as Error)?.message || "Failed to load administration org progress"
+      );
+    }
+  }
+);
 
 export const unenrollOrgTask = onTaskDispatched(
   {
