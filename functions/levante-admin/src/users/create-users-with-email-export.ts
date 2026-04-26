@@ -56,11 +56,15 @@ type CreateUsersWithEmailExportRequestData = {
   users?: InputUser[];
   siteId?: string;
   districtId?: string;
+  /** When `true`, sends the credentials spreadsheet to the caller's Auth email. Default false. */
+  sendCredentialsEmail?: boolean;
 };
 
 type JobDocument = {
   requestingUid: string;
   requesterEmail: string;
+  /** Stored from the initial request; omitted on older job docs means false. */
+  sendCredentialsEmail?: boolean;
   siteId?: string | null;
   users: InputUser[];
   status: "pending" | "processing" | "completed" | "failed";
@@ -189,8 +193,8 @@ async function sendExportEmail(params: {
 /**
  * Claims a pending job in a single Firestore transaction so only one worker runs it.
  * Firebase Auth and mixed Firestore writes inside _createUsers are not one global transaction;
- * this job is all-or-nothing at the Firestore job level (completed vs failed) and email is
- * only sent after _createUsers returns successfully.
+ * this job is all-or-nothing at the Firestore job level (completed vs failed). Email is
+ * only sent after _createUsers returns successfully when `sendCredentialsEmail` is true.
  */
 export async function processCreateUsersEmailExportJob(jobId: string) {
   const db = getFirestore();
@@ -231,12 +235,19 @@ export async function processCreateUsersEmailExportJob(jobId: string) {
       throw new Error("Unexpected create users result");
     }
 
-    const xlsxBuffer = await buildReturnUserDataWorkbook(createResult.data);
-    await sendExportEmail({
-      to: job.requesterEmail,
-      xlsxBuffer,
-      userCount: createResult.data.length,
-    });
+    const sendCredentialsEmail = job.sendCredentialsEmail === true;
+    if (sendCredentialsEmail) {
+      const xlsxBuffer = await buildReturnUserDataWorkbook(createResult.data);
+      await sendExportEmail({
+        to: job.requesterEmail,
+        xlsxBuffer,
+        userCount: createResult.data.length,
+      });
+    } else {
+      logger.info("createUsers email export job skipped SMTP (sendCredentialsEmail false)", {
+        jobId,
+      });
+    }
 
     await db.runTransaction(async (transaction) => {
       const cur = await transaction.get(ref);
@@ -355,10 +366,12 @@ export async function handleCreateUsersWithEmailExportRequest(
     );
   }
 
+  const sendCredentialsEmail = request.data?.sendCredentialsEmail === true;
+
   const auth = getAuth();
   const requesterRecord = await auth.getUser(requestingUid);
-  const requesterEmail = requesterRecord.email;
-  if (!requesterEmail) {
+  const requesterEmail = requesterRecord.email ?? "";
+  if (sendCredentialsEmail && !requesterEmail) {
     throw new HttpsError(
       "failed-precondition",
       "Your account must have an email address to receive the export"
@@ -371,6 +384,7 @@ export async function handleCreateUsersWithEmailExportRequest(
   await jobRef.set({
     requestingUid,
     requesterEmail,
+    sendCredentialsEmail,
     siteId: siteId ?? null,
     users: userData as InputUser[],
     status: "pending",
