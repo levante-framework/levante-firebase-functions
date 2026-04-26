@@ -8,7 +8,6 @@ import { getFunctions } from "firebase-admin/functions";
 import { logger } from "firebase-functions/v2";
 import { HttpsError, type CallableRequest } from "firebase-functions/v2/https";
 import { defineSecret, defineString } from "firebase-functions/params";
-import ExcelJS from "exceljs";
 import nodemailer from "nodemailer";
 import type { InputUser, ReturnUserData } from "./create-users.js";
 import { _createUsers } from "./create-users.js";
@@ -131,29 +130,73 @@ async function deleteParticipantUserByUid(uid: string): Promise<string[]> {
   return failures;
 }
 
-async function buildReturnUserDataWorkbook(rows: ReturnUserData[]) {
-  const workbook = new ExcelJS.Workbook();
-  const sheet = workbook.addWorksheet("Created users");
-  sheet.columns = [
-    { header: "uid", key: "uid", width: 40 },
-    { header: "email", key: "email", width: 36 },
-    { header: "password", key: "password", width: 18 },
-  ];
-  for (const row of rows) {
-    sheet.addRow({
-      uid: row.uid,
-      email: row.email,
-      password: row.password,
-    });
+function escapeCsvField(value: string): string {
+  if (/[",\r\n]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
   }
-  const buffer = await workbook.xlsx.writeBuffer();
-  return Buffer.from(buffer);
+  return value;
+}
+
+function joinOrgIds(ids: string[] | undefined): string {
+  return ids?.length ? ids.join(";") : "";
+}
+
+function buildCreateUsersEmailExportCsv(
+  inputUsers: InputUser[],
+  returnRows: ReturnUserData[]
+): Buffer {
+  const columns = [
+    "id",
+    "userType",
+    "month",
+    "year",
+    "caregiverId",
+    "teacherId",
+    "school",
+    "class",
+    "cohort",
+    "email",
+    "password",
+    "uid",
+  ] as const;
+  const header = columns.map((c) => escapeCsvField(c)).join(",");
+  const lines = [header];
+  returnRows.forEach((row, index) => {
+    const input = inputUsers[index];
+    const id = String(index + 1);
+    const userType = input?.userType ?? "";
+    const month = input?.month ?? "";
+    const year = input?.year ?? "";
+    const caregiverId = input?.parentId ?? "";
+    const teacherId = input?.teacherId ?? "";
+    const school = joinOrgIds(input?.orgIds?.schools);
+    const classIds = joinOrgIds(input?.orgIds?.classes);
+    const cohort = joinOrgIds(input?.orgIds?.groups);
+    lines.push(
+      [
+        escapeCsvField(id),
+        escapeCsvField(userType),
+        escapeCsvField(month),
+        escapeCsvField(year),
+        escapeCsvField(caregiverId),
+        escapeCsvField(teacherId),
+        escapeCsvField(school),
+        escapeCsvField(classIds),
+        escapeCsvField(cohort),
+        escapeCsvField(row.email),
+        escapeCsvField(row.password),
+        escapeCsvField(row.uid),
+      ].join(",")
+    );
+  });
+  return Buffer.from(`${lines.join("\n")}\n`, "utf8");
 }
 
 async function sendExportEmail(params: {
   to: string;
-  xlsxBuffer: Buffer;
+  csvBuffer: Buffer;
   userCount: number;
+  jobId: string;
 }) {
   const host = createUsersExportSmtpHost.value();
   const port = Number.parseInt(createUsersExportSmtpPort.value(), 10) || 587;
@@ -178,13 +221,12 @@ async function sendExportEmail(params: {
     from,
     to: params.to,
     subject: `Levante: credentials for ${params.userCount} created user(s)`,
-    text: "Attached is an Excel file with uid, email, and temporary password for each created account.",
+    text: `Job ID: ${params.jobId}\n\nAttached is a CSV with id, userType, month, year, caregiverId, teacherId, school, class, cohort, email, password, and uid for each created account.`,
     attachments: [
       {
-        filename: "created-users.xlsx",
-        content: params.xlsxBuffer,
-        contentType:
-          "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        filename: "created-users.csv",
+        content: params.csvBuffer,
+        contentType: "text/csv; charset=utf-8",
       },
     ],
   });
@@ -237,11 +279,15 @@ export async function processCreateUsersEmailExportJob(jobId: string) {
 
     const sendCredentialsEmail = job.sendCredentialsEmail === true;
     if (sendCredentialsEmail) {
-      const xlsxBuffer = await buildReturnUserDataWorkbook(createResult.data);
+      const csvBuffer = buildCreateUsersEmailExportCsv(
+        job.users,
+        createResult.data
+      );
       await sendExportEmail({
         to: job.requesterEmail,
-        xlsxBuffer,
+        csvBuffer,
         userCount: createResult.data.length,
+        jobId,
       });
     } else {
       logger.info("createUsers email export job skipped SMTP (sendCredentialsEmail false)", {
