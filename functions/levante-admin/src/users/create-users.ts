@@ -20,7 +20,7 @@ import {
   type RoleDefinition,
 } from "../utils/role-helpers.js";
 
-interface InputUser {
+export interface InputUser {
   userType: string;
   childId?: string;
   parentId?: string;
@@ -67,7 +67,7 @@ interface BaseAuthUserData {
 
 type AdminAuthUserData = BaseAuthUserData;
 
-interface ReturnUserData {
+export interface ReturnUserData {
   uid: string;
   email: string;
   password: string;
