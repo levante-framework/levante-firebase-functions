@@ -68,6 +68,12 @@ node_modules/
 
 # dotenv environment variables file
 .env
+.env.*
+**/.env
+**/.env.*
+
+# Local service-account credential files
+/creds/
 
 .idea/
 
