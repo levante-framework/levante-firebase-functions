@@ -127,15 +127,6 @@ type AssessmentRow = {
   runId?: string;
 };
 
-function missingAnyAssessmentRow(
-  taskDefinitions: { taskId: string }[],
-  assessments: AssessmentRow[]
-): boolean {
-  return taskDefinitions.some(
-    (def) => !assessments.some((a) => a.taskId === def.taskId)
-  );
-}
-
 function classifyTaskForUser(
   assessments: AssessmentRow[],
   taskId: string
@@ -361,8 +352,6 @@ export async function getAdministrationOrgProgressHandler(
       assessments.some((a) => a.startedOn || a.runId)
     ) {
       rollup = "started";
-    } else if (missingAnyAssessmentRow(taskDefinitions, assessments)) {
-      rollup = "notAssigned";
     }
 
     users.push({
