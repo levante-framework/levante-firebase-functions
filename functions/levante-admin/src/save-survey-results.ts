@@ -32,6 +32,16 @@ interface SurveyResponsesInput {
   };
 }
 
+const SURVEY_TASK_IDS = new Set([
+  "caregiver-survey",
+  "teacher-survey",
+  "survey",
+]);
+
+function isSurveyTaskId(taskId?: string): boolean {
+  return !!taskId && SURVEY_TASK_IDS.has(taskId?.trim()?.toLowerCase());
+}
+
 export async function writeSurveyResponses(
   requesterUid: string,
   data: SurveyResponsesInput
@@ -174,12 +184,12 @@ export async function writeSurveyResponses(
         const assessments = assignmentData?.assessments || [];
 
         // Find the survey assessment
-        const surveyAssessmentIndex = assessments.findIndex(
-          (assessment) => assessment.taskId === "survey"
+        const surveyAssessmentIndex = assessments.findIndex((assessment) =>
+          isSurveyTaskId(assessment.taskId)
         );
 
         if (surveyAssessmentIndex !== -1) {
-          const surveyAssessment = assessments[surveyAssessmentIndex];
+          const matchedSurveyTaskId = assessments[surveyAssessmentIndex].taskId;
 
           // Create a copy of the assessments array to modify
           const updatedAssessments = [...assessments];
@@ -207,7 +217,7 @@ export async function writeSurveyResponses(
             updates.progress = updatedProgress;
 
             // Check if assignment should be completed
-            if (shouldCompleteAssignment(assignmentDoc, "survey")) {
+            if (shouldCompleteAssignment(assignmentDoc, matchedSurveyTaskId)) {
               updates.completed = true;
             }
           }
