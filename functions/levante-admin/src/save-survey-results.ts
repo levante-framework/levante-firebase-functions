@@ -28,8 +28,39 @@ interface SurveyData {
 interface SurveyResponsesInput {
   surveyResponses: {
     administrationId: string;
+    taskId?: string;
     surveyData: SurveyData;
   };
+}
+
+const ALLOWED_SURVEY_TASK_IDS = new Set([
+  "caregiver-survey",
+  "teacher-survey",
+  "survey",
+]);
+
+function resolveSurveyTaskId(
+  explicitTaskId: string | undefined,
+  userType: string | undefined
+): string {
+  if (explicitTaskId && ALLOWED_SURVEY_TASK_IDS.has(explicitTaskId)) {
+    return explicitTaskId;
+  }
+  //if there's no valid survey taskId, derive from userType as fallback
+  if (userType === "parent") {
+    return "caregiver-survey";
+  }
+
+  if (userType === "teacher") {
+    return "teacher-survey";
+  }
+
+  if (userType === "student") {
+    //Logic will only get to this point for legacy administrations with survey that was applied to all users. For newer administrations, the child survey is processed as a task and doesn't hit this function
+    return "survey";
+  }
+
+  return "survey";
 }
 
 export async function writeSurveyResponses(
@@ -47,7 +78,7 @@ export async function writeSurveyResponses(
     message: "Error writing survey responses",
   };
 
-  const { administrationId, surveyData } = data.surveyResponses;
+  const { administrationId, surveyData, taskId } = data.surveyResponses;
 
   // Check if administrationId is undefined or null
   if (administrationId == null) {
@@ -109,6 +140,7 @@ export async function writeSurveyResponses(
         administrationId,
         transaction
       );
+      const effectiveTaskId = resolveSurveyTaskId(taskId, userType);
 
       // ALL WRITES AFTER - Process the data and perform writes
 
@@ -175,7 +207,7 @@ export async function writeSurveyResponses(
 
         // Find the survey assessment
         const surveyAssessmentIndex = assessments.findIndex(
-          (assessment) => assessment.taskId === "survey"
+          (assessment) => assessment.taskId === effectiveTaskId
         );
 
         if (surveyAssessmentIndex !== -1) {
@@ -203,11 +235,15 @@ export async function writeSurveyResponses(
 
             // Update the progress object properly
             const currentProgress = assignmentData?.progress || {};
-            const updatedProgress = { ...currentProgress, survey: "completed" };
+            const progressKey = effectiveTaskId.replace(/-/g, "_");
+            const updatedProgress = {
+              ...currentProgress,
+              [progressKey]: "completed",
+            };
             updates.progress = updatedProgress;
 
             // Check if assignment should be completed
-            if (shouldCompleteAssignment(assignmentDoc, "survey")) {
+            if (shouldCompleteAssignment(assignmentDoc, effectiveTaskId)) {
               updates.completed = true;
             }
           }
