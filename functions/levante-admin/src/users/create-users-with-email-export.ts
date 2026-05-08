@@ -8,6 +8,8 @@ import { getFunctions } from "firebase-admin/functions";
 import { logger } from "firebase-functions/v2";
 import { HttpsError, type CallableRequest } from "firebase-functions/v2/https";
 import { defineSecret, defineString } from "firebase-functions/params";
+import archiver from "archiver";
+import ArchiverZipEncrypted from "archiver-zip-encrypted";
 import nodemailer from "nodemailer";
 import type { InputUser, ReturnUserData } from "./create-users.js";
 import { _createUsers } from "./create-users.js";
@@ -192,9 +194,50 @@ function buildCreateUsersEmailExportCsv(
   return Buffer.from(`${lines.join("\n")}\n`, "utf8");
 }
 
+function ensureZipEncryptedFormatRegistered(): void {
+  if (!archiver.isRegisteredFormat("zip-encrypted")) {
+    archiver.registerFormat("zip-encrypted", ArchiverZipEncrypted);
+  }
+}
+
+/**
+ * Password-protects a single file in a ZIP using legacy Zip 2.0 encryption for
+ * broad compatibility (macOS Archive Utility, Windows, Info-Zip unzip).
+ */
+async function zipBufferWithPassword(
+  fileBuffer: Buffer,
+  entryFileName: string,
+  password: string
+): Promise<Buffer> {
+  ensureZipEncryptedFormatRegistered();
+  return new Promise((resolve, reject) => {
+    const chunks: Buffer[] = [];
+    const archive = archiver.create(
+      "zip-encrypted",
+      {
+        zlib: { level: 9 },
+        encryptionMethod: "zip20",
+        password,
+      } as Parameters<typeof archiver.create>[1] & {
+        encryptionMethod: "zip20" | "aes256";
+        password: string;
+      }
+    );
+    archive.on("data", (chunk: string | Buffer) => {
+      chunks.push(typeof chunk === "string" ? Buffer.from(chunk) : chunk);
+    });
+    archive.on("error", reject);
+    archive.on("end", () => {
+      resolve(Buffer.concat(chunks));
+    });
+    archive.append(fileBuffer, { name: entryFileName });
+    void archive.finalize();
+  });
+}
+
 async function sendExportEmail(params: {
   to: string;
-  csvBuffer: Buffer;
+  zipBuffer: Buffer;
   userCount: number;
   jobId: string;
 }) {
@@ -221,12 +264,12 @@ async function sendExportEmail(params: {
     from,
     to: params.to,
     subject: `Levante: credentials for ${params.userCount} created user(s)`,
-    text: `Job ID: ${params.jobId}\n\nAttached is a CSV with id, userType, month, year, caregiverId, teacherId, school, class, cohort, email, password, and uid for each created account.`,
+    text: `Job ID: ${params.jobId}\n\nAttached is a password-protected ZIP containing created-users.csv (columns: id, userType, month, year, caregiverId, teacherId, school, class, cohort, email, password, uid).\n\nZIP password: your Levante account email address — the same address this message was sent to (case-sensitive; match exactly as in Firebase Auth).`,
     attachments: [
       {
-        filename: "created-users.csv",
-        content: params.csvBuffer,
-        contentType: "text/csv; charset=utf-8",
+        filename: "created-users.zip",
+        content: params.zipBuffer,
+        contentType: "application/zip",
       },
     ],
   });
@@ -283,9 +326,14 @@ export async function processCreateUsersEmailExportJob(jobId: string) {
         job.users,
         createResult.data
       );
+      const zipBuffer = await zipBufferWithPassword(
+        csvBuffer,
+        "created-users.csv",
+        job.requesterEmail
+      );
       await sendExportEmail({
         to: job.requesterEmail,
-        csvBuffer,
+        zipBuffer,
         userCount: createResult.data.length,
         jobId,
       });
@@ -395,6 +443,8 @@ export async function handleCreateUsersWithEmailExportRequest(
   if (!Array.isArray(userData) || userData.length === 0) {
     throw new HttpsError("invalid-argument", "users must be a non-empty array");
   }
+
+  console.log("userData", userData);
 
   const siteId = (request.data?.siteId || request.data?.districtId) as
     | string
