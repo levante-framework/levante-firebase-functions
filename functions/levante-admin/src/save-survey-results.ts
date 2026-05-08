@@ -39,7 +39,7 @@ const SURVEY_TASK_IDS = new Set([
 ]);
 
 function isSurveyTaskId(taskId?: string): boolean {
-  return !!taskId && SURVEY_TASK_IDS.has(taskId?.trim()?.toLowerCase());
+  return !!taskId && SURVEY_TASK_IDS.has(taskId.trim().toLowerCase());
 }
 
 export async function writeSurveyResponses(
@@ -213,7 +213,10 @@ export async function writeSurveyResponses(
 
             // Update the progress object properly
             const currentProgress = assignmentData?.progress || {};
-            const updatedProgress = { ...currentProgress, survey: "completed" };
+            const updatedProgress = {
+              ...currentProgress,
+              [matchedSurveyTaskId.replace(/-/g, "_")]: "completed",
+            };
             updates.progress = updatedProgress;
 
             // Check if assignment should be completed
