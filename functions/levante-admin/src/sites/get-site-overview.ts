@@ -37,7 +37,8 @@ export const getSiteOverview = onCall(
     const { siteId } = parsed.data;
 
     const userRecord = await getAuth().getUser(uid);
-    // Legacy permissions (@TODO: remove after migration)
+    // Legacy permissions
+    // TODO: remove after migration
     if (userRecord.customClaims?.useNewPermissions !== true) {
       logger.warn("Permission denied for site overview: legacy permissions", {
         requestingUid: uid,
