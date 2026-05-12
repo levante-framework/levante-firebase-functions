@@ -90,6 +90,13 @@ export const getSiteOverview = onCall(
     }
 
     const db = getFirestore();
+    // TODO(perf): user/assignment counts currently read every matching doc and
+    // bucket in memory. If a site grows past a few thousand users, replace the
+    // users + administrations reads with `getCountFromServer()` aggregations
+    // per bucket (3 user-type counts + 3 assignment-status counts). Requires
+    // new composite indexes (userType + districts.current + archived, and
+    // siteId + dateOpened/dateClosed combos). Schools/classes/cohorts can stay
+    // as list reads since names are needed anyway.
     const [usersSnap, assignmentsSnap, schoolsSnap, classesSnap, cohortsSnap] =
       await Promise.all([
         db
