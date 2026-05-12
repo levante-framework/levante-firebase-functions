@@ -12,6 +12,7 @@
     "format": "npm --prefix functions/levante-admin run format",
     "lint": "npm --prefix functions/levante-admin run lint",
     "prepare": "husky install || true",
+    "test": "npm run test:e2e && npm run test:rules",
     "test:e2e": "npm run build && firebase emulators:exec \"npx vitest run __tests__/e2e\"",
     "test:rules": "firebase emulators:exec \"npx vitest run __tests__/rules\"",
     "predeploy:levante-admin": "npm run build",
