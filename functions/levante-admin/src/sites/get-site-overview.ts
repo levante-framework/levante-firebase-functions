@@ -31,7 +31,7 @@ export const getSiteOverview = onCall(
         parsed.error.issues.map((i) => ({
           path: i.path.join("."),
           message: i.message,
-        }))
+        })),
       );
     }
     const { siteId } = parsed.data;
@@ -39,13 +39,13 @@ export const getSiteOverview = onCall(
     const userRecord = await getAuth().getUser(uid);
     // Legacy permissions (@TODO: remove after migration)
     if (userRecord.customClaims?.useNewPermissions !== true) {
-      logger.error("Permission denied for site overview: legacy permissions", {
+      logger.warn("Permission denied for site overview: legacy permissions", {
         requestingUid: uid,
         siteId,
       });
       throw new HttpsError(
         "permission-denied",
-        "New permission system must be enabled to view site overview"
+        "New permission system must be enabled to view site overview",
       );
     }
     await ensurePermissionsLoaded();
@@ -71,7 +71,7 @@ export const getSiteOverview = onCall(
     ]);
     const denied = checks.filter((c) => !c.allowed);
     if (denied.length > 0) {
-      logger.error("Permission denied for site overview", {
+      logger.warn("Permission denied for site overview", {
         requestingUid: uid,
         siteId,
         denied: denied.map((c) => ({
@@ -82,7 +82,7 @@ export const getSiteOverview = onCall(
       });
       throw new HttpsError(
         "permission-denied",
-        `You do not have permission to view site ${siteId}`
+        `You do not have permission to view site ${siteId}`,
       );
     }
 
@@ -94,7 +94,7 @@ export const getSiteOverview = onCall(
           .where(
             new FieldPath("districts", "current"),
             "array-contains",
-            siteId
+            siteId,
           )
           .where("archived", "==", false)
           .select("userType")
@@ -166,5 +166,5 @@ export const getSiteOverview = onCall(
         name: d.get("name"),
       })),
     };
-  }
+  },
 );

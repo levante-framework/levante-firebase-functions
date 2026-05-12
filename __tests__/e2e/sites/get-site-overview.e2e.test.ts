@@ -1,5 +1,6 @@
 import type { GetSiteOverviewResult } from '@levante-framework/levante-zod';
 import { Timestamp } from 'firebase-admin/firestore';
+import type { HttpsCallable } from 'firebase/functions';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { adminDb, clearAuth, clearFirestore, getClient, seedSystemPermissions, signInAs } from '../app';
 
@@ -11,24 +12,23 @@ const SITE_ADMIN_CLAIMS = {
   siteRoles: { [SITE]: ['site_admin'] },
 };
 
-const callGetSiteOverview = (client: ReturnType<typeof getClient>) =>
-  client.call<{ siteId: string }, GetSiteOverviewResult>('getSiteOverview');
-
 const daysFromNow = (days: number) => Timestamp.fromDate(new Date(Date.now() + days * 24 * 60 * 60 * 1000));
 
 describe('getSiteOverview (e2e)', () => {
   let client: ReturnType<typeof getClient>;
+  let getSiteOverview: HttpsCallable<{ siteId: string }, GetSiteOverviewResult>;
 
   beforeEach(async () => {
     await Promise.all([clearFirestore(), clearAuth()]);
     await seedSystemPermissions();
     client = getClient();
+    getSiteOverview = client.call<{ siteId: string }, GetSiteOverviewResult>('getSiteOverview');
   });
 
   afterEach(() => client.cleanup());
 
   it('rejects unauthenticated callers', async () => {
-    await expect(callGetSiteOverview(client)({ siteId: SITE })).rejects.toMatchObject({
+    await expect(getSiteOverview({ siteId: SITE })).rejects.toMatchObject({
       code: 'functions/unauthenticated',
     });
   });
@@ -37,7 +37,7 @@ describe('getSiteOverview (e2e)', () => {
     await signInAs(client, 'u-admin', SITE_ADMIN_CLAIMS);
     await expect(
       // @ts-expect-error intentionally missing siteId
-      callGetSiteOverview(client)({}),
+      getSiteOverview({}),
     ).rejects.toMatchObject({
       code: 'functions/invalid-argument',
       details: expect.arrayContaining([expect.objectContaining({ path: 'siteId' })]),
@@ -49,7 +49,7 @@ describe('getSiteOverview (e2e)', () => {
       useNewPermissions: true,
       siteRoles: { [OTHER_SITE]: ['site_admin'] },
     });
-    await expect(callGetSiteOverview(client)({ siteId: SITE })).rejects.toMatchObject({
+    await expect(getSiteOverview({ siteId: SITE })).rejects.toMatchObject({
       code: 'functions/permission-denied',
     });
   });
@@ -58,7 +58,7 @@ describe('getSiteOverview (e2e)', () => {
     await signInAs(client, 'u-legacy', {
       siteRoles: { [SITE]: ['site_admin'] },
     });
-    await expect(callGetSiteOverview(client)({ siteId: SITE })).rejects.toMatchObject({
+    await expect(getSiteOverview({ siteId: SITE })).rejects.toMatchObject({
       code: 'functions/permission-denied',
     });
   });
@@ -66,7 +66,7 @@ describe('getSiteOverview (e2e)', () => {
   it('returns zero counts and empty arrays for a site with no data', async () => {
     await signInAs(client, 'u-admin', SITE_ADMIN_CLAIMS);
 
-    const { data } = await callGetSiteOverview(client)({ siteId: SITE });
+    const { data } = await getSiteOverview({ siteId: SITE });
 
     expect(data).toEqual({
       counts: {
@@ -83,7 +83,7 @@ describe('getSiteOverview (e2e)', () => {
     await signInAs(client, 'u-admin', SITE_ADMIN_CLAIMS);
     await seedSiteFixture();
 
-    const { data } = await callGetSiteOverview(client)({ siteId: SITE });
+    const { data } = await getSiteOverview({ siteId: SITE });
 
     expect(data.counts).toEqual({
       users: { teachers: 2, caregivers: 1, children: 3 },
