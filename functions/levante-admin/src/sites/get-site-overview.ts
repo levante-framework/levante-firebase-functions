@@ -135,8 +135,10 @@ export const getSiteOverview = onCall(
       ]);
 
     const userCounts = { teachers: 0, caregivers: 0, children: 0 };
+    const unexpectedUsers: { id: string; userType: unknown }[] = [];
     for (const doc of usersSnap.docs) {
-      switch (doc.get("userType")) {
+      const userType = doc.get("userType");
+      switch (userType) {
         case "teacher":
           userCounts.teachers++;
           break;
@@ -146,18 +148,41 @@ export const getSiteOverview = onCall(
         case "student":
           userCounts.children++;
           break;
+        case "admin":
+          // Admins are intentionally excluded from welcome-page counts.
+          break;
+        default:
+          unexpectedUsers.push({ id: doc.id, userType });
       }
+    }
+    if (unexpectedUsers.length > 0) {
+      logger.warn("Skipped users with unexpected userType", {
+        siteId,
+        users: unexpectedUsers,
+      });
     }
 
     const now = Timestamp.now();
     const assignmentCounts = { open: 0, upcoming: 0, closed: 0 };
+    const skippedAssignmentIds: string[] = [];
     for (const doc of assignmentsSnap.docs) {
       const opened = doc.get("dateOpened") as Timestamp | undefined;
       const closed = doc.get("dateClosed") as Timestamp | undefined;
-      if (!opened || !closed) continue;
+      // Schema declares both fields required; missing dates indicate drift.
+      // Skip rather than bucket arbitrarily, but surface IDs so we can fix the data.
+      if (!opened || !closed) {
+        skippedAssignmentIds.push(doc.id);
+        continue;
+      }
       if (opened.toMillis() > now.toMillis()) assignmentCounts.upcoming++;
       else if (closed.toMillis() < now.toMillis()) assignmentCounts.closed++;
       else assignmentCounts.open++;
+    }
+    if (skippedAssignmentIds.length > 0) {
+      logger.warn("Skipped assignments with missing dates", {
+        siteId,
+        assignmentIds: skippedAssignmentIds,
+      });
     }
 
     return {
