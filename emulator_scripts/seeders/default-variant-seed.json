@@ -1,0 +1,425 @@
+{
+  "source": "emulator-default-variant-seed",
+  "rows": [
+    {
+      "taskId": "matrix-reasoning",
+      "taskData": {
+        "description": "Matrix reasoning assessment task",
+        "name": "Matrix Reasoning",
+        "registered": true,
+        "image": ""
+      },
+      "variants": [
+        {
+          "id": "emulator-default",
+          "data": {
+            "name": "en",
+            "registered": true,
+            "params": {
+              "age": null,
+              "corpus": "matrix-reasoning-item-bank",
+              "keyHelpers": true,
+              "language": "en",
+              "numOfPracticeTrials": 2,
+              "sequentialPractice": true,
+              "skipInstructions": true,
+              "stimulusBlocks": 3,
+              "maxIncorrect": 3,
+              "maxTime": 10,
+              "numberOfTrials": 20,
+              "sequentialStimulus": true,
+              "taskName": "matrix-reasoning"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "mental-rotation",
+      "taskData": {
+        "description": "Mental rotation assessment task",
+        "name": "Mental Rotation",
+        "registered": true,
+        "image": ""
+      },
+      "variants": [
+        {
+          "id": "emulator-default",
+          "data": {
+            "name": "en",
+            "registered": true,
+            "params": {
+              "age": null,
+              "corpus": "mental-rotation-item-bank",
+              "keyHelpers": true,
+              "language": "en",
+              "numOfPracticeTrials": 2,
+              "sequentialPractice": true,
+              "skipInstructions": true,
+              "stimulusBlocks": 3,
+              "maxIncorrect": 6,
+              "maxTime": 8,
+              "numberOfTrials": 300,
+              "sequentialStimulus": false,
+              "taskName": "mental-rotation"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "intro",
+      "taskData": {
+        "description": "Introduction and practice task",
+        "name": "Introduction",
+        "registered": true,
+        "image": ""
+      },
+      "variants": [
+        {
+          "id": "emulator-default",
+          "data": {
+            "name": "en",
+            "registered": true,
+            "params": {
+              "age": null,
+              "corpus": null,
+              "keyHelpers": true,
+              "language": "en",
+              "numOfPracticeTrials": 2,
+              "sequentialPractice": true,
+              "skipInstructions": true,
+              "stimulusBlocks": 3,
+              "maxIncorrect": 100,
+              "maxTime": 100,
+              "numberOfTrials": 20,
+              "sequentialStimulus": true,
+              "storeItemId": true,
+              "taskName": "intro"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "memory-game",
+      "taskData": {
+        "description": "Memory game assessment task",
+        "name": "Memory Game",
+        "registered": true,
+        "image": ""
+      },
+      "variants": [
+        {
+          "id": "emulator-default",
+          "data": {
+            "name": "en",
+            "registered": true,
+            "params": {
+              "age": null,
+              "corpus": null,
+              "keyHelpers": true,
+              "language": "en",
+              "numOfPracticeTrials": 2,
+              "sequentialPractice": true,
+              "skipInstructions": true,
+              "stimulusBlocks": 3,
+              "maxIncorrect": 3,
+              "maxTime": 15,
+              "numberOfTrials": 200,
+              "sequentialStimulus": true,
+              "taskName": "memory-game"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "hearts-and-flowers",
+      "taskData": {
+        "description": "Hearts and flowers executive function task",
+        "name": "Hearts and Flowers",
+        "registered": true,
+        "image": ""
+      },
+      "variants": [
+        {
+          "id": "emulator-default",
+          "data": {
+            "name": "en",
+            "registered": true,
+            "params": {
+              "age": null,
+              "corpus": null,
+              "keyHelpers": true,
+              "language": "en",
+              "numOfPracticeTrials": 2,
+              "sequentialPractice": true,
+              "skipInstructions": true,
+              "stimulusBlocks": 3,
+              "maxIncorrect": 3,
+              "maxTime": 10,
+              "numberOfTrials": 20,
+              "sequentialStimulus": true,
+              "storeItemId": true,
+              "taskName": "hearts-and-flowers"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "egma-math",
+      "taskData": {
+        "description": "EGMA mathematics assessment",
+        "name": "EGMA Math",
+        "registered": true,
+        "image": ""
+      },
+      "variants": [
+        {
+          "id": "emulator-default",
+          "data": {
+            "name": "en",
+            "registered": true,
+            "params": {
+              "age": null,
+              "corpus": null,
+              "keyHelpers": true,
+              "language": "en",
+              "numOfPracticeTrials": 2,
+              "sequentialPractice": true,
+              "skipInstructions": true,
+              "stimulusBlocks": 3,
+              "maxIncorrect": 6,
+              "maxTime": 15,
+              "numberOfTrials": 200,
+              "sequentialStimulus": false,
+              "taskName": "egma-math"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "trog",
+      "taskData": {
+        "description": "Test for Reception of Grammar",
+        "name": "TROG",
+        "registered": true,
+        "image": ""
+      },
+      "variants": [
+        {
+          "id": "emulator-default",
+          "data": {
+            "name": "en",
+            "registered": true,
+            "params": {
+              "age": null,
+              "corpus": null,
+              "keyHelpers": true,
+              "language": "en",
+              "numOfPracticeTrials": 2,
+              "sequentialPractice": true,
+              "skipInstructions": true,
+              "stimulusBlocks": 3,
+              "maxIncorrect": 3,
+              "maxTime": 8,
+              "numberOfTrials": 20,
+              "sequentialStimulus": true,
+              "taskName": "trog"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "theory-of-mind",
+      "taskData": {
+        "description": "Theory of mind assessment task",
+        "name": "Theory of Mind",
+        "registered": true,
+        "image": ""
+      },
+      "variants": [
+        {
+          "id": "emulator-default",
+          "data": {
+            "name": "en",
+            "registered": true,
+            "params": {
+              "age": null,
+              "corpus": null,
+              "keyHelpers": true,
+              "language": "en",
+              "numOfPracticeTrials": 2,
+              "sequentialPractice": true,
+              "skipInstructions": true,
+              "stimulusBlocks": 3,
+              "maxIncorrect": 3,
+              "maxTime": 10,
+              "numberOfTrials": 20,
+              "sequentialStimulus": true,
+              "storeItemId": true,
+              "taskName": "theory-of-mind"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "vocab",
+      "taskData": {
+        "description": "Vocabulary assessment task",
+        "name": "Vocabulary",
+        "registered": true,
+        "image": ""
+      },
+      "variants": [
+        {
+          "id": "emulator-default",
+          "data": {
+            "name": "en",
+            "registered": true,
+            "params": {
+              "age": null,
+              "corpus": null,
+              "keyHelpers": true,
+              "language": "en",
+              "numOfPracticeTrials": 2,
+              "sequentialPractice": true,
+              "skipInstructions": true,
+              "stimulusBlocks": 3,
+              "maxIncorrect": 6,
+              "maxTime": 15,
+              "numberOfTrials": 300,
+              "sequentialStimulus": false,
+              "storeItemId": true,
+              "taskName": "vocab"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "same-different-selection",
+      "taskData": {
+        "description": "Same different selection task",
+        "name": "Same Different Selection",
+        "registered": true,
+        "image": ""
+      },
+      "variants": [
+        {
+          "id": "emulator-default",
+          "data": {
+            "name": "en",
+            "registered": true,
+            "params": {
+              "age": null,
+              "corpus": null,
+              "keyHelpers": true,
+              "language": "en",
+              "numOfPracticeTrials": 2,
+              "sequentialPractice": true,
+              "skipInstructions": true,
+              "stimulusBlocks": 3,
+              "maxIncorrect": 3,
+              "maxTime": 10,
+              "numberOfTrials": 20,
+              "sequentialStimulus": true,
+              "taskName": "same-different-selection"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "pa",
+      "taskData": {
+        "description": "Phonological awareness assessment",
+        "name": "Phonological Awareness",
+        "registered": true,
+        "image": ""
+      },
+      "variants": [
+        {
+          "id": "emulator-default",
+          "data": {
+            "name": "en",
+            "registered": true,
+            "params": {
+              "language": "en",
+              "skipInstructions": true,
+              "consent": true,
+              "recruitment": "pilot",
+              "storyOption": false,
+              "userMode": "3min1Block",
+              "timerLength": 180000
+            }
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "sre",
+      "taskData": {
+        "description": "Sentence reading efficiency assessment",
+        "name": "Sentence Reading Efficiency",
+        "registered": true,
+        "image": ""
+      },
+      "variants": [
+        {
+          "id": "emulator-default",
+          "data": {
+            "name": "en",
+            "registered": true,
+            "params": {
+              "language": "en",
+              "skipInstructions": true,
+              "consent": false,
+              "recruitment": "co-pilot",
+              "storyOption": true,
+              "userMode": "shortRandom",
+              "addNoResponse": false,
+              "audioFeedbackOption": "binary",
+              "numAdaptive": 150,
+              "numNew": 25,
+              "numValidated": 100
+            }
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "swr",
+      "taskData": {
+        "description": "Sight word reading assessment",
+        "name": "Sight Word Reading",
+        "registered": true,
+        "image": ""
+      },
+      "variants": [
+        {
+          "id": "emulator-default",
+          "data": {
+            "name": "en",
+            "registered": true,
+            "params": {
+              "language": "en",
+              "skipInstructions": true,
+              "consent": true,
+              "recruitment": "pilot",
+              "storyOption": "false",
+              "userMode": "fixed",
+              "numTestItems": 19,
+              "story": null
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
