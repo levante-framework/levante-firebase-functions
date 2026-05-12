@@ -16,17 +16,17 @@
  * npm run normalize-user-type-to-roar -- --apply
  *
  * # Dry run on prod:
- * npm run normalize-user-type-to-roar -- --database prod
+ * npm run normalize-user-type-to-roar -- -d prod
  *
  * # Apply changes on prod:
- * npm run normalize-user-type-to-roar -- --database prod --apply
+ * npm run normalize-user-type-to-roar -- -d prod --apply
  * ```
  */
 
-import * as admin from "firebase-admin/app";
-import { getFirestore } from "firebase-admin/firestore";
+import { deleteApp } from "firebase-admin/app";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
+import { initAdmin } from "./utils/init-admin.js";
 
 const CANONICAL = new Set(["admin", "parent", "student", "teacher"]);
 
@@ -64,7 +64,6 @@ const parsedArgs = yargs(hideBin(process.argv))
   .parseSync();
 
 const isDev = parsedArgs.d === "dev";
-const projectId = isDev ? "hs-levante-admin-dev" : "hs-levante-admin-prod";
 const apply = Boolean(parsedArgs.apply);
 const limit =
   typeof parsedArgs.limit === "number" && Number.isFinite(parsedArgs.limit)
@@ -74,34 +73,8 @@ const limit =
 console.log(`Database: ${isDev ? "DEV" : "PROD"}`);
 console.log(`Dry run mode: ${apply ? "OFF" : "ON"}`);
 
-const adminCredentialFile = process.env.LEVANTE_ADMIN_FIREBASE_CREDENTIALS;
-const adminCredentials = adminCredentialFile
-  ? (
-      await import(adminCredentialFile, {
-        assert: { type: "json" },
-      })
-    ).default
-  : null;
-
-const adminApp = admin.initializeApp(
-  {
-    credential: adminCredentials
-      ? admin.cert(adminCredentials)
-      : admin.applicationDefault(),
-    projectId,
-  },
-  "admin"
-);
-
-if (!adminCredentialFile) {
-  console.log(
-    "LEVANTE_ADMIN_FIREBASE_CREDENTIALS not set; using application default credentials."
-  );
-}
-
-const db = getFirestore(adminApp);
-
 async function run() {
+  const { app, db } = await initAdmin({ environment: isDev ? "dev" : "prod" });
   try {
     const usersRef = db.collection("users");
 
@@ -174,7 +147,7 @@ async function run() {
     process.exit(1);
   } finally {
     try {
-      await admin.deleteApp(adminApp);
+      await deleteApp(app);
     } catch (error) {
       console.error("Error deleting Firebase app:", error);
     }
