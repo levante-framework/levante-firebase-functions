@@ -10,16 +10,16 @@
  * Usage:
  * ```bash
  * # Default, dry run on dev:
- * npm run normalize-user-type-to-roar
+ * npm run normalize-user-type
  *
  * # Apply changes on dev:
- * npm run normalize-user-type-to-roar -- --apply
+ * npm run normalize-user-type -- --apply
  *
  * # Dry run on prod:
- * npm run normalize-user-type-to-roar -- --env prod
+ * npm run normalize-user-type -- --env prod
  *
  * # Apply changes on prod:
- * npm run normalize-user-type-to-roar -- --env prod --apply
+ * npm run normalize-user-type -- --env prod --apply
  * ```
  */
 
