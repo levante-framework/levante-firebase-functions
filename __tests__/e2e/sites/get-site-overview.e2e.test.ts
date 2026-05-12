@@ -54,6 +54,13 @@ describe('getSiteOverview (e2e)', () => {
     });
   });
 
+  it('rejects migrated callers with no site roles', async () => {
+    await signInAs(client, 'u-no-roles', { useNewPermissions: true });
+    await expect(getSiteOverview({ siteId: SITE })).rejects.toMatchObject({
+      code: 'functions/permission-denied',
+    });
+  });
+
   it('rejects callers who have not been migrated to the new permission system', async () => {
     await signInAs(client, 'u-legacy', {
       siteRoles: { [SITE]: ['site_admin'] },

@@ -50,6 +50,9 @@ export const getSiteOverview = onCall(
     }
     await ensurePermissionsLoaded();
     const user = buildPermissionsUserFromAuthRecord(userRecord);
+    // All checks required: this view is only routed to roles that have full
+    // read access to a site. If any check fails, the caller shouldn't be on
+    // this page at all — fail closed rather than returning a partial view.
     const checks = bulkCheckForSite(user, siteId, [
       { resource: RESOURCES.USERS, action: ACTIONS.READ },
       { resource: RESOURCES.ASSIGNMENTS, action: ACTIONS.READ },
