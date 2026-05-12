@@ -16,10 +16,10 @@
  * npm run normalize-user-type-to-roar -- --apply
  *
  * # Dry run on prod:
- * npm run normalize-user-type-to-roar -- -d prod
+ * npm run normalize-user-type-to-roar -- --env prod
  *
  * # Apply changes on prod:
- * npm run normalize-user-type-to-roar -- -d prod --apply
+ * npm run normalize-user-type-to-roar -- --env prod --apply
  * ```
  */
 
@@ -44,9 +44,9 @@ type ChangeEntry =
   | { id: string; oldValue: string; newValue: null; status: "unknown" };
 
 const parsedArgs = yargs(hideBin(process.argv))
-  .option("d", {
-    alias: "database",
-    describe: "Database: 'dev' or 'prod'",
+  .option("e", {
+    alias: "env",
+    describe: "Environment: 'dev' or 'prod'",
     choices: ["dev", "prod"],
     default: "dev",
   })
@@ -55,26 +55,18 @@ const parsedArgs = yargs(hideBin(process.argv))
     type: "boolean",
     default: false,
   })
-  .option("limit", {
-    describe: "Limit number of users processed",
-    type: "number",
-  })
   .help()
   .alias("help", "h")
   .parseSync();
 
-const isDev = parsedArgs.d === "dev";
+const environment = parsedArgs.env as "dev" | "prod";
 const apply = Boolean(parsedArgs.apply);
-const limit =
-  typeof parsedArgs.limit === "number" && Number.isFinite(parsedArgs.limit)
-    ? Math.floor(parsedArgs.limit)
-    : undefined;
 
-console.log(`Database: ${isDev ? "DEV" : "PROD"}`);
-console.log(`Dry run mode: ${apply ? "OFF" : "ON"}`);
+console.log(`Environment: ${environment}`);
+console.log(`Dry run: ${apply ? "OFF" : "ON"}`);
 
 async function run() {
-  const { app, db } = await initAdmin({ environment: isDev ? "dev" : "prod" });
+  const { app, db } = await initAdmin({ environment });
   try {
     const usersRef = db.collection("users");
 
@@ -83,10 +75,6 @@ async function run() {
     let query: FirebaseFirestore.Query = usersRef.where("userType", "not-in", [
       ...CANONICAL,
     ]);
-
-    if (typeof limit === "number") {
-      query = query.limit(limit);
-    }
 
     const snap = await query.get();
     const allDocs = snap.docs;
