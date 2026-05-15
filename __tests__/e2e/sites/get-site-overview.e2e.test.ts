@@ -113,7 +113,7 @@ describe("getSiteOverview (e2e)", () => {
     });
   });
 
-  it("aggregates counts and lists for the requested site, excluding archived, off-site, and admin users", async () => {
+  it("aggregates counts and lists for the requested site, excluding archived, disabled, off-site, and admin users", async () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
     await seedSiteFixture();
 
@@ -162,6 +162,7 @@ async function seedSiteFixture() {
     batch.set(adminDb.doc(`users/${id}`), {
       userType,
       archived: false,
+      disabled: false,
       districts: { current: [SITE] },
     });
   }
@@ -170,16 +171,25 @@ async function seedSiteFixture() {
   batch.set(adminDb.doc("users/u-admin-on-site"), {
     userType: "admin", // admins are not in the result counts
     archived: false,
+    disabled: false,
     districts: { current: [SITE] },
   });
   batch.set(adminDb.doc("users/u-archived-teacher"), {
     userType: "teacher",
     archived: true,
+    disabled: false,
+    districts: { current: [SITE] },
+  });
+  batch.set(adminDb.doc("users/u-disabled-teacher"), {
+    userType: "teacher",
+    archived: false,
+    disabled: true,
     districts: { current: [SITE] },
   });
   batch.set(adminDb.doc("users/u-other-site-teacher"), {
     userType: "teacher",
     archived: false,
+    disabled: false,
     districts: { current: [OTHER_SITE] },
   });
 

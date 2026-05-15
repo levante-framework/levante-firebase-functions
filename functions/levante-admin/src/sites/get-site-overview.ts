@@ -108,6 +108,7 @@ export const getSiteOverview = onCall(
             siteId,
           )
           .where("archived", "==", false)
+          .where("disabled", "==", false)
           .select("userType")
           .get(),
         db

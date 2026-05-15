@@ -983,6 +983,10 @@
           "order": "ASCENDING"
         },
         {
+          "fieldPath": "disabled",
+          "order": "ASCENDING"
+        },
+        {
           "fieldPath": "__name__",
           "order": "ASCENDING"
         }
