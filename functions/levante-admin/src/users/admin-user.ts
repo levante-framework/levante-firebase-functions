@@ -94,7 +94,7 @@ export const createAdminUser = async ({
     .getUserByEmail(email)
     .then(async (userRecord) => {
       logger.debug(
-        `Updating preexisting admin user with ${email} in admin project`
+        `Updating preexisting admin user with ${email} in admin project`,
       );
       preExistingUser = true;
       await auth.updateUser(userRecord.uid, {
@@ -171,7 +171,7 @@ export const createAdminUser = async ({
             useNewPermissions: false,
           },
         },
-        { merge: true }
+        { merge: true },
       )
       .then(() => {
         logger.debug("Updated userClaims doc", {
@@ -257,6 +257,7 @@ export const createAdminUser = async ({
       userType: "admin",
       assessmentUid: adminUid,
       archived: false,
+      disabled: false,
       lastUpdated: FieldValue.serverTimestamp(),
       testData: isTestData ?? false,
       roles: rolesWithNames,
@@ -265,10 +266,10 @@ export const createAdminUser = async ({
     for (const orgType of ["districts", "schools", "classes", "groups"]) {
       if (orgs[orgType]?.length) {
         adminUserDocData[`${orgType}.current`] = FieldValue.arrayUnion(
-          ...orgs[orgType]
+          ...orgs[orgType],
         );
         adminUserDocData[`${orgType}.all`] = FieldValue.arrayUnion(
-          ...orgs[orgType]
+          ...orgs[orgType],
         );
         for (const orgId of orgs[orgType]) {
           adminUserDocData[`${orgType}.dates.${orgId}`] =
@@ -285,6 +286,7 @@ export const createAdminUser = async ({
       classes: orgListToMap(orgs.classes),
       groups: orgListToMap(orgs.groups),
       archived: false,
+      disabled: false,
       createdAt: FieldValue.serverTimestamp(),
       lastUpdated: FieldValue.serverTimestamp(),
       testData: isTestData ?? false,
