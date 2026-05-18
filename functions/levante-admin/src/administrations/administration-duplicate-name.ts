@@ -72,7 +72,7 @@ export async function assertNoDuplicateAdministrationNameInSite(
   );
   if (conflictId !== null) {
     throw new HttpsError(
-      "permission-denied",
+      "already-exists",
       "Duplicate name: an administration with this name already exists for this site."
     );
   }
