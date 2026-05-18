@@ -1,0 +1,1638 @@
+{
+  "exportedAt": "2026-05-14T14:05:36.693Z",
+  "environment": "dev",
+  "sourceProject": "hs-levante-admin-dev",
+  "rows": [
+    {
+      "taskId": "adult-reasoning",
+      "taskData": {
+        "registered": true,
+        "description": "Fill in the missing numbers.",
+        "name": "Adult Reasoning",
+        "image": "\nhttps://storage.googleapis.com/levante-assets-dev/task-logos/adult-reasoning-logo.png\n\n\n"
+      },
+      "variants": [
+        {
+          "id": "9q7NLSntvFxYOXTLihXK",
+          "data": {
+            "params": {
+              "heavyInstructions": false,
+              "storeItemId": false,
+              "cat": true,
+              "corpus": "adult-reasoning-item-bank",
+              "sequentialPractice": true,
+              "stimulusBlocks": 3,
+              "taskName": "adult-reasoning",
+              "semThreshold": 0,
+              "maxTime": 100,
+              "sequentialStimulus": true,
+              "numOfPracticeTrials": 2,
+              "inferenceNumStories": null,
+              "language": "en",
+              "keyHelpers": false,
+              "numberOfTrials": 300,
+              "skipInstructions": true,
+              "age": null,
+              "startingTheta": 0,
+              "buttonLayout": "default",
+              "maxIncorrect": 3
+            },
+            "name": "English (North America)",
+            "registered": true
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "caregiver-survey",
+      "taskData": {
+        "registered": true,
+        "description": "Help us answer some questions!",
+        "image": "https://storage.googleapis.com/levante-assets-dev/task-logos/child-survey-logo.png",
+        "name": "Caregiver Survey"
+      },
+      "variants": [
+        {
+          "id": "QaLpzmXxjEELlXTBC41U",
+          "data": {
+            "registered": true,
+            "params": {},
+            "name": "All Languages"
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "child-survey",
+      "taskData": {
+        "description": "\"Answer the questions.\"",
+        "registered": true,
+        "name": "Child Survey",
+        "image": "https://storage.googleapis.com/levante-assets-dev/task-logos/child-survey-logo.png"
+      },
+      "variants": [
+        {
+          "id": "YLKOLpUf72jCQbw1UJ6h",
+          "data": {
+            "registered": true,
+            "params": {
+              "maxIncorrect": 3,
+              "stimulusBlocks": 3,
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "corpus": "child-survey-item-bank",
+              "inferenceNumStories": null,
+              "numberOfTrials": 300,
+              "numOfPracticeTrials": 2,
+              "skipInstructions": true,
+              "age": null,
+              "language": "de",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "child-survey",
+              "semThreshold": 0,
+              "cat": false,
+              "storeItemId": false,
+              "maxTime": 100,
+              "keyHelpers": false
+            },
+            "name": "de"
+          }
+        },
+        {
+          "id": "eAtziH5vgmP9HK6PjNZB",
+          "data": {
+            "registered": true,
+            "params": {
+              "maxIncorrect": 3,
+              "stimulusBlocks": 3,
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "corpus": "child-survey-item-bank",
+              "inferenceNumStories": null,
+              "numberOfTrials": 300,
+              "numOfPracticeTrials": 2,
+              "skipInstructions": true,
+              "age": null,
+              "language": "es",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "child-survey",
+              "semThreshold": 0,
+              "cat": false,
+              "storeItemId": false,
+              "maxTime": 100,
+              "keyHelpers": false
+            },
+            "name": "es-CO"
+          }
+        },
+        {
+          "id": "eFhSiDq2mZRuSdisPus4",
+          "data": {
+            "params": {
+              "taskName": "child-survey",
+              "skipInstructions": true,
+              "sequentialPractice": true,
+              "sequentialStimulus": true,
+              "corpus": "child-survey-item-bank",
+              "buttonLayout": "default",
+              "numOfPracticeTrials": 2,
+              "numberOfTrials": 300,
+              "maxIncorrect": 3,
+              "stimulusBlocks": 3,
+              "keyHelpers": false,
+              "language": "es",
+              "age": null,
+              "maxTime": 100,
+              "storeItemId": false,
+              "cat": false,
+              "inferenceNumStories": null,
+              "semThreshold": 0,
+              "startingTheta": 0,
+              "heavyInstructions": false
+            },
+            "name": "es",
+            "registered": true
+          }
+        },
+        {
+          "id": "rwUpUWZjqz36uZHMN80i",
+          "data": {
+            "registered": true,
+            "params": {
+              "maxIncorrect": 3,
+              "stimulusBlocks": 3,
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "corpus": "child-survey-item-bank",
+              "inferenceNumStories": null,
+              "numberOfTrials": 300,
+              "numOfPracticeTrials": 2,
+              "skipInstructions": true,
+              "age": null,
+              "language": "en",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "child-survey",
+              "semThreshold": 0,
+              "cat": false,
+              "storeItemId": false,
+              "maxTime": 100,
+              "keyHelpers": false
+            },
+            "name": "en"
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "egma-math",
+      "taskData": {
+        "registered": true,
+        "description": "Solve the math problems.",
+        "name": "Math",
+        "image": "https://storage.googleapis.com/levante-assets-dev/task-logos/math-logo.png"
+      },
+      "variants": [
+        {
+          "id": "5EEnX5lwRblrpcJAOvZ3",
+          "data": {
+            "params": {
+              "buttonLayout": "default",
+              "sequentialStimulus": true,
+              "numberOfTrials": 200,
+              "sequentialPractice": true,
+              "taskName": "egma-math",
+              "storeItemId": true,
+              "language": "es-AR",
+              "corpus": "math-item-bank",
+              "keyHelpers": false,
+              "maxTime": 8,
+              "cat": true,
+              "startingTheta": 0
+            },
+            "registered": true,
+            "name": "es-AR Adaptive"
+          }
+        },
+        {
+          "id": "DWTiUJXyw6XfKGiQlIMy",
+          "data": {
+            "registered": true,
+            "name": "es-CO Adaptive",
+            "params": {
+              "cat": true,
+              "language": "es",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "egma-math",
+              "numberOfTrials": 200,
+              "sequentialPractice": true,
+              "corpus": "math-item-bank",
+              "storeItemId": true,
+              "maxTime": 8,
+              "keyHelpers": false
+            }
+          }
+        },
+        {
+          "id": "G9bR9Z6GcgDW44nTk96R",
+          "data": {
+            "registered": true,
+            "params": {
+              "cat": true,
+              "language": "en",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "egma-math",
+              "numberOfTrials": 200,
+              "sequentialPractice": true,
+              "corpus": "math-item-bank",
+              "storeItemId": true,
+              "maxTime": 8,
+              "keyHelpers": false
+            },
+            "name": "en Adaptive"
+          }
+        },
+        {
+          "id": "bZjwnLQ4awf0NRA1ZHi8",
+          "data": {
+            "registered": true,
+            "name": "de Adaptive",
+            "params": {
+              "maxIncorrect": 3,
+              "stimulusBlocks": 3,
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "corpus": "math-item-bank",
+              "inferenceNumStories": null,
+              "numberOfTrials": 300,
+              "numOfPracticeTrials": 2,
+              "skipInstructions": true,
+              "age": null,
+              "language": "de",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "egma-math",
+              "semThreshold": 0,
+              "cat": true,
+              "storeItemId": false,
+              "maxTime": 8,
+              "keyHelpers": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "hearts-and-flowers",
+      "taskData": {
+        "registered": true,
+        "description": "Choose the correct side for the hearts and flowers.",
+        "name": "Hearts & Flowers",
+        "image": "https://storage.googleapis.com/levante-assets-dev/task-logos/hearts-and-flowers-logo.png"
+      },
+      "variants": [
+        {
+          "id": "DRjLxIQsFrgj4VJapHbz",
+          "data": {
+            "registered": true,
+            "params": {
+              "maxIncorrect": 100,
+              "stimulusBlocks": 3,
+              "sequentialPractice": true,
+              "corpus": null,
+              "numberOfTrials": 21,
+              "skipInstructions": true,
+              "age": null,
+              "language": "es",
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "hearts-and-flowers",
+              "numOfPracticeTrials": 3,
+              "storeItemId": false,
+              "maxTime": 8,
+              "keyHelpers": true
+            },
+            "name": "es-CO"
+          }
+        },
+        {
+          "id": "Hmw27ElBX36E2nAJnLYd",
+          "data": {
+            "registered": true,
+            "params": {
+              "maxIncorrect": 100,
+              "stimulusBlocks": 3,
+              "sequentialPractice": true,
+              "corpus": null,
+              "numberOfTrials": 20,
+              "skipInstructions": true,
+              "age": null,
+              "language": "de",
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "hearts-and-flowers",
+              "numOfPracticeTrials": 2,
+              "storeItemId": false,
+              "maxTime": 8,
+              "keyHelpers": true
+            },
+            "name": "de"
+          }
+        },
+        {
+          "id": "NuoJc6KKEyZ3kXolkjsP",
+          "data": {
+            "blockTiming": [
+              1500,
+              2000,
+              3000
+            ],
+            "name": "en-US New H&F Pilot",
+            "registered": true,
+            "params": {
+              "corpus": "same-different-selection-item-bank-spark",
+              "buttonLayout": "default",
+              "skipInstructions": true,
+              "maxTime": 8,
+              "keyHelpers": true,
+              "taskName": "hearts-and-flowers",
+              "sequentialPractice": true,
+              "storeItemId": false,
+              "maxIncorrect": 100,
+              "taskVersion": 2,
+              "language": "en-US",
+              "numOfPracticeTrials": 2,
+              "stimulusBlocks": 3,
+              "age": null,
+              "sequentialStimulus": true,
+              "numberOfTrials": 20
+            }
+          }
+        },
+        {
+          "id": "hGm50PmakVbtF4NDIBRC",
+          "data": {
+            "blockTiming": [
+              1500,
+              2000,
+              3000
+            ],
+            "name": "es-AR New H&F Pilot",
+            "registered": true,
+            "params": {
+              "numberOfTrials": 21,
+              "sequentialStimulus": true,
+              "age": null,
+              "stimulusBlocks": 3,
+              "numOfPracticeTrials": 3,
+              "language": "es-AR",
+              "taskVersion": 2,
+              "cat": false,
+              "maxIncorrect": 100,
+              "storeItemId": false,
+              "sequentialPractice": true,
+              "taskName": "hearts-and-flowers",
+              "keyHelpers": true,
+              "maxTime": 8,
+              "buttonLayout": "default",
+              "skipInstructions": true,
+              "corpus": null
+            }
+          }
+        },
+        {
+          "id": "vZmyM7jOHnCBvCrO2dMr",
+          "data": {
+            "registered": true,
+            "name": "en",
+            "params": {
+              "numOfPracticeTrials": 2,
+              "language": "en",
+              "taskVersion": 1,
+              "maxIncorrect": 100,
+              "numberOfTrials": 20,
+              "sequentialStimulus": true,
+              "age": null,
+              "stimulusBlocks": 3,
+              "buttonLayout": "default",
+              "skipInstructions": true,
+              "corpus": null,
+              "storeItemId": false,
+              "sequentialPractice": true,
+              "taskName": "hearts-and-flowers",
+              "keyHelpers": true,
+              "maxTime": 8
+            }
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "intro",
+      "taskData": {
+        "name": "Instructions",
+        "registered": true,
+        "description": "Learn how to play our games!",
+        "image": "https://storage.googleapis.com/levante-assets-dev/task-logos/intro-logo.png"
+      },
+      "variants": [
+        {
+          "id": "Y3FT8Fvmwk18IydAq8at",
+          "data": {
+            "registered": true,
+            "params": {
+              "maxIncorrect": 3,
+              "stimulusBlocks": 3,
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "corpus": null,
+              "numberOfTrials": 300,
+              "numOfPracticeTrials": 2,
+              "skipInstructions": true,
+              "age": null,
+              "language": "es-AR",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "intro",
+              "semThreshold": 0,
+              "cat": false,
+              "storeItemId": false,
+              "maxTime": 100,
+              "keyHelpers": false
+            },
+            "name": "es-AR"
+          }
+        },
+        {
+          "id": "YXXjBbBuaacSaEV4NGiW",
+          "data": {
+            "registered": true,
+            "params": {
+              "maxIncorrect": 3,
+              "stimulusBlocks": 3,
+              "sequentialPractice": true,
+              "corpus": null,
+              "numberOfTrials": 300,
+              "skipInstructions": true,
+              "age": null,
+              "language": "en",
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "intro",
+              "numOfPracticeTrials": 2,
+              "storeItemId": false,
+              "maxTime": 100,
+              "keyHelpers": false
+            },
+            "name": "en"
+          }
+        },
+        {
+          "id": "aTvH2nyN3ke5jD2LHbXB",
+          "data": {
+            "registered": true,
+            "params": {
+              "maxIncorrect": 3,
+              "stimulusBlocks": 3,
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "corpus": null,
+              "numberOfTrials": 300,
+              "numOfPracticeTrials": 2,
+              "skipInstructions": true,
+              "age": null,
+              "language": "es",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "intro",
+              "semThreshold": 0,
+              "storeItemId": false,
+              "maxTime": 100,
+              "keyHelpers": false
+            },
+            "name": "es-CO"
+          }
+        },
+        {
+          "id": "tcl2VBD3WVezs89I42dy",
+          "data": {
+            "registered": true,
+            "params": {
+              "maxIncorrect": 3,
+              "stimulusBlocks": 3,
+              "sequentialPractice": true,
+              "corpus": null,
+              "numberOfTrials": 300,
+              "skipInstructions": true,
+              "age": null,
+              "language": "de",
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "intro",
+              "numOfPracticeTrials": 2,
+              "storeItemId": false,
+              "maxTime": 100,
+              "keyHelpers": false
+            },
+            "name": "de"
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "matrix-reasoning",
+      "taskData": {
+        "registered": true,
+        "description": "Find the missing piece to complete the puzzle.",
+        "name": "Pattern Matching",
+        "image": "https://storage.googleapis.com/levante-assets-dev/task-logos/matrix-reasoning-logo.png"
+      },
+      "variants": [
+        {
+          "id": "J5TbcDkiVoxMaN4Qy14L",
+          "data": {
+            "registered": true,
+            "params": {
+              "maxIncorrect": 3,
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "corpus": "matrix-reasoning-item-bank",
+              "numberOfTrials": 300,
+              "numOfPracticeTrials": 2,
+              "language": "es",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "matrix-reasoning",
+              "semThreshold": 0,
+              "cat": true,
+              "storeItemId": true,
+              "maxTime": 6,
+              "keyHelpers": false
+            },
+            "name": "es-CO Adaptive"
+          }
+        },
+        {
+          "id": "P7y3FDKZYogLptqE3LKL",
+          "data": {
+            "registered": true,
+            "params": {
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "corpus": "matrix-reasoning-item-bank",
+              "numberOfTrials": 300,
+              "numOfPracticeTrials": 2,
+              "language": "en",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "matrix-reasoning",
+              "semThreshold": 0,
+              "cat": true,
+              "storeItemId": true,
+              "maxTime": 6,
+              "keyHelpers": false
+            },
+            "name": "en Adaptive"
+          }
+        },
+        {
+          "id": "TNHqGwOEq34S8srJ14Sw",
+          "data": {
+            "params": {
+              "inferenceNumStories": null,
+              "stimulusBlocks": 3,
+              "sequentialStimulus": true,
+              "numberOfTrials": 300,
+              "numOfPracticeTrials": 2,
+              "maxTime": 6,
+              "buttonLayout": "default",
+              "heavyInstructions": false,
+              "language": "es-AR",
+              "semThreshold": 0,
+              "cat": true,
+              "skipInstructions": true,
+              "age": null,
+              "keyHelpers": false,
+              "startingTheta": 0,
+              "sequentialPractice": true,
+              "taskName": "matrix-reasoning",
+              "storeItemId": false,
+              "maxIncorrect": 3,
+              "corpus": "matrix-reasoning-item-bank"
+            },
+            "registered": true,
+            "name": "es-AR Adaptive"
+          }
+        },
+        {
+          "id": "a02MjWlWAR3LqAEUJPjT",
+          "data": {
+            "registered": true,
+            "params": {
+              "maxIncorrect": 3,
+              "stimulusBlocks": 3,
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "corpus": "matrix-reasoning-item-bank-downex-pilot",
+              "inferenceNumStories": null,
+              "numberOfTrials": 300,
+              "numOfPracticeTrials": 2,
+              "skipInstructions": true,
+              "age": null,
+              "language": "en",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "matrix-reasoning",
+              "semThreshold": 0,
+              "cat": false,
+              "storeItemId": false,
+              "maxTime": 6,
+              "keyHelpers": false
+            },
+            "name": "en"
+          }
+        },
+        {
+          "id": "eulVCqunMgEUKjH0RfBz",
+          "data": {
+            "registered": true,
+            "name": "de Adaptive",
+            "params": {
+              "maxIncorrect": 3,
+              "stimulusBlocks": 3,
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "corpus": "matrix-reasoning-item-bank",
+              "inferenceNumStories": null,
+              "numberOfTrials": 300,
+              "numOfPracticeTrials": 2,
+              "skipInstructions": true,
+              "age": null,
+              "language": "de",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "matrix-reasoning",
+              "semThreshold": 0,
+              "cat": true,
+              "storeItemId": false,
+              "maxTime": 6,
+              "keyHelpers": false
+            }
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "memory-game",
+      "taskData": {
+        "registered": true,
+        "description": "Play the memory game.",
+        "name": "Memory",
+        "image": "https://storage.googleapis.com/levante-assets-dev/task-logos/memory-game-logo.png"
+      },
+      "variants": [
+        {
+          "id": "8uncSzKJckibYfqAM5xK",
+          "data": {
+            "registered": true,
+            "params": {
+              "maxIncorrect": 3,
+              "stimulusBlocks": 3,
+              "sequentialPractice": true,
+              "corpus": null,
+              "numberOfTrials": 20,
+              "skipInstructions": true,
+              "age": null,
+              "language": "es",
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "memory-game",
+              "numOfPracticeTrials": 2,
+              "storeItemId": false,
+              "maxTime": 15,
+              "keyHelpers": true
+            },
+            "name": "es-CO"
+          }
+        },
+        {
+          "id": "CXcuwZ2Zvj9hV8YRpKEz",
+          "data": {
+            "registered": true,
+            "params": {
+              "maxIncorrect": 3,
+              "stimulusBlocks": 3,
+              "sequentialPractice": true,
+              "corpus": null,
+              "numberOfTrials": 20,
+              "skipInstructions": true,
+              "age": null,
+              "language": "de",
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "memory-game",
+              "numOfPracticeTrials": 2,
+              "storeItemId": false,
+              "maxTime": 15,
+              "keyHelpers": false
+            },
+            "name": "de"
+          }
+        },
+        {
+          "id": "FgEPZzyOM3jmPR2mFTho",
+          "data": {
+            "registered": true,
+            "params": {
+              "taskName": "memory-game",
+              "skipInstructions": true,
+              "stimulusBlocks": 3,
+              "maxIncorrect": 3,
+              "language": "en",
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "age": null,
+              "numOfPracticeTrials": 2,
+              "sequentialPractice": true,
+              "corpus": null,
+              "keyHelpers": true,
+              "maxTime": 15,
+              "numberOfTrials": 20
+            },
+            "name": "en"
+          }
+        },
+        {
+          "id": "H8HH6d3vDtC5lvM7wkaP",
+          "data": {
+            "registered": true,
+            "params": {
+              "sequentialStimulus": true,
+              "sequentialPractice": true,
+              "language": "es-AR",
+              "maxIncorrect": 3,
+              "storeItemId": false,
+              "taskName": "memory-game",
+              "keyHelpers": true,
+              "maxTime": 15,
+              "buttonLayout": "default",
+              "skipInstructions": true,
+              "numOfPracticeTrials": 2,
+              "stimulusBlocks": 3,
+              "age": null,
+              "corpus": null,
+              "numberOfTrials": 20
+            },
+            "name": "es-AR"
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "mental-rotation",
+      "taskData": {
+        "registered": true,
+        "description": "Match the pictures.",
+        "name": "Shape Rotation",
+        "image": "https://storage.googleapis.com/levante-assets-dev/task-logos/mental-rotation-logo.png"
+      },
+      "variants": [
+        {
+          "id": "E5Jf47wCCu2f3F9Fk8AV",
+          "data": {
+            "name": "es-AR Adaptive",
+            "params": {
+              "maxTime": 4,
+              "inferenceNumStories": null,
+              "stimulusBlocks": 3,
+              "taskName": "mental-rotation",
+              "age": null,
+              "language": "es-AR",
+              "storeItemId": false,
+              "keyHelpers": false,
+              "buttonLayout": "default",
+              "sequentialStimulus": true,
+              "semThreshold": 0,
+              "corpus": "mental-rotation-item-bank",
+              "sequentialPractice": true,
+              "maxIncorrect": 3,
+              "cat": true,
+              "skipInstructions": true,
+              "numOfPracticeTrials": 2,
+              "heavyInstructions": false,
+              "numberOfTrials": 300,
+              "startingTheta": 0
+            },
+            "registered": true
+          }
+        },
+        {
+          "id": "SVAFgDbhX36nttQxMh9G",
+          "data": {
+            "registered": true,
+            "params": {
+              "cat": true,
+              "heavyInstructions": false,
+              "language": "de",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "mental-rotation",
+              "semThreshold": 0,
+              "sequentialPractice": true,
+              "corpus": "mental-rotation-item-bank",
+              "storeItemId": true,
+              "maxTime": 4,
+              "numberOfTrials": 300
+            },
+            "name": "de Adaptive"
+          }
+        },
+        {
+          "id": "So5OCT2Zn4fFaEo4KfV7",
+          "data": {
+            "registered": true,
+            "params": {
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "corpus": "mental-rotation-item-bank",
+              "numberOfTrials": 300,
+              "numOfPracticeTrials": 2,
+              "language": "en",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "mental-rotation",
+              "semThreshold": 0,
+              "cat": true,
+              "storeItemId": true,
+              "maxTime": 4,
+              "keyHelpers": false
+            },
+            "name": "en Adaptive"
+          }
+        },
+        {
+          "id": "ur6gK0s71rwnaqZj5KLS",
+          "data": {
+            "registered": true,
+            "params": {
+              "maxIncorrect": 3,
+              "stimulusBlocks": 3,
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "corpus": "mental-rotation-item-bank",
+              "numberOfTrials": 300,
+              "skipInstructions": false,
+              "numOfPracticeTrials": 2,
+              "language": "es",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "mental-rotation",
+              "semThreshold": 0,
+              "cat": true,
+              "storeItemId": true,
+              "maxTime": 4,
+              "keyHelpers": false
+            },
+            "name": "es-CO Adaptive"
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "pa",
+      "taskData": {
+        "registered": true,
+        "description": "Identify the sound in the words.",
+        "name": "Language Sounds",
+        "image": "https://storage.googleapis.com/levante-assets-dev/task-logos/phoneme-logo.png"
+      },
+      "variants": [
+        {
+          "id": "5qBz8FFYIsuoYkuGXwVd",
+          "data": {
+            "registered": true,
+            "params": {
+              "story": null,
+              "consent": false,
+              "recruitment": "pilot",
+              "skipInstructions": true,
+              "storyOption": true,
+              "numTestItems": 19,
+              "userMode": "fixed"
+            },
+            "name": "en"
+          }
+        },
+        {
+          "id": "N5X5vn4zWitcmjiJOPip",
+          "data": {
+            "name": "de",
+            "registered": true,
+            "params": {
+              "consent": false,
+              "numTestItems": 10,
+              "recruitment": "de-pilot",
+              "skipInstructions": true,
+              "story": true,
+              "storyOption": true,
+              "userMode": "random",
+              "language": "de"
+            }
+          }
+        },
+        {
+          "id": "oth3ChvmWxDVULMIOwoZ",
+          "data": {
+            "registered": true,
+            "params": {
+              "numTestItems": 10,
+              "skipInstructions": true,
+              "language": "es",
+              "userMode": "random",
+              "story": true,
+              "consent": false,
+              "recruitment": "co-pilot2",
+              "storyOption": true
+            },
+            "name": "es-CO"
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "same-different-selection",
+      "taskData": {
+        "registered": true,
+        "description": "Find things that are the same about the shapes.",
+        "name": "Same & Different",
+        "image": "https://storage.googleapis.com/levante-assets-dev/task-logos/same-different-selection-logo.png"
+      },
+      "variants": [
+        {
+          "id": "2ZcnI4VEvBvywZH7DELE",
+          "data": {
+            "registered": true,
+            "params": {
+              "cat": true,
+              "language": "es",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "same-different-selection",
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "corpus": "same-different-selection-item-bank",
+              "storeItemId": true,
+              "maxTime": 6,
+              "keyHelpers": false
+            },
+            "name": "es-CO Adaptive"
+          }
+        },
+        {
+          "id": "EPEm1KC5YSzyd9Z3Hwfh",
+          "data": {
+            "registered": true,
+            "name": "en Adaptive",
+            "params": {
+              "heavyInstructions": false,
+              "buttonLayout": "default",
+              "language": "en",
+              "maxTime": 6,
+              "sequentialStimulus": true,
+              "cat": true,
+              "keyHelpers": false,
+              "corpus": "same-different-selection-item-bank-spark",
+              "taskName": "same-different-selection",
+              "storeItemId": true,
+              "startingTheta": 0,
+              "sequentialPractice": true,
+              "taskVersion": 2
+            }
+          }
+        },
+        {
+          "id": "QdkSB0GwqZUbvFDRdIcS",
+          "data": {
+            "name": "es-AR New Spark",
+            "registered": true,
+            "params": {
+              "taskName": "same-different-selection",
+              "sequentialPractice": true,
+              "storeItemId": false,
+              "maxTime": 6,
+              "keyHelpers": false,
+              "buttonLayout": "default",
+              "skipInstructions": true,
+              "corpus": "same-different-selection-item-bank-spark",
+              "age": null,
+              "sequentialStimulus": true,
+              "numberOfTrials": 300,
+              "stimulusBlocks": 3,
+              "taskVersion": 2,
+              "language": "es-AR",
+              "numOfPracticeTrials": 2,
+              "maxIncorrect": 10,
+              "cat": true
+            }
+          }
+        },
+        {
+          "id": "VM2ajPIDwYl9dieFNQey",
+          "data": {
+            "name": "en-US New Spark",
+            "registered": true,
+            "params": {
+              "cat": true,
+              "language": "en-US",
+              "taskVersion": 2,
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "corpus": "same-different-selection-item-bank-spark",
+              "buttonLayout": "default",
+              "keyHelpers": false,
+              "maxTime": 6,
+              "storeItemId": true,
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "taskName": "same-different-selection"
+            }
+          }
+        },
+        {
+          "id": "ljt6CITXjwMKkvA4icMF",
+          "data": {
+            "registered": true,
+            "params": {
+              "cat": true,
+              "language": "de",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "same-different-selection",
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "corpus": "same-different-selection-item-bank",
+              "storeItemId": true,
+              "maxTime": 6,
+              "keyHelpers": false
+            },
+            "name": "de Adaptive"
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "sre",
+      "taskData": {
+        "description": "Read the sentences as quickly as you can and decide if they are true or false.",
+        "registered": true,
+        "image": "https://raw.githubusercontent.com/yeatmanlab/roar-assets/main/roar-apps/sentence-no-lion.png",
+        "name": "Sentence Reading"
+      },
+      "variants": [
+        {
+          "id": "N5m5bxBaUiU8Sb2FChQU",
+          "data": {
+            "name": "en",
+            "registered": true,
+            "params": {
+              "consent": false,
+              "language": "en",
+              "recruitment": "pilot",
+              "storyOption": "false",
+              "skipInstructions": true,
+              "userMode": "3min1Block",
+              "timerLength": 180000
+            }
+          }
+        },
+        {
+          "id": "Yi3GnueA2CQTiQYHtJPT",
+          "data": {
+            "registered": true,
+            "params": {
+              "consent": false,
+              "recruitment": "de-pilot",
+              "skipInstructions": true,
+              "timerLength": 180000,
+              "language": "de",
+              "storyOption": false,
+              "userMode": "90s2Blocks"
+            },
+            "name": "de"
+          }
+        },
+        {
+          "id": "ln5f02yRfFVXZOIdN084",
+          "data": {
+            "registered": true,
+            "params": {
+              "consent": false,
+              "recruitment": "co-pilot",
+              "skipInstructions": true,
+              "timerLength": 180000,
+              "language": "es",
+              "storyOption": "false",
+              "userMode": "90s2Blocks"
+            },
+            "name": "es-CO"
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "swr",
+      "taskData": {
+        "registered": true,
+        "description": "The words will appear quickly on the screen. Decide if they are real or made-up.",
+        "name": "Word Reading",
+        "image": "https://storage.googleapis.com/levante-assets-dev/task-logos/swr-logo.png"
+      },
+      "variants": [
+        {
+          "id": "0kJkPuTmVqhAuhvw9A4l",
+          "data": {
+            "registered": true,
+            "params": {
+              "numAdaptive": 150,
+              "audioFeedbackOption": "binary",
+              "skipInstructions": true,
+              "addNoResponse": false,
+              "language": "de",
+              "userMode": "shortRandom",
+              "numValidated": 100,
+              "consent": false,
+              "recruitment": "de-pilot",
+              "numNew": 25,
+              "storyOption": false
+            },
+            "name": "de"
+          }
+        },
+        {
+          "id": "ERgrQvHnPS4tXJOKcTvm",
+          "data": {
+            "registered": true,
+            "params": {
+              "numAdaptive": 150,
+              "audioFeedbackOption": "binary",
+              "skipInstructions": true,
+              "addNoResponse": false,
+              "language": "es",
+              "userMode": "shortRandom",
+              "numValidated": 100,
+              "consent": false,
+              "recruitment": "co-pilot2",
+              "numNew": 25,
+              "storyOption": "false"
+            },
+            "name": "es-CO"
+          }
+        },
+        {
+          "id": "sZ2IL1JDXB0TzFLH1mdG",
+          "data": {
+            "registered": true,
+            "params": {
+              "numAdaptive": 150,
+              "audioFeedbackOption": "binary",
+              "skipInstructions": true,
+              "addNoResponse": false,
+              "userMode": "shortAdaptive",
+              "numValidated": 100,
+              "consent": false,
+              "recruitment": "co-pilot2",
+              "cat": true,
+              "numNew": 25,
+              "storyOption": false
+            },
+            "name": "en"
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "teacher-survey",
+      "taskData": {
+        "registered": true,
+        "description": "Help us answer some questions!",
+        "image": "https://storage.googleapis.com/levante-assets-dev/task-logos/child-survey-logo.png",
+        "name": "Teacher Survey"
+      },
+      "variants": [
+        {
+          "id": "he2KLQSTxP6tPKygON14",
+          "data": {
+            "registered": true,
+            "params": {},
+            "name": "All Languages"
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "theory-of-mind",
+      "taskData": {
+        "registered": true,
+        "description": "Listen to the stories and answer the questions.",
+        "name": "Stories",
+        "image": "https://storage.googleapis.com/levante-assets-dev/task-logos/theory-of-mind-logo.png"
+      },
+      "variants": [
+        {
+          "id": "GKGaqIbtbkR3ZUlBRB1A",
+          "data": {
+            "name": "English (United States)",
+            "params": {
+              "age": null,
+              "maxIncorrect": 100,
+              "sequentialPractice": true,
+              "version": "2",
+              "skipInstructions": true,
+              "numOfPracticeTrials": 2,
+              "sequentialStimulus": true,
+              "maxTime": 15,
+              "numberOfTrials": 300,
+              "taskName": "theory-of-mind",
+              "language": "en-US",
+              "buttonLayout": "default",
+              "corpus": "theory-of-mind-item-bank-cat-test",
+              "cat": true,
+              "storeItemId": false,
+              "stimulusBlocks": 3,
+              "keyHelpers": false
+            },
+            "registered": true
+          }
+        },
+        {
+          "id": "SetFthiAWRoktltjvLwE",
+          "data": {
+            "name": "Spanish (Colombia)",
+            "params": {
+              "numberOfTrials": 300,
+              "sequentialPractice": true,
+              "language": "es-CO",
+              "maxIncorrect": 100,
+              "keyHelpers": false,
+              "buttonLayout": "default",
+              "corpus": "theory-of-mind-item-bank-cat-test",
+              "cat": true,
+              "skipInstructions": true,
+              "stimulusBlocks": 3,
+              "version": "2",
+              "maxTime": 15,
+              "storeItemId": false,
+              "taskName": "theory-of-mind",
+              "sequentialStimulus": true,
+              "numOfPracticeTrials": 2,
+              "age": null
+            },
+            "registered": true
+          }
+        },
+        {
+          "id": "eIngZAZjVAs63Qnlnv6h",
+          "data": {
+            "params": {
+              "language": "de-DE",
+              "buttonLayout": "default",
+              "age": null,
+              "numberOfTrials": 300,
+              "maxIncorrect": 100,
+              "sequentialStimulus": true,
+              "sequentialPractice": true,
+              "taskName": "theory-of-mind",
+              "skipInstructions": true,
+              "stimulusBlocks": 3,
+              "corpus": "theory-of-mind-item-bank-cat-test",
+              "numOfPracticeTrials": 2,
+              "version": "2",
+              "storeItemId": false,
+              "maxTime": 100,
+              "keyHelpers": false,
+              "cat": true
+            },
+            "name": "German (Germany)",
+            "registered": true
+          }
+        },
+        {
+          "id": "xG25RpsBxgDn4Hrrh13a",
+          "data": {
+            "params": {
+              "language": "es-AR",
+              "buttonLayout": "default",
+              "age": null,
+              "numberOfTrials": 300,
+              "maxIncorrect": 100,
+              "sequentialStimulus": true,
+              "sequentialPractice": true,
+              "taskName": "theory-of-mind",
+              "skipInstructions": true,
+              "stimulusBlocks": 3,
+              "corpus": "theory-of-mind-item-bank-cat-test",
+              "numOfPracticeTrials": 2,
+              "version": "2",
+              "storeItemId": false,
+              "maxTime": 15,
+              "keyHelpers": false,
+              "cat": true
+            },
+            "name": "Spanish (Argentina)",
+            "registered": true
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "trog",
+      "taskData": {
+        "registered": true,
+        "description": "Listen to the phrases and choose the right picture.",
+        "name": "Sentence Understanding",
+        "image": "https://storage.googleapis.com/levante-assets-dev/task-logos/trog-logo.png"
+      },
+      "variants": [
+        {
+          "id": "cEjpQMNapPLnvKfVY5yq",
+          "data": {
+            "registered": true,
+            "params": {
+              "maxIncorrect": 3,
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "corpus": "trog-item-bank",
+              "numberOfTrials": 300,
+              "skipInstructions": true,
+              "numOfPracticeTrials": 2,
+              "language": "es",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "trog",
+              "semThreshold": 0,
+              "cat": true,
+              "storeItemId": true,
+              "maxTime": 4,
+              "keyHelpers": false
+            },
+            "name": "es-CO Adaptive"
+          }
+        },
+        {
+          "id": "ozK1ks57oKGekmLz31bz",
+          "data": {
+            "registered": true,
+            "params": {
+              "cat": true,
+              "numberOfTrials": 300,
+              "heavyInstructions": false,
+              "language": "de",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "trog",
+              "semThreshold": 0,
+              "sequentialPractice": true,
+              "corpus": "trog-item-bank-full-params",
+              "storeItemId": true,
+              "maxTime": 4,
+              "keyHelpers": false
+            },
+            "name": "de Adaptive"
+          }
+        },
+        {
+          "id": "uIRTl2HCItMjmiHTgq37",
+          "data": {
+            "registered": true,
+            "params": {
+              "cat": true,
+              "numberOfTrials": 300,
+              "heavyInstructions": false,
+              "language": "en",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "trog",
+              "semThreshold": 0,
+              "sequentialPractice": true,
+              "corpus": "trog-item-bank-full-params",
+              "storeItemId": true,
+              "maxTime": 4,
+              "keyHelpers": false
+            },
+            "name": "en Adaptive"
+          }
+        },
+        {
+          "id": "zboJsDdF6O7SnExQ7ags",
+          "data": {
+            "registered": true,
+            "params": {
+              "maxIncorrect": 3,
+              "stimulusBlocks": 3,
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "corpus": "trog-item-bank-full-params",
+              "inferenceNumStories": null,
+              "numberOfTrials": 300,
+              "numOfPracticeTrials": 2,
+              "skipInstructions": true,
+              "age": null,
+              "language": "es-AR",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "trog",
+              "semThreshold": 0,
+              "cat": true,
+              "storeItemId": false,
+              "maxTime": 4,
+              "keyHelpers": false
+            },
+            "name": "es-AR"
+          }
+        }
+      ]
+    },
+    {
+      "taskId": "vocab",
+      "taskData": {
+        "registered": true,
+        "name": "Vocabulary",
+        "description": "Listen to the words and choose the right picture.",
+        "image": "https://storage.googleapis.com/levante-assets-dev/task-logos/vocab-logo.png"
+      },
+      "variants": [
+        {
+          "id": "4IzN6i3uZ8fGW9MUKQqC",
+          "data": {
+            "params": {
+              "startingTheta": 0,
+              "maxTime": 4,
+              "corpus": "vocab-item-bank-en-US",
+              "buttonLayout": "default",
+              "semThreshold": 0,
+              "sequentialStimulus": true,
+              "storeItemId": true,
+              "skipInstructions": false,
+              "sequentialPractice": true,
+              "taskName": "vocab",
+              "numberOfTrials": 300,
+              "keyHelpers": false,
+              "heavyInstructions": false,
+              "cat": true,
+              "language": "en-US"
+            },
+            "name": "English (North America) - New",
+            "registered": true
+          }
+        },
+        {
+          "id": "Ac6LdTPdqnlvZ8WXrnxG",
+          "data": {
+            "registered": true,
+            "params": {
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "corpus": "vocab-item-bank",
+              "numberOfTrials": 300,
+              "skipInstructions": false,
+              "language": "en",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "vocab",
+              "semThreshold": 0,
+              "cat": true,
+              "storeItemId": true,
+              "maxTime": 4,
+              "keyHelpers": false
+            },
+            "name": "en Adaptive"
+          }
+        },
+        {
+          "id": "FUSUckptfmsP4YgHZt3f",
+          "data": {
+            "registered": true,
+            "params": {
+              "maxIncorrect": 3,
+              "heavyInstructions": false,
+              "sequentialPractice": true,
+              "corpus": "CO-vocab-item-bank",
+              "numberOfTrials": 300,
+              "skipInstructions": false,
+              "numOfPracticeTrials": 2,
+              "language": "es",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "vocab",
+              "semThreshold": 0,
+              "cat": true,
+              "storeItemId": true,
+              "maxTime": 4,
+              "keyHelpers": false
+            },
+            "name": "es-CO Adaptive"
+          }
+        },
+        {
+          "id": "TeJcDBxaQERcSwn856oW",
+          "data": {
+            "params": {
+              "startingTheta": 0,
+              "maxTime": 4,
+              "corpus": "vocab-item-bank-es-CO",
+              "buttonLayout": "default",
+              "semThreshold": 0,
+              "maxIncorrect": 3,
+              "sequentialStimulus": true,
+              "storeItemId": true,
+              "numOfPracticeTrials": 2,
+              "skipInstructions": false,
+              "sequentialPractice": true,
+              "taskName": "vocab",
+              "numberOfTrials": 300,
+              "heavyInstructions": false,
+              "keyHelpers": false,
+              "cat": true,
+              "language": "es-CO"
+            },
+            "name": "Spanish (Colombia) - New",
+            "registered": true
+          }
+        },
+        {
+          "id": "TmnL3uaf6Hz1aKzeyjDV",
+          "data": {
+            "params": {
+              "heavyInstructions": false,
+              "sequentialStimulus": true,
+              "storeItemId": true,
+              "maxTime": 4,
+              "corpus": "vocab-item-bank-de-DE",
+              "numberOfTrials": 300,
+              "buttonLayout": "default",
+              "taskName": "vocab",
+              "sequentialPractice": true,
+              "keyHelpers": false,
+              "semThreshold": 0,
+              "cat": true,
+              "language": "de-DE",
+              "startingTheta": 0
+            },
+            "name": "German (Germany) - New",
+            "registered": true
+          }
+        },
+        {
+          "id": "jnaabbY2pwn8PSJmhQh5",
+          "data": {
+            "registered": true,
+            "params": {
+              "cat": true,
+              "numberOfTrials": 300,
+              "heavyInstructions": false,
+              "language": "de",
+              "startingTheta": 0,
+              "sequentialStimulus": true,
+              "buttonLayout": "default",
+              "taskName": "vocab",
+              "semThreshold": 0,
+              "sequentialPractice": true,
+              "corpus": "vocab-item-bank",
+              "storeItemId": true,
+              "maxTime": 4,
+              "keyHelpers": false
+            },
+            "name": "de Adaptive"
+          }
+        }
+      ]
+    }
+  ]
+}
