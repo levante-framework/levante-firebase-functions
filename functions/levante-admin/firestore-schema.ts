@@ -213,6 +213,7 @@ export interface User {
   assessmentUid: string;
   classes: OrgAssociationMap;
   createdAt: Timestamp;
+  disabled: boolean;
   displayName: string;
   districts: OrgAssociationMap;
   email: string;

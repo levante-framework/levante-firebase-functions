@@ -11,7 +11,7 @@ import { emptyOrgs } from "../utils/utils.js";
 
 export const createGuestDocs = async (
   user: AuthUserRecord,
-  sso: string = "google"
+  sso: string = "google",
 ) => {
   const roarUid = user.uid;
   const guestUserData = {
@@ -22,6 +22,7 @@ export const createGuestDocs = async (
     families: emptyOrgs(),
     groups: emptyOrgs(),
     archived: false,
+    disabled: false,
     createdAt: FieldValue.serverTimestamp(),
     sso,
   };
