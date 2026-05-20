@@ -86,6 +86,12 @@ lib
 .nx/cache
 .nx/workspace-data
 
+# Variant snapshots exported from dev/prod via
+# `npm --prefix functions/local run export-registered-variants`. Real
+# variant config from live projects should never be committed.
+emulator_scripts/registered-variants.json
+functions/local/registered-variants.json
+
 # Firebase Emulator Suite
 # Emulator data directories
 emulator_data/

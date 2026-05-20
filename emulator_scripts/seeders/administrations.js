@@ -1,6 +1,15 @@
 const admin = require('firebase-admin');
 
 const ADULT_TASK_IDS = ['adult-reasoning', 'caregiver-survey', 'teacher-survey'];
+// Per-task restriction for the adult administration: which userTypes should
+// receive this assessment in their per-user assignment doc. Tasks not listed
+// here are treated as unrestricted (everyone eligible to receive the
+// administration gets them).
+const ADULT_TASK_USER_TYPES = {
+  'adult-reasoning': ['parent'],
+  'caregiver-survey': ['parent'],
+  'teacher-survey': ['teacher'],
+};
 const MAX_CHILD_BUNDLES = 3;
 
 const DEFAULT_LEGAL = {
@@ -83,7 +92,8 @@ async function buildAdministrationPlans(db) {
         sequential: false,
         tags: ['adult', 'emulator'],
         daysToClose: 30,
-        userTypes: ['student', 'teacher', 'parent'],
+        userTypes: ['parent', 'teacher'],
+        assessmentUserTypes: ADULT_TASK_USER_TYPES,
       },
       assessments: adultAssessments,
     });
@@ -93,8 +103,9 @@ async function buildAdministrationPlans(db) {
     );
   }
 
+
   const adultIdSet = new Set(ADULT_TASK_IDS);
-  const childTaskIds = allTaskIds.filter((id) => !adultAssignmentReady || !adultIdSet.has(id));
+  const childTaskIds = allTaskIds.filter((id) => !adultIdSet.has(id));
 
   const numBundles = Math.min(MAX_CHILD_BUNDLES, childTaskIds.length);
   const chunks = splitTaskIdsIntoNBuckets(childTaskIds, numBundles);
@@ -346,10 +357,35 @@ async function createUserAssignments(
     variantName: a.variantName,
   }));
 
+  // Optional per-task userType restriction. If `template.assessmentUserTypes`
+  // is set, an assessment is only included in a user's assignment when that
+  // user's userType is in the allowed list for that taskId. Tasks not listed
+  // in the map are unrestricted.
+  const assessmentUserTypes = template.assessmentUserTypes || null;
+  const assessmentsForUser = (userType) => {
+    if (!assessmentUserTypes) {
+      return assignmentAssessments;
+    }
+    return assignmentAssessments.filter((a) => {
+      const allowed = assessmentUserTypes[a.taskId];
+      return !allowed || allowed.includes(userType);
+    });
+  };
+
+  let skippedUsers = 0;
   for (const user of eligibleUsers) {
     try {
+      const userAssessments = assessmentsForUser(user.userType);
+      if (userAssessments.length === 0) {
+        skippedUsers += 1;
+        console.log(
+          `        ⚠️  Skipping ${user.userKey} (${user.userType}): no assessments for this user type`,
+        );
+        continue;
+      }
+
       const assignmentData = {
-        assessments: assignmentAssessments,
+        assessments: userAssessments,
         assigningOrgs: testOrgs,
         completed: false,
         dateAssigned: admin.firestore.FieldValue.serverTimestamp(),
@@ -389,7 +425,8 @@ async function createUserAssignments(
     }
   }
 
-  console.log(`      ✅ Created assignments for ${eligibleUsers.length} users`);
+  const writtenCount = eligibleUsers.length - skippedUsers;
+  console.log(`      ✅ Created assignments for ${writtenCount} user(s)`);
 }
 
 function getDefaultParamsForTask(taskId) {
@@ -411,4 +448,4 @@ function getDefaultParamsForTask(taskId) {
   };
 }
 
-module.exports = { createAdministrations };
+module.exports = { createAdministrations, splitTaskIdsIntoNBuckets };

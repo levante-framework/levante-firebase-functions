@@ -13,6 +13,7 @@
     "lint": "npm --prefix functions/levante-admin run lint",
     "prepare": "husky install || true",
     "test": "firebase emulators:exec \"npx vitest run\"",
+    "test:seed": "npx vitest run __tests__/emulator-variant-seed.test.ts",
     "predeploy:levante-admin": "npm run build",
     "predeploy:levante-assessment": "npm run build",
     "deploy:levante-admin": "firebase deploy --only functions --prefix ./functions/levante-admin/firebase.json",

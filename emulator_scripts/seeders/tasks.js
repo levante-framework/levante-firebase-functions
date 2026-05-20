@@ -4,6 +4,40 @@ const path = require('path');
 
 const DEFAULT_VARIANT_SEED_PATH = path.join(__dirname, 'default-variant-seed.json');
 
+const FIRESTORE_TIMESTAMP_SENTINEL_KEY = '__firestoreTimestamp';
+
+// The exporter (functions/local/src/variants/write-registered-variants-json.ts)
+// wraps Firestore Timestamp values as `{ __firestoreTimestamp: "<iso>" }` so
+// they survive JSON serialization. On seed we replace every sentinel with a
+// fresh `serverTimestamp()` so timestamps in the emulator reflect when the
+// data was seeded — not when it was last touched in dev/prod. Recursively
+// walks arrays and objects; primitives pass through unchanged.
+function isTimestampSentinel(value) {
+  return (
+    value !== null &&
+    typeof value === 'object' &&
+    !Array.isArray(value) &&
+    typeof value[FIRESTORE_TIMESTAMP_SENTINEL_KEY] === 'string' &&
+    Object.keys(value).length === 1
+  );
+}
+
+function materializeFirestoreValues(value) {
+  if (value === null || value === undefined) return value;
+  if (Array.isArray(value)) return value.map(materializeFirestoreValues);
+  if (typeof value === 'object') {
+    if (isTimestampSentinel(value)) {
+      return admin.firestore.FieldValue.serverTimestamp();
+    }
+    const out = {};
+    for (const [k, v] of Object.entries(value)) {
+      out[k] = materializeFirestoreValues(v);
+    }
+    return out;
+  }
+  return value;
+}
+
 function loadVariantSeedRows(seedPath) {
   if (!fs.existsSync(seedPath)) {
     throw new Error(
@@ -47,21 +81,20 @@ async function seedTasksFromVariantSeedFile(db, seedPath) {
     const taskRef = db.collection('tasks').doc(taskId);
 
     await taskRef.set({
-      ...taskData,
+      ...materializeFirestoreValues(taskData),
       lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
     });
     console.log(`    ✅ Task document: ${taskId}`);
 
     for (const v of variants) {
       await taskRef.collection('variants').doc(v.id).set({
-        ...v.data,
+        ...materializeFirestoreValues(v.data),
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
       });
       console.log(`      ✅ Variant ${v.id}`);
     }
 
     const primaryVariantId = variants[0].id;
-    const v0 = variants[0].data || {};
     const taskName = taskData.name || taskId;
     createdTasks.push({
       id: taskId,
@@ -83,4 +116,10 @@ async function createTasks(adminApp, options = {}) {
   return seedTasksFromVariantSeedFile(db, seedPath);
 }
 
-module.exports = { createTasks };
+module.exports = {
+  createTasks,
+  loadVariantSeedRows,
+  materializeFirestoreValues,
+  isTimestampSentinel,
+  FIRESTORE_TIMESTAMP_SENTINEL_KEY,
+};
