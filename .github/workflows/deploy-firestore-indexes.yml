@@ -1,0 +1,101 @@
+name: Deploy Firestore Indexes
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to checkout"
+        required: true
+        default: "main"
+        type: string
+      target_project:
+        description: "Project to update"
+        required: true
+        default: "dev"
+        type: choice
+        options:
+          - dev
+          - preview
+
+env:
+  HUSKY: 0
+  DEV_PROJECT_ID: hs-levante-admin-dev
+  PREVIEW_PROJECT_ID: ${{ vars.PREVIEW_PROJECT || secrets.PREVIEW_PROJECT || vars.SEED_PROJECT || secrets.SEED_PROJECT }}
+
+jobs:
+  deploy-indexes:
+    name: Deploy indexes to ${{ github.event.inputs.target_project }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.branch }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Validate local Firestore indexes file
+        run: |
+          if [ ! -f "functions/levante-admin/firestore.indexes.json" ]; then
+            echo "❌ functions/levante-admin/firestore.indexes.json not found"
+            exit 1
+          fi
+        shell: bash
+
+      - name: Resolve target project
+        id: resolve-target
+        run: |
+          if [ "${{ github.event.inputs.target_project }}" = "preview" ]; then
+            project_id="${PREVIEW_PROJECT_ID}"
+          else
+            project_id="${DEV_PROJECT_ID}"
+          fi
+
+          if [ -z "$project_id" ]; then
+            echo "❌ Target project ID is not configured"
+            exit 1
+          fi
+
+          echo "project_id=$project_id" >> "$GITHUB_OUTPUT"
+          echo "Resolved target project: $project_id"
+        env:
+          DEV_PROJECT_ID: ${{ env.DEV_PROJECT_ID }}
+          PREVIEW_PROJECT_ID: ${{ env.PREVIEW_PROJECT_ID }}
+        shell: bash
+
+      - name: Authenticate with GCP (dev)
+        if: github.event.inputs.target_project == 'dev'
+        uses: google-github-actions/auth@v2
+        with:
+          project_id: ${{ env.DEV_PROJECT_ID }}
+          credentials_json: ${{ secrets.GCP_SA_CREDENTIALS_DEV }}
+          request_reason: "levante-firebase-functions/deploy-firestore-indexes run ${{ github.run_id }}"
+          access_token_scopes: "email,openid,https://www.googleapis.com/auth/cloudplatformprojects.readonly,https://www.googleapis.com/auth/firebase,https://www.googleapis.com/auth/cloud-platform"
+
+      - name: Authenticate to Firebase (preview service account)
+        if: github.event.inputs.target_project == 'preview'
+        run: |
+          echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT_PREVIEW_DEV }}' > "$RUNNER_TEMP/firebase-sa.json"
+          echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-sa.json" >> "$GITHUB_ENV"
+        shell: bash
+
+      - name: Deploy Firestore indexes
+        run: |
+          npx firebase deploy --only firestore:indexes --project "${{ steps.resolve-target.outputs.project_id }}" --non-interactive
+        shell: bash
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/firebase-sa.json"
+        shell: bash
