@@ -32,6 +32,10 @@ interface SurveyResponsesInput {
   };
 }
 
+function isSurveyTask(taskId?: string): boolean {
+  return !!taskId && taskId.toLowerCase().includes("survey");
+}
+
 export async function writeSurveyResponses(
   requesterUid: string,
   data: SurveyResponsesInput
@@ -174,8 +178,8 @@ export async function writeSurveyResponses(
         const assessments = assignmentData?.assessments || [];
 
         // Find the survey assessment
-        const surveyAssessmentIndex = assessments.findIndex(
-          (assessment) => assessment.taskId === "survey"
+        const surveyAssessmentIndex = assessments.findIndex((assessment) =>
+          isSurveyTask(assessment.taskId)
         );
 
         if (surveyAssessmentIndex !== -1) {
