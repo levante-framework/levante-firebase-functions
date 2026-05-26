@@ -3,10 +3,6 @@ import { FieldPath, getFirestore, Timestamp } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import {
-  GetSiteOverviewParamsSchema,
-  type GetSiteOverviewResult,
-} from "@levante-framework/levante-zod";
-import {
   ACTIONS,
   GROUP_SUB_RESOURCES,
   RESOURCES,
@@ -17,24 +13,34 @@ import {
   ensurePermissionsLoaded,
 } from "../utils/permission-helpers.js";
 
+interface GetSiteOverviewResult {
+  counts: {
+    users: { teachers: number; caregivers: number; children: number };
+    assignments: { open: number; upcoming: number; closed: number };
+  };
+  schools: Array<{ id: string; name: unknown }>;
+  classes: Array<{ id: string; name: unknown; schoolId: unknown }>;
+  cohorts: Array<{ id: string; name: unknown }>;
+}
+
+function parseGetSiteOverviewParams(data: unknown): { siteId: string } {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    throw new HttpsError("invalid-argument", "Invalid input");
+  }
+  const siteId = (data as { siteId?: unknown }).siteId;
+  if (typeof siteId !== "string" || siteId.trim().length === 0) {
+    throw new HttpsError("invalid-argument", "A valid siteId is required");
+  }
+  return { siteId: siteId.trim() };
+}
+
 export const getSiteOverview = onCall(
   async (req): Promise<GetSiteOverviewResult> => {
     const uid = req.auth?.uid;
     if (!uid)
       throw new HttpsError("unauthenticated", "User must be authenticated");
 
-    const parsed = GetSiteOverviewParamsSchema.safeParse(req.data);
-    if (!parsed.success) {
-      throw new HttpsError(
-        "invalid-argument",
-        "Invalid input",
-        parsed.error.issues.map((i) => ({
-          path: i.path.join("."),
-          message: i.message,
-        })),
-      );
-    }
-    const { siteId } = parsed.data;
+    const { siteId } = parseGetSiteOverviewParams(req.data);
 
     const userRecord = await getAuth().getUser(uid);
     // Legacy permissions

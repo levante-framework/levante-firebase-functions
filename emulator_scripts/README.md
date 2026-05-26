@@ -2,9 +2,24 @@
 
 ## Emulator (local)
 
-- **Seed:** `npm run emulator:seed` — populates the local emulator (run with emulator started).
+- **Seed:** `npm run emulator:seed` — populates the local emulator through the legacy direct Auth/Firestore seed (run with emulator started).
+- **Functions seed:** `npm run emulator:seed:functions` — signs in as the bootstrapped super admin and creates visible dashboard data by invoking Firebase callable functions.
+- **UI seed:** `npm run emulator:seed:ui` — drives the researcher dashboard through Cypress in `../levante-support` to create realistic groups, users, and assignments. Videos are disabled by default.
+- **Start seeded dashboard:** `npm run emulator:start:dashboard` — starts Auth/Firestore/Functions emulators, bootstraps only permissions/admin/tasks, creates visible seed data through callable Firebase Functions, starts the local dashboard, then prints login credentials and keeps everything running for manual use.
+- **Admin login smoke test:** `npm run emulator:test:admin-login` — starts Auth/Firestore/Functions emulators, bootstraps permissions, task variants, and a super-admin user, starts the local dashboard, then verifies the seeded super admin can log in through Cypress. Videos are disabled.
 - **Clear:** `npm run emulator:clear` — wipes Auth + Firestore in the emulator.
 - **Reset:** `npm run emulator:reset` — clear then seed.
+
+`emulator:seed:ui` first bootstraps only data the dashboard cannot create itself: system permissions, a super-admin user/claims, and task variants. Cypress then signs in as that user, creates a Site through the dashboard UI, selects it, then creates realistic school/class/cohort/users/assignment data through the UI. Override the support repo path with `LEVANTE_SUPPORT_DIR=/path/to/levante-support` if the repos are not siblings.
+
+`emulator:seed:functions` and `emulator:start:dashboard` use the same minimal bootstrap assumptions as the Cypress UI seed. The bootstrap creates only data the dashboard cannot create itself: system permissions, a super-admin user/claims, and task variants. Visible test fixtures are then created through the same callable Firebase Functions used by the dashboard (`setUidClaims`, `upsertOrg`, `createUsers`, `linkUsers`, and `upsertAdministration`).
+
+`emulator:start:dashboard` provides these default credentials unless overridden with `E2E_AI_SUPER_ADMIN_EMAIL` and `E2E_AI_SUPER_ADMIN_PASSWORD`:
+
+```text
+Email: superadmin@levante.test
+Password: super123
+```
 
 ## Live project (from firebaseconfig.js or env)
 

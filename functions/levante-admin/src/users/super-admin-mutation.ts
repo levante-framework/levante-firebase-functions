@@ -4,9 +4,8 @@ import type { UserRecord } from "firebase-admin/auth";
 import {
   ACTIONS,
   RESOURCES,
-  ROLES,
-  ADMIN_SUB_RESOURCES,
 } from "@levante-framework/permissions-core";
+import { ROLES } from "../utils/constants.js";
 import { sanitizeRoles } from "../utils/role-helpers.js";
 import { _createAdministratorWithRoles } from "./create-administrator.js";
 import type {
@@ -76,7 +75,7 @@ export const createUpdateSuperAdmin = async (params: {
 
   const requestingUser = buildPermissionsUserFromAuthRecord(requesterRecord);
   const permissionsService = getPermissionService();
-  const subResource = ADMIN_SUB_RESOURCES.SUPER_ADMIN;
+  const subResource = ROLES.SUPER_ADMIN as any;
 
   const adminUid = typeof adminUidRaw === "string" ? adminUidRaw.trim() : "";
 
