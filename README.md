@@ -79,6 +79,7 @@ The emulator includes a comprehensive seeding system that creates test users, gr
 # Database Management
 npm run emulator:clear           # Clear all data from emulator
 npm run emulator:seed            # Seed via Firebase callable functions
+npm run emulator:seed:tasks      # Copy registered tasks/variants from source project
 npm run emulator:seed:legacy     # Legacy direct Auth/Firestore seed
 npm run emulator:reset           # Clear + seed (fresh start)
 
@@ -110,6 +111,12 @@ rm -rf emulator_data && npm run dev:clean
    ```bash
    npm run emulator:reset  # Fresh start
    ```
+
+Task/variant bootstrap for functions-driven seeding copies only `registered == true` tasks and variants from `hs-levante-admin-dev` by default. Override with:
+
+```bash
+SEED_TASK_SOURCE_PROJECT=hs-levante-admin-prod npm run emulator:seed
+```
 
 ### User Claims & Permissions
 

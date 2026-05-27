@@ -4,6 +4,7 @@
 
 - **Seed:** `npm run emulator:seed` — populates the local emulator through Firebase callable functions.
 - **Legacy seed:** `npm run emulator:seed:legacy` — legacy direct Auth/Firestore seed.
+- **Tasks bootstrap:** `npm run emulator:seed:tasks` — copies only `registered == true` tasks and variants from a source project into the emulator.
 - **Functions seed:** `npm run emulator:seed:functions` — signs in as the bootstrapped super admin and creates visible dashboard data by invoking Firebase callable functions.
 - **UI seed:** `npm run emulator:seed:ui` — drives the researcher dashboard through Cypress in `../levante-support` to create realistic groups, users, and assignments. Videos are disabled by default.
 - **Start seeded dashboard:** `npm run emulator:start:dashboard` — starts Auth/Firestore/Functions emulators, bootstraps only permissions/admin/tasks, creates visible seed data through callable Firebase Functions, starts the local dashboard, then prints login credentials and keeps everything running for manual use.
@@ -13,7 +14,13 @@
 
 `emulator:seed:ui` first bootstraps only data the dashboard cannot create itself: system permissions, a super-admin user/claims, and task variants. Cypress then signs in as that user, creates a Site through the dashboard UI, selects it, then creates realistic school/class/cohort/users/assignment data through the UI. Override the support repo path with `LEVANTE_SUPPORT_DIR=/path/to/levante-support` if the repos are not siblings.
 
-`emulator:seed:functions` and `emulator:start:dashboard` use the same minimal bootstrap assumptions as the Cypress UI seed. The bootstrap creates only data the dashboard cannot create itself: system permissions, a super-admin user/claims, and task variants. Visible test fixtures are then created through the same callable Firebase Functions used by the dashboard (`setUidClaims`, `upsertOrg`, `createUsers`, `linkUsers`, and `upsertAdministration`).
+`emulator:seed:functions` and `emulator:start:dashboard` use the same minimal bootstrap assumptions as the Cypress UI seed. The bootstrap creates only data the dashboard cannot create itself: system permissions, a super-admin user/claims, and task variants. Task variants are copied from a source project and filtered to `registered == true` for both tasks and variants. Visible test fixtures are then created through the same callable Firebase Functions used by the dashboard (`setUidClaims`, `upsertOrg`, `createUsers`, `linkUsers`, and `upsertAdministration`).
+
+By default task copy source is `hs-levante-admin-dev`. Override with:
+
+```bash
+SEED_TASK_SOURCE_PROJECT=hs-levante-admin-prod npm run emulator:seed
+```
 
 `emulator:start:dashboard` provides these default credentials unless overridden with `E2E_AI_SUPER_ADMIN_EMAIL` and `E2E_AI_SUPER_ADMIN_PASSWORD`:
 

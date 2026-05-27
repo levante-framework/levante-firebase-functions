@@ -23,6 +23,7 @@
     "emulator:seed": "EMULATOR=1 node emulator_scripts/seed-emulator-functions.js",
     "emulator:seed:legacy": "EMULATOR=1 node emulator_scripts/seed-emulator.js",
     "emulator:seed:functions": "EMULATOR=1 node emulator_scripts/seed-emulator-functions.js",
+    "emulator:seed:tasks": "EMULATOR=1 node emulator_scripts/seed-tasks-from-project.js",
     "emulator:seed:ui": "node emulator_scripts/seed-emulator-ui.js",
     "emulator:start:dashboard": "node emulator_scripts/start-seeded-dashboard.js",
     "emulator:test:admin-login": "node emulator_scripts/test-admin-login.js",

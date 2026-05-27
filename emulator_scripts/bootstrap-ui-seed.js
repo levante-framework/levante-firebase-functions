@@ -2,7 +2,7 @@ const admin = require('firebase-admin');
 const { getAuth } = require('firebase-admin/auth');
 const { getSeedConfig } = require('./config');
 const { createSystemPermissions } = require('./seeders/permissions');
-const { createTasks } = require('./seeders/tasks');
+const { seedRegisteredTasksFromProject } = require('./seeders/tasks-from-project');
 
 const { projectId, isEmulator } = getSeedConfig();
 
@@ -12,6 +12,10 @@ if (isEmulator) {
 }
 
 const app = admin.initializeApp({ projectId }, 'ui-seed-bootstrap');
+const sourceProjectId =
+  process.env.SEED_TASK_SOURCE_PROJECT ||
+  process.env.TASKS_SOURCE_PROJECT ||
+  'hs-levante-admin-dev';
 
 async function ensureSuperAdmin() {
   const auth = getAuth(app);
@@ -91,7 +95,11 @@ async function main() {
   console.log('=== BOOTSTRAPPING EMULATOR FOR CYPRESS UI SEED ===');
   await createSystemPermissions(app);
   await ensureSuperAdmin();
-  await createTasks(app);
+  await seedRegisteredTasksFromProject({
+    targetApp: app,
+    sourceProjectId,
+    verbose: true,
+  });
   console.log('=== EMULATOR UI SEED BOOTSTRAP COMPLETE ===');
 }
 

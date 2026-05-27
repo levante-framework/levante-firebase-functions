@@ -1,5 +1,6 @@
 const { getSeedConfig } = require('./config');
 const admin = require('firebase-admin');
+const { seedRegisteredTasksFromProject } = require('./seeders/tasks-from-project');
 
 const { projectId, isEmulator } = getSeedConfig();
 
@@ -13,6 +14,10 @@ const functionsOrigin =
   process.env.FUNCTIONS_EMULATOR_ORIGIN || `http://127.0.0.1:${process.env.FIREBASE_FUNCTIONS_EMULATOR_PORT || '5002'}`;
 const superAdminEmail = process.env.E2E_AI_SUPER_ADMIN_EMAIL || 'superadmin@levante.test';
 const superAdminPassword = process.env.E2E_AI_SUPER_ADMIN_PASSWORD || 'super123';
+const sourceProjectId =
+  process.env.SEED_TASK_SOURCE_PROJECT ||
+  process.env.TASKS_SOURCE_PROJECT ||
+  'hs-levante-admin-dev';
 const validationApp = admin.initializeApp({ projectId }, 'functions-seed-validation');
 
 const ADMIN_USERS = [
@@ -578,6 +583,11 @@ async function validateDashboardVisibleData({ siteId, createdAdministrations, id
 
 async function main() {
   console.log('=== STARTING FUNCTIONS-DRIVEN EMULATOR SEED ===');
+  await seedRegisteredTasksFromProject({
+    targetApp: validationApp,
+    sourceProjectId,
+    verbose: true,
+  });
   const { idToken, uid } = await signIn();
 
   console.log('Calling setUidClaims as seeded super admin...');
