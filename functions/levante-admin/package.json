@@ -15,8 +15,9 @@
     "serve": "npm run build:watch | firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
+    "normalize:indexes": "node scripts/normalize-indexes.js",
     "validate:indexes": "bash scripts/validate-indexes.sh",
-    "update:indexes": "firebase firestore:indexes --project dev > firestore.indexes.json"
+    "update:indexes": "firebase firestore:indexes --project dev > firestore.indexes.json && npm run normalize:indexes"
   },
   "engines": {
     "node": "20"
