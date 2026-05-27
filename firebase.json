@@ -15,6 +15,7 @@
     }
   ],
   "firestore": {
+    "database": "(default)",
     "rules": "functions/levante-admin/firestore.rules",
     "indexes": "functions/levante-admin/firestore.indexes.json"
   },
