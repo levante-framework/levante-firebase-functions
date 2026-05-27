@@ -37,11 +37,6 @@ jobs:
           npm install -g husky
           npm ci
 
-      - name: Install Firebase CLI
-        run: |
-          npm install -g firebase-tools
-        shell: bash
-
       - name: Authenticate with GCP (Dev)
         uses: google-github-actions/auth@v2
         with:
@@ -53,7 +48,8 @@ jobs:
       - name: Export current Firestore indexes from Dev
         run: |
           cd functions/levante-admin
-          firebase firestore:indexes --project dev > current-indexes.json
+          npx firebase firestore:indexes --project dev > current-indexes.json
+          node scripts/normalize-indexes.js current-indexes.json
         shell: bash
 
       - name: Check if indexes have changed
@@ -73,8 +69,11 @@ jobs:
             exit 0
           fi
 
+          cp firestore.indexes.json local-indexes.json
+          node scripts/normalize-indexes.js local-indexes.json
+
           # Normalize both files
-          normalize_json "firestore.indexes.json" > local-normalized.json
+          normalize_json "local-indexes.json" > local-normalized.json
           normalize_json "current-indexes.json" > remote-normalized.json
 
           # Compare the normalized files
@@ -133,5 +132,5 @@ jobs:
         if: always()
         run: |
           cd functions/levante-admin
-          rm -f current-indexes.json local-normalized.json remote-normalized.json
+          rm -f current-indexes.json local-indexes.json local-normalized.json remote-normalized.json
         shell: bash
