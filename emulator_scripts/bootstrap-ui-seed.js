@@ -2,6 +2,7 @@ const admin = require('firebase-admin');
 const { getAuth } = require('firebase-admin/auth');
 const { getSeedConfig } = require('./config');
 const { createSystemPermissions } = require('./seeders/permissions');
+const { getTaskSourceProject } = require('./function-based-seeders/options');
 const { seedRegisteredTasksFromProject } = require('./seeders/tasks-from-project');
 
 const { projectId, isEmulator } = getSeedConfig();
@@ -12,10 +13,7 @@ if (isEmulator) {
 }
 
 const app = admin.initializeApp({ projectId }, 'ui-seed-bootstrap');
-const sourceProjectId =
-  process.env.SEED_TASK_SOURCE_PROJECT ||
-  process.env.TASKS_SOURCE_PROJECT ||
-  'hs-levante-admin-dev';
+const sourceProjectId = getTaskSourceProject();
 
 async function ensureSuperAdmin() {
   const auth = getAuth(app);

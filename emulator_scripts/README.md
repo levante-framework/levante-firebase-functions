@@ -22,6 +22,25 @@ By default task copy source is `hs-levante-admin-dev`. Override with:
 SEED_TASK_SOURCE_PROJECT=hs-levante-admin-prod npm run emulator:seed
 ```
 
+The functions-driven seeder is modular and profile-based. Default `SEED_PROFILE=dashboard` preserves the full visible dashboard fixture. Available profiles:
+
+- `dashboard`: full default seed.
+- `small`: same shape as `dashboard`, with fewer generated students.
+- `minimal`: copy registered tasks/variants, sign in as the bootstrapped super admin, and refresh claims.
+- `no-administrations`: create orgs/admins/participants, but skip administration creation.
+- `tasks-only`: copy registered tasks/variants and stop.
+
+Useful overrides:
+
+```bash
+SEED_PROFILE=small npm run emulator:seed
+SEED_STUDENT_COUNT=50 npm run emulator:seed
+SEED_INCLUDE_OPTIONAL_ADMINISTRATION_TEMPLATES=true npm run emulator:seed
+SEED_VALIDATE=false npm run emulator:seed
+```
+
+Optional administration templates reference `MEFS` and `survey`. They are excluded by default because the `hs-levante-admin-dev` source data currently does not provide registered variants for those tasks.
+
 `emulator:start:dashboard` provides these default credentials unless overridden with `E2E_AI_SUPER_ADMIN_EMAIL` and `E2E_AI_SUPER_ADMIN_PASSWORD`:
 
 ```text

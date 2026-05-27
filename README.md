@@ -122,6 +122,19 @@ Task/variant bootstrap for functions-driven seeding copies only `registered == t
 SEED_TASK_SOURCE_PROJECT=hs-levante-admin-prod npm run emulator:seed
 ```
 
+The functions-driven seeder also supports profiles for smaller or more targeted local datasets:
+
+```bash
+SEED_PROFILE=small npm run emulator:seed              # Same shape, fewer generated students
+SEED_PROFILE=no-administrations npm run emulator:seed # Users/orgs only
+SEED_PROFILE=tasks-only npm run emulator:seed         # Registered tasks/variants only
+SEED_STUDENT_COUNT=50 npm run emulator:seed           # Override generated student count
+SEED_INCLUDE_OPTIONAL_ADMINISTRATION_TEMPLATES=true npm run emulator:seed # Try optional templates
+SEED_VALIDATE=false npm run emulator:seed             # Skip final validation checks
+```
+
+Optional administration templates reference `MEFS` and `survey`, which are skipped by default because the `-dev` source data currently does not provide registered variants for them.
+
 ### User Claims & Permissions
 
 - **Super Admin**: Has `super_admin: true` and access to all groups

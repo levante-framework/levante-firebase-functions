@@ -1,5 +1,6 @@
 const admin = require('firebase-admin');
 const { getSeedConfig } = require('./config');
+const { getTaskSourceProject } = require('./function-based-seeders/options');
 const { seedRegisteredTasksFromProject } = require('./seeders/tasks-from-project');
 
 const { projectId, isEmulator } = getSeedConfig();
@@ -10,10 +11,7 @@ if (!isEmulator) {
 
 process.env.FIRESTORE_EMULATOR_HOST ||= '127.0.0.1:8180';
 
-const sourceProjectId =
-  process.env.SEED_TASK_SOURCE_PROJECT ||
-  process.env.TASKS_SOURCE_PROJECT ||
-  'hs-levante-admin-dev';
+const sourceProjectId = getTaskSourceProject();
 
 const app = admin.initializeApp({ projectId }, 'tasks-from-project-seeder');
 
