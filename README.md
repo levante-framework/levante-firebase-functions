@@ -56,22 +56,22 @@ npm run emulator:seed
 
 ### Database Seeding Scripts
 
-The emulator includes a comprehensive seeding system that creates test users, groups, and data relationships:
+The default emulator seed is functions-driven. It copies registered tasks/variants from the configured source project, then creates dashboard-visible users, orgs, administrations, and assignments through Firebase callable functions.
 
 #### Test Users Created
 | User Type | Email | Password | Description |
 |-----------|-------|----------|-------------|
 | Super Admin | superadmin@levante.test | super123 | Super Admin user |
-| Admin | admin@levante.test | admin123 | Admin user |
-| Teacher | teacher@levante.test | teach123 | Participant user (teacher) |
-| Student | student@levante.test | student123 | Participant user (student) |
-| Parent | parent@levante.test | parent123 | Participant user (parent) |
+| Admin | admin@levante.test | Set by `createAdministrator` | Site admin fixture user |
+| Site Admin | siteadmin@levante.test | Set by `createAdministrator` | Site admin fixture user |
+| Research Assistant | ra@levante.test | Set by `createAdministrator` | Research assistant fixture user |
+| Participants | Generated seed users | N/A | Teacher, parent, and generated child users |
 
 #### Groups Created
-- **District**: "Test District" (ID: test-district-1)
-- **School**: "Test Elementary School" (ID: test-school-1)  
-- **Class**: "3rd Grade - Room 101" (ID: test-class-1)
-- **Group**: "Reading Intervention Cohort" (ID: test-group-1)
+- **District/Site**: "Function Seed District"
+- **School**: "Function Seed Elementary School"
+- **Classes**: "3rd Grade - Room 101", "4th Grade - Room 102"
+- **Group**: "Reading Intervention Cohort"
 
 #### Available Commands
 
