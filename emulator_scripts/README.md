@@ -2,7 +2,8 @@
 
 ## Emulator (local)
 
-- **Seed:** `npm run emulator:seed` — populates the local emulator through the legacy direct Auth/Firestore seed (run with emulator started).
+- **Seed:** `npm run emulator:seed` — populates the local emulator through Firebase callable functions.
+- **Legacy seed:** `npm run emulator:seed:legacy` — legacy direct Auth/Firestore seed.
 - **Functions seed:** `npm run emulator:seed:functions` — signs in as the bootstrapped super admin and creates visible dashboard data by invoking Firebase callable functions.
 - **UI seed:** `npm run emulator:seed:ui` — drives the researcher dashboard through Cypress in `../levante-support` to create realistic groups, users, and assignments. Videos are disabled by default.
 - **Start seeded dashboard:** `npm run emulator:start:dashboard` — starts Auth/Firestore/Functions emulators, bootstraps only permissions/admin/tasks, creates visible seed data through callable Firebase Functions, starts the local dashboard, then prints login credentials and keeps everything running for manual use.
@@ -25,7 +26,8 @@ Password: super123
 
 `seed:dev` and `clear:dev` use **projectId** from (in order): env `SEED_PROJECT` / `FIREBASE_PROJECT`, or the repo root file `firebaseconfig.js`. Locally, copy `firebaseconfig.example.js` to `firebaseconfig.js` and fill in values; that file is gitignored.
 
-- **Seed:** `npm run seed:dev` — seeds the project (Auth + Firestore). Use Application Default Credentials (e.g. `gcloud auth application-default login`).
+- **Seed:** `npm run seed:dev` — seeds through Firebase callable functions. Use Application Default Credentials (e.g. `gcloud auth application-default login`).
+- **Legacy seed:** `npm run seed:dev:legacy` — legacy direct Auth/Firestore seed.
 - **Clear:** `CONFIRM_CLEAR=1 npm run clear:dev` — wipes Auth + Firestore in that project. Requires `CONFIRM_CLEAR=1` to avoid accidental runs.
 - **Reset:** `npm run reset:dev` — clear (with confirmation) then seed.
 

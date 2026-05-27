@@ -49,7 +49,7 @@ NOTE: Current version numbers above are LTS versions at the time of writing.
 # Start emulators with data persistence
 npm run dev
 
-# Fill the emulator environment with seed data
+# Fill the emulator environment with seed data (functions-driven)
 npm run emulator:seed
 ```
 
@@ -78,7 +78,8 @@ The emulator includes a comprehensive seeding system that creates test users, gr
 ```bash
 # Database Management
 npm run emulator:clear           # Clear all data from emulator
-npm run emulator:seed            # Seed database with test data
+npm run emulator:seed            # Seed via Firebase callable functions
+npm run emulator:seed:legacy     # Legacy direct Auth/Firestore seed
 npm run emulator:reset           # Clear + seed (fresh start)
 
 # Utility Commands
@@ -100,14 +101,14 @@ rm -rf emulator_data && npm run dev:clean
 
 2. **Set up test data**:
    ```bash
-   npm run emulator:setup
+   npm run emulator:seed
    ```
 
 3. **Develop and test** your application with the created users
 
 4. **Reset data when needed**:
    ```bash
-   npm run emulator:setup  # Fresh start
+   npm run emulator:reset  # Fresh start
    ```
 
 ### User Claims & Permissions
