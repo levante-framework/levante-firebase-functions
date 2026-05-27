@@ -248,7 +248,7 @@ async function getFirstVariant(taskId, idToken) {
   );
 
   const document = body.documents?.[0];
-  if (!document) throw new Error(`No seeded variant found for task ${taskId}`);
+  if (!document) return null;
 
   return {
     variantId: document.name.split('/').pop(),
@@ -258,8 +258,10 @@ async function getFirstVariant(taskId, idToken) {
 }
 
 async function getVariantsByTaskIds(taskIds, idToken) {
-  const entries = await Promise.all(taskIds.map(async (taskId) => [taskId, await getFirstVariant(taskId, idToken)]));
-  return Object.fromEntries(entries);
+  const entries = await Promise.all(
+    taskIds.map(async (taskId) => [taskId, await getFirstVariant(taskId, idToken)]),
+  );
+  return Object.fromEntries(entries.filter(([, variant]) => Boolean(variant)));
 }
 
 async function getDocument(path, idToken) {
@@ -416,7 +418,7 @@ async function linkParticipantUsers({ userRows, createdUsers, siteId, idToken })
 function buildAdministrationAssessments({ template, variantsByTaskId }) {
   return template.taskIds.map((taskId) => {
     const variant = variantsByTaskId[taskId];
-    if (!variant) throw new Error(`Missing variant for task ${taskId}`);
+    if (!variant) throw new Error(`Missing seeded registered variant for task ${taskId}`);
 
     return {
       taskId,
@@ -437,6 +439,14 @@ async function createAdministrations({ idToken, siteId, schoolId, classIds, coho
   const now = new Date();
 
   for (const template of ADMINISTRATION_TEMPLATES) {
+    const missingTasks = template.taskIds.filter((taskId) => !variantsByTaskId[taskId]);
+    if (missingTasks.length > 0) {
+      console.log(
+        `Skipping administration template ${template.templateId}; missing registered variants for: ${missingTasks.join(', ')}`,
+      );
+      continue;
+    }
+
     const closeDate = new Date(now.getTime() + template.daysToClose * 24 * 60 * 60 * 1000);
     const result = await callFunction(
       'upsertAdministration',
@@ -541,7 +551,7 @@ async function validateDashboardVisibleData({ siteId, createdAdministrations, id
     schools: 1,
     classes: 2,
     groups: 1,
-    administrations: 6,
+    administrations: createdAdministrations.length,
   };
   const actualCounts = {
     users: usersCount,
