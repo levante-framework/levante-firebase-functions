@@ -90,6 +90,7 @@ export const completeTask = onCall(async (request) => {
 
       // NOW DO ALL WRITES
       const docRef = getAssignmentDocRef(db, userId, administrationId);
+      const progressKey = taskId.replace(/-/g, "_");
 
       // Update this assessment's `completedOn` timestamp
       updateAssignedTaskInTransaction(
@@ -100,10 +101,17 @@ export const completeTask = onCall(async (request) => {
         transaction
       );
 
+      const assignmentUpdates: { [key: string]: unknown } = {
+        [`progress.${progressKey}`]: "completed",
+        started: true,
+      };
+
       // Mark assignment as complete if all assessments are now completed
       if (shouldComplete) {
-        transaction.update(docRef, { completed: true });
+        assignmentUpdates.completed = true;
       }
+
+      transaction.update(docRef, assignmentUpdates);
     });
 
     logger.info(userId, "completed task", {
