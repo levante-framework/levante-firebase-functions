@@ -89,6 +89,10 @@ jobs:
           echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-sa.json" >> "$GITHUB_ENV"
         shell: bash
 
+      - name: Normalize Firestore indexes for deploy
+        run: node functions/levante-admin/scripts/normalize-indexes.js
+        shell: bash
+
       - name: Deploy Firestore indexes
         run: |
           npx firebase deploy --only firestore:indexes --project "${{ steps.resolve-target.outputs.project_id }}" --non-interactive
