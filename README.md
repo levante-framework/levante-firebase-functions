@@ -79,9 +79,13 @@ The emulator includes a comprehensive seeding system that creates test users, gr
 # Database Management
 npm run emulator:clear           # Clear all data from emulator
 npm run emulator:seed            # Seed via Firebase callable functions
+npm run emulator:seed:functions  # Explicit functions-driven seed (same as emulator:seed)
 npm run emulator:seed:tasks      # Copy registered tasks/variants from source project
+npm run emulator:seed:ui         # Seed through dashboard UI automation (Cypress)
 npm run emulator:seed:legacy     # Legacy direct Auth/Firestore seed
 npm run emulator:reset           # Clear + seed (fresh start)
+npm run emulator:start:dashboard # Start emulators + dashboard with seeded data
+npm run emulator:test:admin-login # Smoke-test seeded super-admin login
 
 # Utility Commands
 npm run emulator:export          # Export current emulator data for backup
