@@ -94,7 +94,6 @@ function buildParticipantRows({ siteId, schoolId, originalClassId, newClassId, c
     districts: [siteId],
     schools: [schoolId],
     groups: [cohortId],
-    families: [],
   };
 
   const rowForClass = (row, classId) => ({
