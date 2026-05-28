@@ -1,10 +1,6 @@
 import { logger } from "firebase-functions/v2";
 import { HttpsError } from "firebase-functions/v2/https";
 import type { UserRecord } from "firebase-admin/auth";
-import {
-  ACTIONS,
-  RESOURCES,
-} from "@levante-framework/permissions-core";
 import { ROLES } from "../utils/constants.js";
 import { sanitizeRoles } from "../utils/role-helpers.js";
 import { _createAdministratorWithRoles } from "./create-administrator.js";
@@ -18,8 +14,6 @@ import {
 } from "./update-administrator.js";
 import {
   buildPermissionsUserFromAuthRecord,
-  ensurePermissionsLoaded,
-  getPermissionService,
 } from "../utils/permission-helpers.js";
 
 const assertSuperAdminRolesOnly = (roles: ReturnType<typeof sanitizeRoles>) => {
@@ -41,8 +35,6 @@ export const createUpdateSuperAdmin = async (params: {
   isTestData?: boolean;
   adminUid?: string;
 }) => {
-  await ensurePermissionsLoaded();
-
   const {
     requesterAdminUid,
     requesterRecord,
@@ -74,8 +66,15 @@ export const createUpdateSuperAdmin = async (params: {
   assertSuperAdminRolesOnly(sanitizedRoles);
 
   const requestingUser = buildPermissionsUserFromAuthRecord(requesterRecord);
-  const permissionsService = getPermissionService();
-  const subResource = ROLES.SUPER_ADMIN as any;
+  const requesterIsSuperAdmin = requestingUser.roles.some(
+    (role) => role.role === ROLES.SUPER_ADMIN,
+  );
+  if (!requesterIsSuperAdmin) {
+    throw new HttpsError(
+      "permission-denied",
+      "You do not have permission to create or update super administrators"
+    );
+  }
 
   const adminUid = typeof adminUidRaw === "string" ? adminUidRaw.trim() : "";
 
@@ -87,18 +86,6 @@ export const createUpdateSuperAdmin = async (params: {
   });
 
   if (adminUid.length === 0) {
-    const allowed = permissionsService.canPerformGlobalAction(
-      requestingUser,
-      RESOURCES.ADMINS,
-      ACTIONS.CREATE,
-      subResource
-    );
-    if (!allowed) {
-      throw new HttpsError(
-        "permission-denied",
-        "You do not have permission to create super administrators"
-      );
-    }
     if (!email || typeof email !== "string") {
       throw new HttpsError("invalid-argument", "A valid email is required");
     }
@@ -120,19 +107,6 @@ export const createUpdateSuperAdmin = async (params: {
       isTestData,
       requesterAdminUid,
     });
-  }
-
-  const allowed = permissionsService.canPerformGlobalAction(
-    requestingUser,
-    RESOURCES.ADMINS,
-    ACTIONS.UPDATE,
-    subResource
-  );
-  if (!allowed) {
-    throw new HttpsError(
-      "permission-denied",
-      "You do not have permission to update super administrators"
-    );
   }
 
   logger.info("super-admin-mutation: updating super administrator roles", {
