@@ -55,7 +55,7 @@ const buildGroupStructure = (groupIds?: string[]) => {
 
   const now = new Date();
   const dates = Object.fromEntries(
-    groupIds.map((groupId) => [groupId, { from: now }]),
+    groupIds.map((groupId) => [groupId, { from: now }])
   );
 
   return {
@@ -89,7 +89,7 @@ export const _createAdministratorWithRoles = async ({
   if (trimmedName.first.length === 0 || trimmedName.last.length === 0) {
     throw new HttpsError(
       "invalid-argument",
-      "First and last name values are required",
+      "First and last name values are required"
     );
   }
 
@@ -97,12 +97,12 @@ export const _createAdministratorWithRoles = async ({
   if (sanitizedRoles.length === 0) {
     throw new HttpsError(
       "invalid-argument",
-      "At least one valid role must be provided",
+      "At least one valid role must be provided"
     );
   }
 
   const superAdminRoles = sanitizedRoles.filter(
-    (role) => role.role === ROLES.SUPER_ADMIN,
+    (role) => role.role === ROLES.SUPER_ADMIN
   );
   const hasSuperAdminRole = superAdminRoles.length > 0;
   const finalRoles = hasSuperAdminRole ? [superAdminRoles[0]] : sanitizedRoles;
@@ -226,7 +226,7 @@ export const _createAdministratorWithRoles = async ({
             adminOrgs: EMPTY_USER_CLAIMS_ADMIN_ORGS,
           },
         },
-        { merge: true },
+        { merge: true }
       );
     }
   } else {

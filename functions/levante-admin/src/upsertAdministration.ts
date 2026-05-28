@@ -13,6 +13,7 @@ import {
   processNewAdministration,
   processModifiedAdministration,
 } from "./administrations/sync-administrations.js";
+import { assertNoDuplicateAdministrationNameInSite } from "./administrations/administration-duplicate-name.js";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import type { IAssessment, IOrgsList } from "./interfaces.js"; // Assuming necessary types/helpers are in common
@@ -106,6 +107,19 @@ async function validateSanitizedOrganizationsExist(
   }
 }
 
+async function validateSiteIdDistrictExists(
+  siteId: string,
+  db: Firestore
+): Promise<void> {
+  const snap = await db.collection("districts").doc(siteId).get();
+  if (!snap.exists) {
+    throw new HttpsError(
+      "not-found",
+      "siteId must match an existing districtId."
+    );
+  }
+}
+
 export const upsertAdministrationHandler = async (
   callerAdminUid: string,
   data: UpsertAdministrationData
@@ -169,6 +183,19 @@ export const upsertAdministrationHandler = async (
       `The end date cannot be before the start date: ${dateClose} < ${dateOpen}`
     );
   }
+
+  const siteId = data.siteId;
+  if (typeof siteId !== "string" || siteId.length === 0) {
+    throw new HttpsError("invalid-argument", "siteId is required.");
+  }
+
+  await validateSiteIdDistrictExists(siteId, db);
+
+  await assertNoDuplicateAdministrationNameInSite(db, {
+    siteId,
+    name,
+    excludeAdministrationId: administrationId,
+  });
 
   const sanitizeOrgIds = (ids: string[] | undefined): string[] =>
     (ids ?? []).filter((id) => typeof id === "string" && id.length > 0);
@@ -264,8 +291,6 @@ export const upsertAdministrationHandler = async (
         // --- Read 1 (Create Path) --- Check if user doc exists BEFORE any writes
         const userDocRef = db.collection("users").doc(callerAdminUid);
         const userDoc = await transaction.get(userDocRef);
-
-        const siteId = data.siteId;
 
         // Prepare Administration Data for creation
         const administrationData: IAdministrationDoc = {

@@ -24,7 +24,7 @@ env:
 
 jobs:
   deploy-indexes:
-    name: Deploy indexes to ${{ github.event.inputs.target_project }}
+    name: Deploy indexes to ${{ github.event.inputs.target_project }} from ${{ github.event.inputs.branch }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -34,6 +34,27 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.branch }}
+
+      - name: Show run context
+        run: |
+          checked_out_sha=$(git rev-parse HEAD)
+          checked_out_short=$(git rev-parse --short HEAD)
+          {
+            echo "## Deploy Firestore Indexes"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Branch input | \`${{ github.event.inputs.branch }}\` |"
+            echo "| Checked-out commit | [\`${checked_out_short}\`](${{ github.server_url }}/${{ github.repository }}/commit/${checked_out_sha}) |"
+            echo "| Target project | \`${{ github.event.inputs.target_project }}\` |"
+            echo "| Triggered by | @${{ github.actor }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Branch:           ${{ github.event.inputs.branch }}"
+          echo "Checked-out SHA:  ${checked_out_sha}"
+          echo "Target project:   ${{ github.event.inputs.target_project }}"
+          echo "Triggered by:     ${{ github.actor }}"
+        shell: bash
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -89,13 +110,51 @@ jobs:
           echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-sa.json" >> "$GITHUB_ENV"
         shell: bash
 
+      - name: Normalize Firestore indexes for deploy
+        run: node functions/levante-admin/scripts/normalize-indexes.js
+        shell: bash
+
+      - name: Check if indexes differ from target project
+        id: check-changes
+        run: |
+          cd functions/levante-admin
+          npx firebase firestore:indexes --project "${{ steps.resolve-target.outputs.project_id }}" > current-indexes.json
+          node scripts/normalize-indexes.js current-indexes.json
+
+          normalize_json() { jq -S '.' "$1" | sed 's/[[:space:]]//g'; }
+
+          if cmp -s <(normalize_json firestore.indexes.json) <(normalize_json current-indexes.json); then
+            echo "has-changes=false" >> $GITHUB_OUTPUT
+            echo "No index differences detected between this branch and ${{ steps.resolve-target.outputs.project_id }}."
+          else
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+            echo "Index differences detected — deploy will apply changes."
+          fi
+        shell: bash
+
       - name: Deploy Firestore indexes
         run: |
           npx firebase deploy --only firestore:indexes --project "${{ steps.resolve-target.outputs.project_id }}" --non-interactive
+        shell: bash
+
+      - name: Warn if no index changes were deployed
+        if: steps.check-changes.outputs.has-changes == 'false'
+        run: |
+          echo "::warning::No index changes detected — firestore.indexes.json on branch '${{ github.event.inputs.branch }}' already matches what is deployed in ${{ steps.resolve-target.outputs.project_id }}. The deploy was a no-op."
+          {
+            echo "## ⚠️ No index changes detected"
+            echo ""
+            echo "\`firestore.indexes.json\` on branch \`${{ github.event.inputs.branch }}\` already matches the indexes deployed in \`${{ steps.resolve-target.outputs.project_id }}\`. The deploy was a no-op."
+            echo ""
+            echo "If you expected this run to add or change indexes, verify:"
+            echo "- The new entries are committed to this branch."
+            echo "- You ran this workflow against the correct branch."
+          } >> "$GITHUB_STEP_SUMMARY"
         shell: bash
 
       - name: Cleanup
         if: always()
         run: |
           rm -f "$RUNNER_TEMP/firebase-sa.json"
+          rm -f functions/levante-admin/current-indexes.json
         shell: bash

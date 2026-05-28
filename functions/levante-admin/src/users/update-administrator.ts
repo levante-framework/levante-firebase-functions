@@ -220,13 +220,10 @@ export const removeAdministratorRoles = async ({
 
     const roleRemoved = currentRoles.find((r) => r.siteId === siteId);
     const now = FieldValue.serverTimestamp();
-    transaction.update(context.adminUserDocRef, {
-      roles: remainingRoles,
-      updatedAt: now,
-    });
+    const districtDocRef = db.collection("districts").doc(siteId);
+    let districtAdministrators: Array<Record<string, unknown>> | null = null;
 
     if (roleRemoved?.role !== ROLES.SUPER_ADMIN) {
-      const districtDocRef = db.collection("districts").doc(siteId);
       const districtSnapshot = await transaction.get(districtDocRef);
 
       if (!districtSnapshot.exists) {
@@ -248,7 +245,7 @@ export const removeAdministratorRoles = async ({
           entry?.adminUid !== context.adminUid || entry.siteId !== siteId
       );
 
-      const updatedAdministrators = existingEntry
+      districtAdministrators = existingEntry
         ? [
             ...otherAdministrators,
             {
@@ -261,9 +258,16 @@ export const removeAdministratorRoles = async ({
             },
           ]
         : otherAdministrators;
+    }
 
+    transaction.update(context.adminUserDocRef, {
+      roles: remainingRoles,
+      updatedAt: now,
+    });
+
+    if (districtAdministrators !== null) {
       transaction.update(districtDocRef, {
-        administrators: updatedAdministrators,
+        administrators: districtAdministrators,
         updatedAt: now,
       });
     }

@@ -32,6 +32,10 @@ interface SurveyResponsesInput {
   };
 }
 
+function isSurveyTask(taskId?: string): boolean {
+  return !!taskId && taskId.toLowerCase().includes("survey");
+}
+
 export async function writeSurveyResponses(
   requesterUid: string,
   data: SurveyResponsesInput
@@ -174,12 +178,20 @@ export async function writeSurveyResponses(
         const assessments = assignmentData?.assessments || [];
 
         // Find the survey assessment
-        const surveyAssessmentIndex = assessments.findIndex(
-          (assessment) => assessment.taskId === "survey"
+        const surveyAssessmentIndex = assessments.findIndex((assessment) =>
+          isSurveyTask(assessment.taskId)
         );
 
         if (surveyAssessmentIndex !== -1) {
-          const surveyAssessment = assessments[surveyAssessmentIndex];
+          const matchedSurveyTaskId = assessments[surveyAssessmentIndex].taskId;
+          const progressKey = matchedSurveyTaskId.replace(/-/g, "_");
+          const currentProgress = assignmentData?.progress || {};
+          const nextProgressValue =
+            currentProgress[progressKey] === "completed"
+              ? "completed"
+              : isEntireSurveyCompleted
+              ? "completed"
+              : "started";
 
           // Create a copy of the assessments array to modify
           const updatedAssessments = [...assessments];
@@ -190,24 +202,28 @@ export async function writeSurveyResponses(
           let hasAssessmentChanges = false;
           const updates: any = {};
 
-          // Add startedOn timestamp if this is the first survey submission
-          if (isNewDocument && !updatedSurveyAssessment.startedOn) {
+          // Add startedOn timestamp once the survey has any saved response
+          if (!updatedSurveyAssessment.startedOn) {
             updatedSurveyAssessment.startedOn = new Date();
             hasAssessmentChanges = true;
           }
+
+          if (!assignmentData?.started) {
+            updates.started = true;
+          }
+
+          updates.progress = {
+            ...currentProgress,
+            [progressKey]: nextProgressValue,
+          };
 
           // Add completedOn timestamp if entire survey is complete
           if (isEntireSurveyCompleted) {
             updatedSurveyAssessment.completedOn = new Date();
             hasAssessmentChanges = true;
 
-            // Update the progress object properly
-            const currentProgress = assignmentData?.progress || {};
-            const updatedProgress = { ...currentProgress, survey: "completed" };
-            updates.progress = updatedProgress;
-
             // Check if assignment should be completed
-            if (shouldCompleteAssignment(assignmentDoc, "survey")) {
+            if (shouldCompleteAssignment(assignmentDoc, matchedSurveyTaskId)) {
               updates.completed = true;
             }
           }
