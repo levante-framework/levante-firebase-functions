@@ -1,4 +1,4 @@
-const VALID_PROFILES = new Set(['dashboard', 'small', 'minimal', 'no-administrations', 'tasks-only']);
+const VALID_PROFILES = new Set(['dashboard', 'large', 'minimal', 'no-administrations', 'tasks-only']);
 
 function parseBoolean(value, defaultValue) {
   if (value === undefined || value === '') return defaultValue;
@@ -22,7 +22,7 @@ function getFunctionsSeedOptions(env = process.env) {
     console.warn(`Unknown SEED_PROFILE "${requestedProfile}"; falling back to "dashboard".`);
   }
 
-  const defaultStudentCount = profile === 'small' ? 20 : 200;
+  const defaultStudentCount = profile === 'large' ? 200 : 20;
   const studentCount = parseInteger(env.SEED_STUDENT_COUNT, defaultStudentCount);
 
   return {

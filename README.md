@@ -122,10 +122,10 @@ Task/variant bootstrap for functions-driven seeding copies only `registered == t
 SEED_TASK_SOURCE_PROJECT=hs-levante-admin-prod npm run emulator:seed
 ```
 
-The functions-driven seeder also supports profiles for smaller or more targeted local datasets:
+The functions-driven seeder also supports profiles for larger or more targeted local datasets:
 
 ```bash
-SEED_PROFILE=small npm run emulator:seed              # Same shape, fewer generated students
+SEED_PROFILE=large npm run emulator:seed              # Same shape, 200 generated students
 SEED_PROFILE=no-administrations npm run emulator:seed # Users/orgs only
 SEED_PROFILE=tasks-only npm run emulator:seed         # Registered tasks/variants only
 SEED_STUDENT_COUNT=50 npm run emulator:seed           # Override generated student count
