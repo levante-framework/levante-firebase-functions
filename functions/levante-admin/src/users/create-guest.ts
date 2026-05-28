@@ -11,7 +11,7 @@ import { emptyOrgs } from "../utils/utils.js";
 
 export const createGuestDocs = async (
   user: AuthUserRecord,
-  sso: string = "google",
+  sso: string = "google"
 ) => {
   const roarUid = user.uid;
   const guestUserData = {
