@@ -76,6 +76,7 @@ const DEFAULT_LEGAL = {
   consent: 'I consent to the terms of the Levante Privacy Policy and Terms of Service.',
   expectedTime: '30 minutes',
 };
+const CHILD_BIRTH_YEARS = ['2014', '2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024'];
 
 function normalizeToLowercase(value = '') {
   return value.trim().toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
@@ -140,7 +141,7 @@ function buildParticipantRows({ siteId, schoolId, originalClassId, newClassId, c
           id: `student${studentNumber}`,
           userType: 'child',
           month: String((studentNumber % 12) + 1),
-          year: '2018',
+          year: CHILD_BIRTH_YEARS[index % CHILD_BIRTH_YEARS.length],
         },
         studentNumber <= Math.ceil(studentCount / 2) ? newClassId : originalClassId,
       );
