@@ -24,7 +24,7 @@ env:
 
 jobs:
   deploy-indexes:
-    name: Deploy indexes to ${{ github.event.inputs.target_project }}
+    name: Deploy indexes to ${{ github.event.inputs.target_project }} from ${{ github.event.inputs.branch }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -34,6 +34,27 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.branch }}
+
+      - name: Show run context
+        run: |
+          checked_out_sha=$(git rev-parse HEAD)
+          checked_out_short=$(git rev-parse --short HEAD)
+          {
+            echo "## Deploy Firestore Indexes"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Branch input | \`${{ github.event.inputs.branch }}\` |"
+            echo "| Checked-out commit | [\`${checked_out_short}\`](${{ github.server_url }}/${{ github.repository }}/commit/${checked_out_sha}) |"
+            echo "| Target project | \`${{ github.event.inputs.target_project }}\` |"
+            echo "| Triggered by | @${{ github.actor }} |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Branch:           ${{ github.event.inputs.branch }}"
+          echo "Checked-out SHA:  ${checked_out_sha}"
+          echo "Target project:   ${{ github.event.inputs.target_project }}"
+          echo "Triggered by:     ${{ github.actor }}"
+        shell: bash
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
