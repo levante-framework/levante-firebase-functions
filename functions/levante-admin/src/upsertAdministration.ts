@@ -114,8 +114,8 @@ async function validateSiteIdDistrictExists(
   const snap = await db.collection("districts").doc(siteId).get();
   if (!snap.exists) {
     throw new HttpsError(
-      "invalid-argument",
-      "siteId must match an existing district."
+      "not-found",
+      "siteId must match an existing districtId."
     );
   }
 }
