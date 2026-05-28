@@ -53,15 +53,6 @@ const ADMINISTRATION_TEMPLATES = [
     assignedCondition: { field: 'userType', op: 'EQUAL', value: 'student' },
   },
   {
-    templateId: 'executive-function-assessment',
-    name: 'Executive Function Assessment',
-    taskIds: ['hearts-and-flowers', 'MEFS', 'same-different-selection'],
-    sequential: false,
-    daysToClose: 14,
-    assignedCondition: { field: 'userType', op: 'EQUAL', value: 'student' },
-    optional: true,
-  },
-  {
     templateId: 'mixed-assessment-battery',
     name: 'Mixed Skills Assessment',
     taskIds: ['intro', 'pa', 'matrix-reasoning', 'vocab'],

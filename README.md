@@ -133,7 +133,7 @@ SEED_INCLUDE_OPTIONAL_ADMINISTRATION_TEMPLATES=true npm run emulator:seed # Try 
 SEED_VALIDATE=false npm run emulator:seed             # Skip final validation checks
 ```
 
-Optional administration templates reference `MEFS` and `survey`, which are skipped by default because the `-dev` source data currently does not provide registered variants for them.
+Optional administration templates reference `survey`, which is skipped by default because the `-dev` source data currently does not provide a registered variant for it.
 
 ### User Claims & Permissions
 

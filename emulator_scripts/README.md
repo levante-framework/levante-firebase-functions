@@ -39,7 +39,7 @@ SEED_INCLUDE_OPTIONAL_ADMINISTRATION_TEMPLATES=true npm run emulator:seed
 SEED_VALIDATE=false npm run emulator:seed
 ```
 
-Optional administration templates reference `MEFS` and `survey`. They are excluded by default because the `hs-levante-admin-dev` source data currently does not provide registered variants for those tasks.
+Optional administration templates reference `survey`. They are excluded by default because the `hs-levante-admin-dev` source data currently does not provide a registered variant for that task.
 
 `emulator:start:dashboard` provides these default credentials unless overridden with `E2E_AI_SUPER_ADMIN_EMAIL` and `E2E_AI_SUPER_ADMIN_PASSWORD`:
 
