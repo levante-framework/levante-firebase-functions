@@ -24,7 +24,9 @@ const spec = JSON.parse(readFileSync(indexesPath, "utf8"));
 
 spec.indexes = (spec.indexes ?? []).map((index) => ({
   ...index,
-  fields: (index.fields ?? []).filter((field) => field.fieldPath !== "__name__"),
+  fields: (index.fields ?? []).filter(
+    (field) => field.fieldPath !== "__name__"
+  ),
 }));
 
 writeFileSync(indexesPath, `${JSON.stringify(spec, null, 2)}\n`);
