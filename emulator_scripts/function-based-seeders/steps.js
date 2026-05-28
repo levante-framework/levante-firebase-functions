@@ -152,6 +152,7 @@ function buildAdministrationAssessments({ template, variantsByTaskId }) {
       variantId: variant.variantId,
       variantName: variant.variantName,
       params: variant.params,
+      // TODO: remove when task-level assignment conditions are read from task documents.
       ...(template.assignedCondition && {
         conditions: { assigned: template.assignedCondition },
       }),
@@ -193,7 +194,6 @@ async function createAdministrations({
       'upsertAdministration',
       {
         name: template.name,
-        publicName: template.publicName,
         normalizedName: normalizeToLowercase(template.name),
         assessments: buildAdministrationAssessments({ template, variantsByTaskId }),
         dateOpen: now.toISOString(),
@@ -205,7 +205,6 @@ async function createAdministrations({
           classes: classIds,
           groups: [cohortId],
         },
-        tags: template.tags,
         isTestData: false,
         legal: DEFAULT_LEGAL,
         creatorName,
