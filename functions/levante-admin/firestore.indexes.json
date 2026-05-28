@@ -5,6 +5,21 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
+          "fieldPath": "siteId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "administrations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
           "fieldPath": "districts",
           "order": "ASCENDING"
         },
