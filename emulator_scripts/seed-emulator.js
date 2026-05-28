@@ -1,7 +1,34 @@
 const admin = require('firebase-admin');
+const path = require('path');
 const { getSeedConfig } = require('./config');
 
 const { projectId, isEmulator } = getSeedConfig();
+
+function parseVariantSeedPath() {
+  const argv = process.argv;
+  const idx = argv.indexOf('--variant-seed');
+  if (idx !== -1) {
+    const next = argv[idx + 1];
+    if (!next || next.startsWith('--')) {
+      throw new Error('Usage: --variant-seed <path-to-variant-seed.json>');
+    }
+    return path.resolve(process.cwd(), next);
+  }
+  const eqArg = argv.find((a) => a.startsWith('--variant-seed='));
+  if (eqArg) {
+    const rest = eqArg.slice('--variant-seed='.length);
+    if (!rest) {
+      throw new Error('Usage: --variant-seed=<path-to-variant-seed.json>');
+    }
+    return path.resolve(process.cwd(), rest);
+  }
+  if (process.env.VARIANT_SEED_FILE) {
+    return path.resolve(process.cwd(), process.env.VARIANT_SEED_FILE.trim());
+  }
+  return null;
+}
+
+const variantSeedPath = parseVariantSeedPath();
 
 if (isEmulator) {
   process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8180';
@@ -57,12 +84,12 @@ async function seedDatabase() {
     
     // Step 7: Create tasks and variants
     console.log("Step 7: Creating tasks and variants...");
-    const tasks = await createTasks(adminApp);
+    const tasks = await createTasks(adminApp, { variantSeedPath });
     console.log("✅ Tasks and variants created successfully\n");
     
     // Step 8: Create administrations with subcollections
     console.log("Step 8: Creating administrations...");
-    const administrations = await createAdministrations(adminApp, tasks, users, groups);
+    const administrations = await createAdministrations(adminApp, users, groups);
     console.log("✅ Administrations created successfully\n");
     
     console.log("=== DATABASE SEEDING COMPLETE ===");
@@ -87,12 +114,8 @@ async function seedDatabase() {
     });
     
     const studentCount = users.filter(user => user.userType === 'student').length;
-    const allParticipantCount = users.filter(user => 
-      ['student', 'teacher', 'parent'].includes(user.userType)
-    ).length;
     console.log(`\nAssignment distribution:`);
     console.log(`- Academic assessments assigned to ${studentCount} student(s)`);
-    console.log(`- Survey administration assigned to ${allParticipantCount} participant(s) (students, teachers, parents)`);
     
     console.log("\n=== READY FOR TESTING ===");
     

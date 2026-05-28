@@ -1,0 +1,4 @@
+{
+  "about": "Variant seed file for emulator (same shape as export-registered-variants). Required: \"rows\" array. Each element: \"taskId\" (string), \"taskData\" (object: task root fields like description, name, registered, image), \"variants\" (non-empty array of { \"id\": variant doc id, \"data\": { name, registered, params, ... } }). Omit lastUpdated; seed sets server timestamps. Default seed: emulator_scripts/seeders/default-variant-seed.json. Export from admin: npm --prefix functions/local run export-registered-variants.",
+  "rows": []
+}

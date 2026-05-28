@@ -1,65 +1,17 @@
 const admin = require('firebase-admin');
 
-// Administration templates with different task combinations
-const ADMINISTRATION_TEMPLATES = [
-  {
-    templateId: 'reading-assessment-1',
-    name: 'Basic Reading Assessment',
-    publicName: 'Reading Skills Evaluation',
-    taskIds: ['pa', 'sre', 'swr'],
-    sequential: false,
-    tags: ['reading', 'literacy', 'basic'],
-    daysToClose: 30,
-  },
-  {
-    templateId: 'cognitive-assessment-1',
-    name: 'Cognitive Assessment Battery',
-    publicName: 'Thinking Skills Assessment',
-    taskIds: ['matrix-reasoning', 'mental-rotation', 'memory-game'],
-    sequential: false,
-    tags: ['cognitive', 'reasoning', 'memory'],
-    daysToClose: 21,
-  },
-  {
-    templateId: 'comprehensive-assessment-1',
-    name: 'Comprehensive Academic Assessment',
-    publicName: 'Complete Learning Evaluation',
-    taskIds: ['vocab', 'egma-math', 'trog', 'theory-of-mind'],
-    sequential: false,
-    tags: ['comprehensive', 'academic', 'language'],
-    daysToClose: 45,
-  },
-  {
-    templateId: 'executive-function-assessment',
-    name: 'Executive Function Assessment',
-    publicName: 'Focus and Control Skills Test',
-    taskIds: ['hearts-and-flowers', 'MEFS', 'same-different-selection'],
-    sequential: false,
-    tags: ['executive-function', 'attention', 'control'],
-    daysToClose: 14,
-  },
-  {
-    templateId: 'mixed-assessment-battery',
-    name: 'Mixed Skills Assessment',
-    publicName: 'General Skills Evaluation',
-    taskIds: ['intro', 'pa', 'matrix-reasoning', 'vocab'],
-    sequential: false,
-    tags: ['mixed', 'general', 'evaluation'],
-    daysToClose: 60,
-  },
-  {
-    templateId: 'survey-administration',
-    name: 'Background Survey',
-    publicName: 'Background Information Survey',
-    taskIds: ['survey'],
-    sequential: true,
-    tags: ['survey', 'background', 'information'],
-    daysToClose: 90,
-    userTypes: ['student', 'teacher', 'parent'], // For all participant types
-  },
-];
+const ADULT_TASK_IDS = ['adult-reasoning', 'caregiver-survey', 'teacher-survey'];
+// Per-task restriction for the adult administration: which userTypes should
+// receive this assessment in their per-user assignment doc. Tasks not listed
+// here are treated as unrestricted (everyone eligible to receive the
+// administration gets them).
+const ADULT_TASK_USER_TYPES = {
+  'adult-reasoning': ['parent'],
+  'caregiver-survey': ['parent'],
+  'teacher-survey': ['teacher'],
+};
+const MAX_CHILD_BUNDLES = 3;
 
-// Default legal information
 const DEFAULT_LEGAL = {
   amount: '0',
   assent: null,
@@ -67,13 +19,131 @@ const DEFAULT_LEGAL = {
   expectedTime: '30 minutes',
 };
 
-async function createAdministrations(adminApp, createdTasks, users, groups) {
+async function pickFirstVariantAssessment(db, taskId) {
+  const taskRef = db.collection('tasks').doc(taskId);
+  const taskSnap = await taskRef.get();
+  if (!taskSnap.exists) {
+    return null;
+  }
+  const variantsSnap = await taskRef.collection('variants').get();
+  if (variantsSnap.empty) {
+    return null;
+  }
+  const docs = [...variantsSnap.docs].sort((a, b) => a.id.localeCompare(b.id));
+  const v = docs[0];
+  const d = v.data() || {};
+  const variantName =
+    typeof d.name === 'string' && d.name.trim() !== '' ? d.name.trim() : String(v.id);
+  const params =
+    d.params != null && typeof d.params === 'object' && !Array.isArray(d.params)
+      ? { ...d.params }
+      : getDefaultParamsForTask(taskId);
+  return {
+    taskId,
+    variantId: v.id,
+    variantName,
+    params,
+  };
+}
+
+function splitTaskIdsIntoNBuckets(taskIds, n) {
+  if (!taskIds.length || n < 1) {
+    return [];
+  }
+  const num = Math.min(n, taskIds.length);
+  const chunks = [];
+  let index = 0;
+  for (let b = 0; b < num; b++) {
+    const remaining = taskIds.length - index;
+    const bucketsLeft = num - b;
+    const size = Math.ceil(remaining / bucketsLeft);
+    chunks.push(taskIds.slice(index, index + size));
+    index += size;
+  }
+  return chunks;
+}
+
+async function buildAdministrationPlans(db) {
+  const tasksSnap = await db.collection('tasks').get();
+  if (tasksSnap.empty) {
+    throw new Error('No tasks in Firestore; seed tasks before administrations.');
+  }
+  const allTaskIds = tasksSnap.docs.map((d) => d.id).sort((a, b) => a.localeCompare(b));
+
+  const plans = [];
+
+  const adultAssessments = [];
+  for (const id of ADULT_TASK_IDS) {
+    const a = await pickFirstVariantAssessment(db, id);
+    if (!a) {
+      adultAssessments.length = 0;
+      break;
+    }
+    adultAssessments.push(a);
+  }
+
+  const adultAssignmentReady = adultAssessments.length === ADULT_TASK_IDS.length;
+  if (adultAssignmentReady) {
+    plans.push({
+      template: {
+        templateId: 'adult-task-assignment',
+        name: 'Adult Task Assignment',
+        publicName: 'Adult Task Assignment',
+        sequential: false,
+        tags: ['adult', 'emulator'],
+        daysToClose: 30,
+        userTypes: ['parent', 'teacher'],
+        assessmentUserTypes: ADULT_TASK_USER_TYPES,
+      },
+      assessments: adultAssessments,
+    });
+  } else if (adultAssessments.length > 0) {
+    console.warn(
+      `[seed] Skipping "Adult Task Assignment": need a variant for each of ${ADULT_TASK_IDS.join(', ')}.`,
+    );
+  }
+
+
+  const adultIdSet = new Set(ADULT_TASK_IDS);
+  const childTaskIds = allTaskIds.filter((id) => !adultIdSet.has(id));
+
+  const numBundles = Math.min(MAX_CHILD_BUNDLES, childTaskIds.length);
+  const chunks = splitTaskIdsIntoNBuckets(childTaskIds, numBundles);
+  for (let i = 0; i < chunks.length; i++) {
+    const ids = chunks[i];
+    const assessments = [];
+    for (const taskId of ids) {
+      const a = await pickFirstVariantAssessment(db, taskId);
+      if (a) {
+        assessments.push(a);
+      }
+    }
+    if (assessments.length === 0) {
+      continue;
+    }
+    const n = i + 1;
+    plans.push({
+      template: {
+        templateId: `task-bundle-${n}`,
+        name: `Task Bundle ${n}`,
+        publicName: `Task Bundle ${n}`,
+        sequential: false,
+        tags: ['child', 'emulator'],
+        daysToClose: 30,
+      },
+      assessments,
+    });
+  }
+
+  return plans;
+}
+
+async function createAdministrations(adminApp, users, groups) {
   const db = adminApp.firestore();
   const createdAdministrations = [];
 
-  console.log('  Creating administrations...');
+  console.log('  Creating administrations from seeded tasks/variants...');
 
-  // Create organization references using the generated IDs (both classes; site has all users)
   const testOrgs = {
     districts: [groups.districts[0].id],
     schools: [groups.schools[0].id],
@@ -82,20 +152,20 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
     families: [],
   };
 
-  // Create a lookup map for task variants
-  const taskVariantMap = {};
-  createdTasks.forEach((task) => {
-    taskVariantMap[task.id] = task.variantId;
-  });
-
-  // Get participant users (excluding admin users)
   const participantUsers = users.filter((user) =>
     ['student', 'parent', 'teacher'].includes(user.userType),
   );
 
-  for (const template of ADMINISTRATION_TEMPLATES) {
+  const plans = await buildAdministrationPlans(db);
+  if (plans.length === 0) {
+    throw new Error('No administrations could be built from Firestore tasks (no variants?).');
+  }
+
+  const adminUser = users.find((user) => user.userKey === 'admin');
+
+  for (const plan of plans) {
+    const { template, assessments } = plan;
     try {
-      // Generate administration ID
       const administrationId = db.collection('administrations').doc().id;
 
       console.log(`    Creating administration: ${administrationId} (${template.name})...`);
@@ -103,25 +173,8 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
       const now = new Date();
       const closeDate = new Date(now.getTime() + template.daysToClose * 24 * 60 * 60 * 1000);
 
-      // Build assessments array from task IDs.
-      const assessments = template.taskIds.map((taskId) => {
-        const variantId = taskVariantMap[taskId];
-        if (!variantId) {
-          throw new Error(`Variant not found for task: ${taskId}`);
-        }
-
-        return {
-          taskId,
-          params: getDefaultParamsForTask(taskId),
-          variantId,
-          variantName: getVariantNameForTask(taskId),
-        };
-      });
-      const adminUser = users.find(user => user.userKey === 'admin');
-
-      // Create administration document
       const administrationData = {
-        assessments: assessments,
+        assessments,
         classes: testOrgs.classes,
         createdBy: adminUser.uid,
         creatorName: adminUser.displayName,
@@ -140,23 +193,19 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
         sequential: template.sequential,
         tags: template.tags,
         testData: false,
-        siteId: testOrgs.districts[0]
+        siteId: testOrgs.districts[0],
       };
 
       const adminRef = db.collection('administrations').doc(administrationId);
       await adminRef.set(administrationData);
       console.log(`      ✅ Created administration document: ${administrationId}`);
 
-      // Create assignedOrgs subcollection
       await createAssignedOrgs(adminRef, administrationId, template, administrationData);
 
-      // Create readOrgs subcollection
       await createReadOrgs(adminRef, administrationId, template, administrationData);
 
-      // Create stats subcollection
       await createStats(adminRef, template);
 
-      // Create user assignments
       await createUserAssignments(
         adminApp,
         db,
@@ -164,7 +213,6 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
         template,
         administrationData,
         participantUsers,
-        taskVariantMap,
       );
 
       createdAdministrations.push({
@@ -172,7 +220,7 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
         templateId: template.templateId,
         name: template.name,
         publicName: template.publicName,
-        taskCount: template.taskIds.length,
+        taskCount: assessments.length,
         sequential: template.sequential,
       });
     } catch (error) {
@@ -181,14 +229,13 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
     }
   }
 
-  console.log(`  ✅ Created ${createdAdministrations.length} administrations with subcollections`);
+  console.log(`  ✅ Created ${createdAdministrations.length} administration(s) with subcollections`);
   return createdAdministrations;
 }
 
 async function createAssignedOrgs(adminRef, administrationId, template, administrationData) {
   console.log(`      Creating assignedOrgs subcollection...`);
 
-  // Create assigned orgs for each organization type
   const orgTypes = ['districts', 'schools', 'classes', 'groups'];
 
   for (const orgType of orgTypes) {
@@ -204,7 +251,7 @@ async function createAssignedOrgs(adminRef, administrationId, template, administ
         legal: administrationData.legal,
         name: administrationData.name,
         orgId: orgId,
-        orgType: orgType.slice(0, -1), // Remove 's' to match schema (e.g., 'districts' -> 'district')
+        orgType: orgType.slice(0, -1),
         publicName: administrationData.publicName,
         testData: administrationData.testData,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
@@ -221,7 +268,6 @@ async function createAssignedOrgs(adminRef, administrationId, template, administ
 async function createReadOrgs(adminRef, administrationId, template, administrationData) {
   console.log(`      Creating readOrgs subcollection...`);
 
-  // Create read orgs for each organization type
   const orgTypes = ['districts', 'schools', 'classes', 'groups'];
 
   for (const orgType of orgTypes) {
@@ -237,7 +283,7 @@ async function createReadOrgs(adminRef, administrationId, template, administrati
         legal: administrationData.legal,
         name: administrationData.name,
         orgId: orgId,
-        orgType: orgType.slice(0, -1), // Remove 's' to match schema
+        orgType: orgType.slice(0, -1),
         publicName: administrationData.publicName,
         testData: administrationData.testData,
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
@@ -254,7 +300,6 @@ async function createReadOrgs(adminRef, administrationId, template, administrati
 async function createStats(adminRef, template) {
   console.log(`      Creating stats subcollection...`);
 
-  // Create sample stats document
   const statsData = {
     assignment: {
       total: 0,
@@ -281,11 +326,9 @@ async function createUserAssignments(
   template,
   administrationData,
   participantUsers,
-  taskVariantMap,
 ) {
   console.log(`      Creating user assignments...`);
 
-  // Create testOrgs for assignments using the same IDs as the administration
   const testOrgs = {
     districts: administrationData.districts,
     schools: administrationData.schools,
@@ -294,15 +337,11 @@ async function createUserAssignments(
     families: administrationData.families,
   };
 
-  // Filter users based on administration's target user types
   const eligibleUsers = participantUsers.filter((user) => {
     if (template.userTypes) {
-      // If administration specifies user types, only assign to those types
       return template.userTypes.includes(user.userType);
-    } else {
-      // If no user types specified, only assign to students (exclude teacher/parent from academic assessments)
-      return user.userType === 'student';
     }
+    return user.userType === 'student';
   });
 
   if (eligibleUsers.length === 0) {
@@ -310,20 +349,43 @@ async function createUserAssignments(
     return;
   }
 
+  const assignmentAssessments = administrationData.assessments.map((a) => ({
+    optional: false,
+    taskId: a.taskId,
+    params: a.params,
+    variantId: a.variantId,
+    variantName: a.variantName,
+  }));
+
+  // Optional per-task userType restriction. If `template.assessmentUserTypes`
+  // is set, an assessment is only included in a user's assignment when that
+  // user's userType is in the allowed list for that taskId. Tasks not listed
+  // in the map are unrestricted.
+  const assessmentUserTypes = template.assessmentUserTypes || null;
+  const assessmentsForUser = (userType) => {
+    if (!assessmentUserTypes) {
+      return assignmentAssessments;
+    }
+    return assignmentAssessments.filter((a) => {
+      const allowed = assessmentUserTypes[a.taskId];
+      return !allowed || allowed.includes(userType);
+    });
+  };
+
+  let skippedUsers = 0;
   for (const user of eligibleUsers) {
     try {
-      // Build assessments array for assignment document.
-      const assessments = template.taskIds.map((taskId) => ({
-        optional: false,
-        taskId,
-        params: getDefaultParamsForTask(taskId),
-        variantId: taskVariantMap[taskId],
-        variantName: getVariantNameForTask(taskId),
-      }));
+      const userAssessments = assessmentsForUser(user.userType);
+      if (userAssessments.length === 0) {
+        skippedUsers += 1;
+        console.log(
+          `        ⚠️  Skipping ${user.userKey} (${user.userType}): no assessments for this user type`,
+        );
+        continue;
+      }
 
-      // Create assignment document following Assignment interface
       const assignmentData = {
-        assessments: assessments,
+        assessments: userAssessments,
         assigningOrgs: testOrgs,
         completed: false,
         dateAssigned: admin.firestore.FieldValue.serverTimestamp(),
@@ -349,7 +411,6 @@ async function createUserAssignments(
         },
       };
 
-      // Create assignment document in user's assignments subcollection
       const assignmentRef = db
         .collection('users')
         .doc(user.uid)
@@ -364,55 +425,27 @@ async function createUserAssignments(
     }
   }
 
-  console.log(`      ✅ Created assignments for ${eligibleUsers.length} users`);
+  const writtenCount = eligibleUsers.length - skippedUsers;
+  console.log(`      ✅ Created assignments for ${writtenCount} user(s)`);
 }
 
 function getDefaultParamsForTask(taskId) {
-  // Return appropriate default parameters based on task type
   const readingTasks = ['pa', 'sre', 'swr'];
-  const specialTasks = ['MEFS', 'survey'];
 
   if (readingTasks.includes(taskId)) {
     return {
       language: 'en',
       skipInstructions: true,
     };
-  } else if (specialTasks.includes(taskId)) {
-    return {};
-  } else {
-    // Standard tasks
-    return {
-      language: 'en',
-      skipInstructions: true,
-      keyHelpers: true,
-      numOfPracticeTrials: 2,
-      sequentialPractice: true,
-      stimulusBlocks: 3,
-    };
   }
-}
-
-function getVariantNameForTask(taskId) {
-  // Return appropriate variant name based on task type
-  const taskNames = {
-    pa: 'Phonological Awareness - English',
-    sre: 'Sentence Reading Efficiency - English',
-    swr: 'Sight Word Reading - English',
-    'matrix-reasoning': 'Matrix Reasoning - English',
-    'mental-rotation': 'Mental Rotation - English',
-    intro: 'Introduction - English',
-    'memory-game': 'Memory Game - English',
-    'hearts-and-flowers': 'Hearts and Flowers - English',
-    'egma-math': 'EGMA Math - English',
-    trog: 'TROG - English',
-    'theory-of-mind': 'Theory of Mind - English',
-    vocab: 'Vocabulary - English',
-    'same-different-selection': 'Same Different Selection - English',
-    MEFS: 'MEFS - All Languages',
-    survey: 'Survey - All Languages',
+  return {
+    language: 'en',
+    skipInstructions: true,
+    keyHelpers: true,
+    numOfPracticeTrials: 2,
+    sequentialPractice: true,
+    stimulusBlocks: 3,
   };
-
-  return taskNames[taskId] || `${taskId} - English`;
 }
 
-module.exports = { createAdministrations };
+module.exports = { createAdministrations, splitTaskIdsIntoNBuckets };
