@@ -87,6 +87,8 @@ lib
 .nx/workspace-data
 
 # Firebase Emulator Suite
+emulator_scripts/registered-variants.json
+
 # Emulator data directories
 emulator_data/
 emulator_data_dev/
