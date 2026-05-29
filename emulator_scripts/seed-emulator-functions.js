@@ -24,6 +24,34 @@ process.env.FIREBASE_AUTH_EMULATOR_HOST ||= '127.0.0.1:9199';
 const options = getFunctionsSeedOptions();
 const runtime = createFunctionsSeedRuntime({ projectId });
 
+function printTesterLogins({ createdUsers, userRows }) {
+  const userBySeedId = new Map(userRows.map((row, index) => [row.id, createdUsers[index]]));
+  const logins = [
+    {
+      label: 'Super admin',
+      email: options.superAdminEmail,
+      password: options.superAdminPassword,
+    },
+    {
+      label: 'Child participant',
+      ...userBySeedId.get('student1'),
+    },
+    {
+      label: 'Teacher participant',
+      ...userBySeedId.get('teacher'),
+    },
+    {
+      label: 'Parent participant',
+      ...userBySeedId.get('parent'),
+    },
+  ].filter((login) => login.email && login.password);
+
+  console.log('\nTester logins:');
+  logins.forEach((login) => {
+    console.log(`- ${login.label}: ${login.email} / ${login.password}`);
+  });
+}
+
 async function main() {
   console.log('=== STARTING FUNCTIONS-DRIVEN EMULATOR SEED ===');
   console.log(`Profile:           ${options.profile}`);
@@ -135,6 +163,8 @@ async function main() {
       console.log(`- ${assignmentCount.name}: ${assignmentCount.count}`);
     });
   }
+
+  printTesterLogins({ createdUsers, userRows });
 }
 
 main().catch((error) => {
