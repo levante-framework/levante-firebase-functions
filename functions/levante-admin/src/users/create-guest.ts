@@ -22,6 +22,7 @@ export const createGuestDocs = async (
     families: emptyOrgs(),
     groups: emptyOrgs(),
     archived: false,
+    disabled: false,
     createdAt: FieldValue.serverTimestamp(),
     sso,
   };

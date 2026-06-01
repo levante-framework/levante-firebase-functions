@@ -5,6 +5,10 @@ import {
   getAssignmentDocRef,
   getAssignmentDoc,
 } from "./utils/assignment.js";
+import {
+  AdminStatsBufferRegistry,
+  syncOnAssignmentUpdated,
+} from "./assignments/assignment-sync-in-transaction.js";
 
 type Response = {
   responseTime: string;
@@ -21,7 +25,21 @@ interface SurveyData {
   userType: string;
 }
 
-export async function writeSurveyResponses(requesterUid, data) {
+interface SurveyResponsesInput {
+  surveyResponses: {
+    administrationId: string;
+    surveyData: SurveyData;
+  };
+}
+
+function isSurveyTask(taskId?: string): boolean {
+  return !!taskId && taskId.toLowerCase().includes("survey");
+}
+
+export async function writeSurveyResponses(
+  requesterUid: string,
+  data: SurveyResponsesInput
+) {
   const db = getFirestore();
 
   // write or update survey responses as subcollection of user document
@@ -41,8 +59,6 @@ export async function writeSurveyResponses(requesterUid, data) {
   }
 
   try {
-    // Deterministic survey response document id ensures that the survey response is always written to the same document
-    const surveyRef = surveyResponsesCollection.doc(administrationId);
     const {
       pageNo,
       isGeneral,
@@ -66,8 +82,23 @@ export async function writeSurveyResponses(requesterUid, data) {
 
     // Use a transaction to ensure atomicity between survey responses and assignment updates
     await db.runTransaction(async (transaction) => {
-      const existingSurveyDoc = await transaction.get(surveyRef);
-      const isNewDocument = !existingSurveyDoc.exists;
+      const statsRegistry = new AdminStatsBufferRegistry(db);
+      // Check if the survey response document already exists
+      const existingDocQuery = surveyResponsesCollection
+        .where("administrationId", "==", administrationId)
+        .limit(1);
+
+      const existingDocSnapshot = await transaction.get(existingDocQuery);
+
+      const surveyRef = existingDocSnapshot.empty
+        ? surveyResponsesCollection.doc()
+        : existingDocSnapshot.docs[0].ref;
+
+      const existingSurveyDoc = existingDocSnapshot.empty
+        ? await transaction.get(surveyRef)
+        : existingDocSnapshot.docs[0];
+
+      const isNewDocument = existingDocSnapshot.empty;
       const existingData: any = existingSurveyDoc.data() || {};
 
       // Read assignment document
@@ -147,12 +178,20 @@ export async function writeSurveyResponses(requesterUid, data) {
         const assessments = assignmentData?.assessments || [];
 
         // Find the survey assessment
-        const surveyAssessmentIndex = assessments.findIndex(
-          (assessment) => assessment.taskId === "survey"
+        const surveyAssessmentIndex = assessments.findIndex((assessment) =>
+          isSurveyTask(assessment.taskId)
         );
 
         if (surveyAssessmentIndex !== -1) {
-          const surveyAssessment = assessments[surveyAssessmentIndex];
+          const matchedSurveyTaskId = assessments[surveyAssessmentIndex].taskId;
+          const progressKey = matchedSurveyTaskId.replace(/-/g, "_");
+          const currentProgress = assignmentData?.progress || {};
+          const nextProgressValue =
+            currentProgress[progressKey] === "completed"
+              ? "completed"
+              : isEntireSurveyCompleted
+              ? "completed"
+              : "started";
 
           // Create a copy of the assessments array to modify
           const updatedAssessments = [...assessments];
@@ -163,24 +202,28 @@ export async function writeSurveyResponses(requesterUid, data) {
           let hasAssessmentChanges = false;
           const updates: any = {};
 
-          // Add startedOn timestamp if this is the first survey submission
-          if (isNewDocument && !updatedSurveyAssessment.startedOn) {
+          // Add startedOn timestamp once the survey has any saved response
+          if (!updatedSurveyAssessment.startedOn) {
             updatedSurveyAssessment.startedOn = new Date();
             hasAssessmentChanges = true;
           }
+
+          if (!assignmentData?.started) {
+            updates.started = true;
+          }
+
+          updates.progress = {
+            ...currentProgress,
+            [progressKey]: nextProgressValue,
+          };
 
           // Add completedOn timestamp if entire survey is complete
           if (isEntireSurveyCompleted) {
             updatedSurveyAssessment.completedOn = new Date();
             hasAssessmentChanges = true;
 
-            // Update the progress object properly
-            const currentProgress = assignmentData?.progress || {};
-            const updatedProgress = { ...currentProgress, survey: "completed" };
-            updates.progress = updatedProgress;
-
             // Check if assignment should be completed
-            if (shouldCompleteAssignment(assignmentDoc, "survey")) {
+            if (shouldCompleteAssignment(assignmentDoc, matchedSurveyTaskId)) {
               updates.completed = true;
             }
           }
@@ -193,6 +236,20 @@ export async function writeSurveyResponses(requesterUid, data) {
 
           // Apply updates if any exist
           if (Object.keys(updates).length > 0) {
+            const prevData = assignmentData;
+            if (!prevData) {
+              throw new Error("Assignment data is missing");
+            }
+            const currData = { ...prevData, ...updates };
+            await syncOnAssignmentUpdated(
+              db,
+              transaction,
+              requesterUid,
+              administrationId,
+              prevData,
+              currData,
+              statsRegistry.forAdministration(administrationId)
+            );
             transaction.set(assignmentRef, updates, { merge: true });
           }
         }
@@ -204,6 +261,7 @@ export async function writeSurveyResponses(requesterUid, data) {
 
       // Write survey responses
       transaction.set(surveyRef, updateData, { merge: true });
+      statsRegistry.flush(transaction);
     });
 
     returnObj.success = true;

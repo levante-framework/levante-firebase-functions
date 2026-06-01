@@ -16,12 +16,7 @@ import {
   getPermissionService,
   checkPermission,
 } from "./utils/permission-helpers.js";
-import {
-  onDocumentCreated,
-  onDocumentDeleted,
-  onDocumentUpdated,
-  onDocumentWritten,
-} from "firebase-functions/v2/firestore";
+import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import {
   appendOrRemoveAdminOrgs,
   setUidClaimsInBothProjects,
@@ -37,18 +32,11 @@ import {
   updateAdministratorRoles,
 } from "./users/update-administrator.js";
 import type { AdministratorRoleDefinition } from "./users/create-administrator.js";
+import { createUpdateSuperAdmin as runCreateUpdateSuperAdmin } from "./users/super-admin-mutation.js";
 import { createSoftDeleteCloudFunction } from "./utils/soft-delete.js";
-import {
-  syncAssignmentCreatedEventHandler,
-  syncAssignmentDeletedEventHandler,
-  syncAssignmentUpdatedEventHandler,
-} from "./assignments/on-assignment-updates.js";
-import {
-  syncAssignmentsOnUserUpdateEventHandler,
-  updateAssignmentsForOrgChunkHandler,
-  syncAssignmentsOnAdministrationUpdateEventHandler,
-} from "./assignments/sync-assignments.js";
+import { updateAssignmentsForOrgChunkHandler } from "./assignments/sync-assignments.js";
 import { getAdministrationsForAdministrator } from "./administrations/administration-utils.js";
+import { getAdministrationOrgProgressHandler } from "./administrations/get-administration-org-progress.js";
 import { _deleteAdministration } from "./administrations/delete-administration.js";
 import { unenrollOrg } from "./orgs/org-utils.js";
 import { deleteOrg } from "./orgs/delete-org.js";
@@ -326,6 +314,36 @@ export const updateAdministrator = onCall(async (request) => {
   });
 });
 
+export const createUpdateSuperAdmin = onCall(async (request) => {
+  const requesterAdminUid = request.auth?.uid;
+  if (!requesterAdminUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated");
+  }
+
+  const auth = getAuth();
+  const requesterRecord = await auth.getUser(requesterAdminUid);
+  const customClaims: any = requesterRecord.customClaims || {};
+  const useNewPermissions = customClaims.useNewPermissions === true;
+
+  if (!useNewPermissions) {
+    throw new HttpsError(
+      "permission-denied",
+      "New permission system must be enabled to create or update super administrators"
+    );
+  }
+
+  await ensurePermissionsLoaded();
+  return runCreateUpdateSuperAdmin({
+    requesterAdminUid,
+    requesterRecord,
+    email: request.data?.email,
+    name: request.data?.name,
+    roles: request.data?.roles ?? [],
+    isTestData: request.data?.isTestData ?? false,
+    adminUid: request.data?.adminUid,
+  });
+});
+
 export const removeAdministratorFromSite = onCall(async (request) => {
   const requesterAdminUid = request.auth?.uid;
   if (!requesterAdminUid) {
@@ -382,14 +400,6 @@ export const removeAdministratorFromSite = onCall(async (request) => {
   });
 });
 
-export const syncAssignmentsOnAdministrationUpdate = onDocumentWritten(
-  {
-    document: "administrations/{administrationId}",
-    memory: "2GiB",
-  },
-  syncAssignmentsOnAdministrationUpdateEventHandler
-);
-
 export const updateAssignmentsForOrgChunk = onTaskDispatched(
   {
     retryConfig: {
@@ -403,46 +413,8 @@ export const updateAssignmentsForOrgChunk = onTaskDispatched(
     timeoutSeconds: 540,
   },
   async (request) => {
-    const { administrationId, administrationData, orgChunk, mode } =
-      request.data;
-    await updateAssignmentsForOrgChunkHandler({
-      administrationId,
-      administrationData,
-      orgChunk,
-      mode,
-    });
+    await updateAssignmentsForOrgChunkHandler(request.data);
   }
-);
-
-export const syncAssignmentsOnUserUpdate = onDocumentWritten(
-  {
-    document: "users/{roarUid}",
-    memory: "512MiB",
-  },
-  (event) =>
-    syncAssignmentsOnUserUpdateEventHandler({
-      event,
-      userTypes: ["student", "parent", "teacher"],
-    })
-);
-
-export const syncAssignmentCreated = onDocumentCreated(
-  "users/{roarUid}/assignments/{assignmentUid}",
-  syncAssignmentCreatedEventHandler
-);
-
-export const syncAssignmentDeleted = onDocumentDeleted(
-  "users/{roarUid}/assignments/{assignmentUid}",
-  syncAssignmentDeletedEventHandler
-);
-
-export const syncAssignmentUpdated = onDocumentUpdated(
-  {
-    document: "users/{roarUid}/assignments/{assignmentUid}",
-    timeoutSeconds: 300,
-    memory: "512MiB",
-  },
-  syncAssignmentUpdatedEventHandler
 );
 
 export const softDeleteUser = createSoftDeleteCloudFunction(["users"]);
@@ -598,6 +570,30 @@ export const getAdministrations = onCall(async (request) => {
   return { status: "ok", data: administrations };
 });
 
+export const getAdministrationOrgProgress = onCall(
+  { memory: "1GiB", timeoutSeconds: 300 },
+  async (request) => {
+    const requestingUid = request.auth?.uid;
+    if (!requestingUid) {
+      throw new HttpsError("unauthenticated", "User must be authenticated");
+    }
+    try {
+      const data = await getAdministrationOrgProgressHandler(
+        requestingUid,
+        request.data
+      );
+      return { status: "ok", data };
+    } catch (err) {
+      if (err instanceof HttpsError) throw err;
+      logger.error("getAdministrationOrgProgress failed", { err });
+      throw new HttpsError(
+        "internal",
+        (err as Error)?.message || "Failed to load administration org progress"
+      );
+    }
+  }
+);
+
 export const unenrollOrgTask = onTaskDispatched(
   {
     retryConfig: {
@@ -642,7 +638,7 @@ export const editUsers = onCall(async (request) => {
 
 export const upsertOrg = onCall(async (request) => {
   const requestingUid = request.auth?.uid;
-  const groupData = request.data.orgData as OrgData;
+  const groupData = request.data as OrgData;
 
   if (!requestingUid) {
     logger.error("User is not authenticated.");
@@ -1074,9 +1070,19 @@ export const upsertTaskSchema = onCall(async (request) => {
 export { completeTask } from "./tasks/completeTask.js";
 export { startTask } from "./tasks/startTask.js";
 
+/**
+ * Syncs run document changes to assignment best-run and completion status.
+ * Kept as a Firestore trigger because runs are written by the assessment app
+ * (client SDK), not by our callables. Errors are thrown to surface failures.
+ */
 export const syncOnRunDocUpdate = onDocumentWritten(
   {
     document: "users/{roarUid}/runs/{runId}",
+    retry: true,
   },
-  syncOnRunDocUpdateEventHandler
+  async (event) => {
+    await syncOnRunDocUpdateEventHandler(event);
+  }
 );
+
+export { getSiteOverview } from "./sites/get-site-overview.js";

@@ -28,7 +28,8 @@ async function createUserClaims(adminApp, users, organizations) {
   
   console.log("  Creating userClaims documents...");
   
-  for (const [userKey, user] of Object.entries(users)) {
+  for (const user of users) {
+    const { userKey } = user;
     try {
       console.log(`    Creating claims for ${userKey}...`);
       
@@ -106,8 +107,8 @@ async function createUserClaims(adminApp, users, organizations) {
       }
 
       // Persist computed claims for downstream seeders to consume (avoid reads)
-      users[userKey].claims = claims;
-      users[userKey].authClaims = authClaims;
+      user.claims = claims;
+      user.authClaims = authClaims;
       
     } catch (error) {
       console.error(`      ❌ Failed to create claims for ${userKey}:`, error.message);

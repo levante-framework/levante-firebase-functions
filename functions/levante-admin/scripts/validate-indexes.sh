@@ -24,19 +24,22 @@ fi
 echo "📥 Exporting current indexes from dev project..."
 firebase firestore:indexes --project dev > current-indexes.json
 
+cp firestore.indexes.json local-indexes.json
+node scripts/normalize-indexes.js local-indexes.json
+
 # Function to normalize JSON for comparison
 normalize_json() {
     jq -S '.' "$1" | sed 's/[[:space:]]//g'
 }
 
 # Normalize both files
-normalize_json "firestore.indexes.json" > local-normalized.json
+normalize_json "local-indexes.json" > local-normalized.json
 normalize_json "current-indexes.json" > remote-normalized.json
 
 # Compare the normalized files
 if cmp -s local-normalized.json remote-normalized.json; then
     echo "✅ Firestore indexes match! Local file is up to date with dev project."
-    rm -f current-indexes.json local-normalized.json remote-normalized.json
+    rm -f current-indexes.json local-indexes.json local-normalized.json remote-normalized.json
     exit 0
 else
     echo "❌ Firestore indexes do not match!"
@@ -51,6 +54,6 @@ else
     echo "3. Commit the updated firestore.indexes.json file"
     
     # Cleanup
-    rm -f current-indexes.json local-normalized.json remote-normalized.json
+    rm -f current-indexes.json local-indexes.json local-normalized.json remote-normalized.json
     exit 1
 fi 

@@ -12,6 +12,7 @@ import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import bcrypt from "bcrypt";
 import { isEmulated } from "../utils/utils.js";
+import { processUserAddedOrgs } from "../administrations/sync-administrations.js";
 import { ROLES } from "../utils/constants.js";
 import {
   buildRoleClaimsStructure,
@@ -620,6 +621,21 @@ export const _createUsers = async (
   } catch (error) {
     logger.error("Error creating user docs", { error });
     throw error;
+  }
+
+  for (let i = 0; i < adminAuthUsers.length; i++) {
+    const uid = adminAuthUsers[i].uid;
+    const orgIds = adminAuthUsers[i].fromCSV.orgIds;
+    const addedOrgs = {
+      districts: orgIds.districts || [],
+      schools: orgIds.schools || [],
+      classes: orgIds.classes || [],
+      groups: orgIds.groups || [],
+    };
+    const hasOrgs = Object.values(addedOrgs).some((arr) => arr.length > 0);
+    if (hasOrgs) {
+      await processUserAddedOrgs(uid, addedOrgs);
+    }
   }
 
   return {

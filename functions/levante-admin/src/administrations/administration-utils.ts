@@ -22,6 +22,7 @@ import _fromPairs from "lodash-es/fromPairs.js";
 import type { IAdministration, IOrgsList } from "../interfaces.js";
 import { ORG_NAMES } from "../interfaces.js";
 import { removeOrgsFromAssignments } from "../assignments/assignment-utils.js";
+import { AdminStatsBufferRegistry } from "../assignments/assignment-sync-in-transaction.js";
 import {
   chunkOrgs,
   getExhaustiveOrgs,
@@ -280,12 +281,15 @@ export const processUserRemovedOrgs = async (
       restrictToOpenAdministrations: true, // Restrict to open assignments. If a user has been removed from an org, we want to keep old assignments that they completed.
     });
 
+    const statsRegistry = new AdminStatsBufferRegistry(db);
     await removeOrgsFromAssignments(
       [uid],
       administrations,
       removedExhaustiveOrgs,
-      transaction
+      transaction,
+      statsRegistry
     );
+    statsRegistry.flush(transaction);
   });
 };
 

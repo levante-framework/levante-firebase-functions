@@ -1,16 +1,26 @@
 const admin = require('firebase-admin');
 const { getAuth } = require('firebase-admin/auth');
+const { getSeedConfig } = require('./config');
 
-// // Point to the emulator BEFORE initializing Firebase Admin
-process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8180";
-process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9199";
+const { projectId, isEmulator } = getSeedConfig();
 
-// Initialize Firebase Admin with the emulator configuration
-const adminApp = admin.initializeApp({projectId: "demo-emulator"}, "admin-clearer");
+if (isEmulator) {
+  process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8180';
+  process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:9199';
+}
+
+if (!isEmulator && process.env.CONFIRM_CLEAR !== '1') {
+  console.error('Refusing to clear a live Firebase project without CONFIRM_CLEAR=1.');
+  console.error(`To clear project "${projectId}", run: CONFIRM_CLEAR=1 npm run clear:dev`);
+  process.exit(1);
+}
+
+const adminApp = admin.initializeApp({ projectId }, 'admin-clearer');
 
 async function clearDatabase() {
   try {
-    console.log("=== CLEARING EMULATOR DATABASE ===\n");
+    const title = isEmulator ? 'CLEARING EMULATOR DATABASE' : `CLEARING PROJECT: ${projectId}`;
+    console.log(`=== ${title} ===\n`);
     
     const auth = getAuth(adminApp);
     const db = adminApp.firestore();
@@ -139,6 +149,11 @@ async function clearDatabase() {
   } catch (error) {
     console.error("\n❌ CLEARING FAILED!");
     console.error("Error:", error.message);
+    if (error?.code === 'app/invalid-credential' || error?.message?.includes('metadata.google.internal') || error?.message?.includes('fetch a valid Google OAuth2 access token')) {
+      console.error("\nTo run against a live project locally, authenticate first:");
+      console.error("  gcloud auth application-default login");
+      console.error("Or set GOOGLE_APPLICATION_CREDENTIALS to the path of a service account JSON file.");
+    }
     if (error.stack) {
       console.error("Stack trace:", error.stack);
     }

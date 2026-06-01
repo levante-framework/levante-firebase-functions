@@ -1,6 +1,5 @@
 import { getFirestore, Timestamp } from "firebase-admin/firestore";
 import { getAuth, UserRecord } from "firebase-admin/auth";
-import { logger } from "firebase-functions/v2";
 import { HttpsError } from "firebase-functions/v2/https";
 import {
   ACTIONS,
@@ -20,6 +19,13 @@ import {
 } from "./constants.js";
 import { normalizeRoleKey } from "./role-helpers.js";
 import type { CallableRequest } from "firebase-functions/v2/https";
+import { logger } from "firebase-functions/v2";
+
+function stripUndefined<T extends Record<string, any>>(obj: T): T {
+  return Object.fromEntries(
+    Object.entries(obj).filter(([, v]) => v !== undefined)
+  ) as T;
+}
 
 export const createPermissionsFirestoreSink = (
   loggingConfig: LoggingModeConfig
@@ -34,8 +40,9 @@ export const createPermissionsFirestoreSink = (
             .collection(FIRESTORE_SYSTEM_COLLECTION)
             .doc(FIRESTORE_PERMISSIONS_DOCUMENT)
             .collection(FIRESTORE_PERMISSIONS_LOGS_COLLECTION);
+          const eventWithUndefinedStripped = stripUndefined(event);
           await logsCollection.add({
-            ...event,
+            ...eventWithUndefinedStripped,
             expireAt: Timestamp.fromMillis(
               Date.now() + 1000 * 60 * 60 * 24 * 90 // 90 days from now. TTL is not turned on yet.
             ),
@@ -70,6 +77,9 @@ export const ensurePermissionsLoaded = async () => {
       .collection("system")
       .doc("permissions")
       .get();
+    logger.info("Permissions document loaded", {
+      permissionsDoc: permissionsDoc.data(),
+    });
     const data = permissionsDoc.data();
     if (!data)
       throw new Error("Permissions document not found at system/permissions");

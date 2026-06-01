@@ -1,47 +1,57 @@
 const admin = require('firebase-admin');
 
+function getUserClass(user) {
+  // New class: ~100 students (student1–100) + 1 parent
+  // Original class: teacher + standard student + student101–200
+  if (user.userType === 'parent') return 'newClass';
+  if (user.userType === 'teacher') return 'originalClass';
+  if (user.userType === 'student') {
+    const match = user.email.match(/^student(\d+)@levante\.test$/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      return num <= 100 ? 'newClass' : 'originalClass';
+    }
+    return 'originalClass'; // standard student@levante.test
+  }
+  return 'originalClass';
+}
+
 async function linkUsersToGroups(adminApp, users, groups) {
   const db = adminApp.firestore();
   
   console.log("  Linking users to groups...");
   
-  // Extract the first (and only) IDs from each group type
   const districtId = groups.districts[0].id;
   const schoolId = groups.schools[0].id;
-  const classId = groups.classes[0].id;
+  const classId = groups.classes[0].id; // original: 3rd Grade - Room 101
+  const classId2 = groups.classes[1].id; // new: 4th Grade - Room 102
   const groupId = groups.groups[0].id;
   
-  // Get participant users (exclude admin users)
-  const participantUsers = Object.entries(users).filter(([userKey, user]) => 
+  const participantUsers = users.filter((user) => 
     ['student', 'parent', 'teacher'].includes(user.userType)
   );
   
-  for (const [userKey, user] of participantUsers) {
+  for (const user of participantUsers) {
     try {
-      console.log(`    Linking ${userKey} to groups...`);
+      const userClass = getUserClass(user);
+      const assignedClassId = userClass === 'newClass' ? classId2 : classId;
+      
+      console.log(`    Linking ${user.email} to groups (${userClass === 'newClass' ? '4th Grade' : '3rd Grade'})...`);
       
       const currentTimestamp = admin.firestore.FieldValue.serverTimestamp();
       
-      // Update user document with group associations
       const userRef = db.collection('users').doc(user.uid);
       
       const updateData = {
-        // Add to districts
         'districts.all': admin.firestore.FieldValue.arrayUnion(districtId),
         'districts.current': admin.firestore.FieldValue.arrayUnion(districtId),
         [`districts.dates.${districtId}`]: currentTimestamp,
-        
-        // Add to schools
         'schools.all': admin.firestore.FieldValue.arrayUnion(schoolId),
         'schools.current': admin.firestore.FieldValue.arrayUnion(schoolId),
         [`schools.dates.${schoolId}`]: currentTimestamp,
-        
-        // Add to classes
-        'classes.all': admin.firestore.FieldValue.arrayUnion(classId),
-        'classes.current': admin.firestore.FieldValue.arrayUnion(classId),
-        [`classes.dates.${classId}`]: currentTimestamp,
-        
-        // Add to groups
+        'classes.all': admin.firestore.FieldValue.arrayUnion(assignedClassId),
+        'classes.current': admin.firestore.FieldValue.arrayUnion(assignedClassId),
+        [`classes.dates.${assignedClassId}`]: currentTimestamp,
         'groups.all': admin.firestore.FieldValue.arrayUnion(groupId),
         'groups.current': admin.firestore.FieldValue.arrayUnion(groupId),
         [`groups.dates.${groupId}`]: currentTimestamp,
@@ -49,14 +59,10 @@ async function linkUsersToGroups(adminApp, users, groups) {
       
       await userRef.update(updateData);
       
-      console.log(`      ✅ Linked ${userKey} to groups`);
-      console.log(`        - Districts: ${districtId}`);
-      console.log(`        - Schools: ${schoolId}`);
-      console.log(`        - Classes: ${classId}`);
-      console.log(`        - Groups: ${groupId}`);
+      console.log(`      ✅ Linked ${user.email} (district, school, class ${assignedClassId}, group)`);
       
     } catch (error) {
-      console.error(`      ❌ Failed to link ${userKey} to groups:`, error.message);
+      console.error(`      ❌ Failed to link ${user.email} to groups:`, error.message);
       throw error;
     }
   }

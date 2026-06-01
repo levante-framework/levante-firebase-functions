@@ -52,14 +52,13 @@ Districts
 - `upsertAdministration`: Create or update assessment administrations
 - `deleteAdministration`: Delete administrations (super admin only)
 - `getAdministrations`: Retrieve administrations for an administrator
-- `syncAssignmentsOnAdministrationUpdate`: Sync assignments when administration changes
+- Administration sync is triggered inline from upsert/delete handlers (no Firestore triggers)
 
 ### Assignment Synchronization
-- `syncAssignmentCreated`: Mirror assignment creation to assessment database
-- `syncAssignmentUpdated`: Sync assignment updates
-- `syncAssignmentDeleted`: Handle assignment deletion
-- `syncAssignmentsOnUserUpdate`: Update assignments when user data changes
-- `updateAssignmentsForOrgChunk`: Background task for bulk assignment updates
+- Assignment sync is performed inline within the same transaction as create/update/delete (see `assignment-sync-in-transaction.ts`)
+- `syncAssignmentsForUserOrgChange`: Update assignments when user org memberships change (called from editUsers)
+- `processUserAddedOrgs`: Add assignments when a user gains org memberships (called from editUsers, createUsers)
+- `updateAssignmentsForOrgChunk`: Background task for bulk assignment add/update/remove (supports modes: add, update, remove)
 
 ### Assessment Tracking
 - `startTask`: Initialize assessment task
