@@ -88,11 +88,11 @@ jobs:
         id: resolve-target
         run: |
           if [ "${{ github.event.inputs.target_project }}" = "dev" ]; then
-            project_id="${env.DEV_PROJECT_ID}"
+            project_id="$DEV_PROJECT_ID"
           elif [ "${{ github.event.inputs.target_project }}" = "preview" ]; then
-            project_id="${env.PREVIEW_PROJECT_ID}"
+            project_id="$PREVIEW_PROJECT_ID"
           elif [ "${{ github.event.inputs.target_project }}" = "prod" ]; then
-            project_id="${env.PROD_PROJECT_ID}"
+            project_id="$PROD_PROJECT_ID"
           fi
 
           if [ -z "$project_id" ]; then

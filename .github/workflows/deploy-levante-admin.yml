@@ -161,9 +161,9 @@ jobs:
         run: |
           cd functions/levante-admin
           if [ "${{ github.event.inputs.environment }}" == "dev" ]; then
-            firebase deploy --only functions,firestore:rules --project ${{ env.DEV_PROJECT_ID }}
+            npx firebase deploy --only functions,firestore:rules --project ${{ env.DEV_PROJECT_ID }}
           elif [ "${{ github.event.inputs.environment }}" == "prod" ]; then
-            firebase deploy --only functions,firestore:rules --project ${{ env.PROD_PROJECT_ID }}
+            npx firebase deploy --only functions,firestore:rules --project ${{ env.PROD_PROJECT_ID }}
           else
             echo "❌ Invalid environment: ${{ github.event.inputs.environment }}"
             exit 1
