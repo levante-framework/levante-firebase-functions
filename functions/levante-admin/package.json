@@ -1,6 +1,6 @@
 {
   "name": "@levante-firebase-functions/levante-admin",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "type": "module",
   "scripts": {
     "build": "tsc",
