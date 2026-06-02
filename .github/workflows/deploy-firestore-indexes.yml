@@ -18,6 +18,10 @@ on:
           - preview
           - prod
 
+concurrency:
+  group: deploy-firestore-indexes-${{ github.event.inputs.target_project }}
+  cancel-in-progress: false
+
 env:
   DEV_PROJECT_ID: hs-levante-admin-dev
   PREVIEW_PROJECT_ID: ${{ vars.PREVIEW_PROJECT || secrets.PREVIEW_PROJECT || vars.SEED_PROJECT || secrets.SEED_PROJECT }}

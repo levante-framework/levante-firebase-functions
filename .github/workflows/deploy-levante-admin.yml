@@ -21,6 +21,10 @@ on:
           - minor
           - major
 
+concurrency:
+  group: deploy-levante-admin-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
 env:
   HUSKY: 0
   DEV_PROJECT_ID: hs-levante-admin-dev
@@ -80,15 +84,20 @@ jobs:
       - name: Check Firestore index drift status
         run: |
           set -euo pipefail
+
+          main_sha=$(gh api "repos/${{ github.repository }}/git/ref/heads/main" --jq '.object.sha')
+          echo "Current main HEAD: $main_sha"
+
           result=$(gh api \
             "repos/${{ github.repository }}/actions/workflows/check-firestore-index-drift.yml/runs?branch=main&per_page=1" \
-            --jq '.workflow_runs[0] | {status: .status, conclusion: .conclusion, html_url: .html_url}')
+            --jq '.workflow_runs[0] | {status: .status, conclusion: .conclusion, head_sha: .head_sha, html_url: .html_url}')
 
           status=$(echo "$result" | jq -r '.status')
           conclusion=$(echo "$result" | jq -r '.conclusion')
+          run_sha=$(echo "$result" | jq -r '.head_sha')
           url=$(echo "$result" | jq -r '.html_url')
 
-          echo "Latest drift check: status=$status, conclusion=$conclusion"
+          echo "Latest drift check: status=$status, conclusion=$conclusion, sha=$run_sha"
           echo "Run: $url"
 
           if [ "$status" != "completed" ]; then
@@ -102,7 +111,14 @@ jobs:
             exit 1
           fi
 
-          echo "✅ Firestore index drift check passed"
+          if [ "$run_sha" != "$main_sha" ]; then
+            echo "::error::Drift check passed on $run_sha but main is now at $main_sha."
+            echo "::error::A new commit has landed since the last drift check ran. Wait for it to complete and pass before deploying."
+            echo "Run: $url"
+            exit 1
+          fi
+
+          echo "✅ Firestore index drift check passed on current main HEAD ($main_sha)"
         env:
           GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         shell: bash
@@ -145,8 +161,6 @@ jobs:
         run: |
           git add functions/levante-admin/package.json
           git commit -m "🤖 Bump version to ${{ steps.bump-version.outputs.new-version }} for prod deployment"
-        env:
-          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
         shell: bash
 
       - name: Push changes
