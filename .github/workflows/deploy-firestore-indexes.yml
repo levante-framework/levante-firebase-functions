@@ -133,6 +133,11 @@ jobs:
           request_reason: "levante-firebase-functions/deploy-firestore-indexes run ${{ github.run_id }}"
           access_token_scopes: "email,openid,https://www.googleapis.com/auth/cloudplatformprojects.readonly,https://www.googleapis.com/auth/firebase,https://www.googleapis.com/auth/cloud-platform"
 
+      - name: Export deployed Firestore indexes
+        run: |
+          npx firebase firestore:indexes --project "${{ steps.resolve-target.outputs.project_id }}" > functions/levante-admin/remote-indexes.json
+        shell: bash
+
       - name: Check if indexes differ from target project
         id: check-changes
         run: |
@@ -143,9 +148,6 @@ jobs:
             jq -S '.' "$1" | sed 's/[[:space:]]//g'
           }
 
-          # Export deployed Firestore indexes
-          npx firebase firestore:indexes --project "${{ steps.resolve-target.outputs.project_id }}" > remote-indexes.json
-          
           # Normalize index files for comparison
           normalize_json "firestore.indexes.json" > local-normalized.json
           normalize_json "remote-indexes.json" > remote-normalized.json
@@ -163,7 +165,6 @@ jobs:
       - name: Deploy Firestore indexes
         if: steps.check-changes.outputs.has-changes == 'true'
         run: |
-          cd functions/levante-admin
           npx firebase deploy --only firestore:indexes --project "${{ steps.resolve-target.outputs.project_id }}" --non-interactive
         shell: bash
 
