@@ -12,6 +12,9 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  DEV_PROJECT_ID: hs-levante-admin-dev
+
 jobs:
   check-firestore-index-drift:
     runs-on: ubuntu-latest
@@ -41,7 +44,7 @@ jobs:
       - name: Export deployed Firestore indexes
         run: |
           cd functions/levante-admin
-          npx firebase firestore:indexes --project dev > remote-indexes.json
+          npx firebase firestore:indexes --project "$DEV_PROJECT_ID" > remote-indexes.json
         shell: bash
 
       - name: Check for index drift

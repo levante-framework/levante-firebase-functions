@@ -16,11 +16,16 @@ on:
         options:
           - dev
           - preview
+          - prod
+
+concurrency:
+  group: deploy-firestore-indexes-${{ github.event.inputs.target_project }}
+  cancel-in-progress: false
 
 env:
-  HUSKY: 0
   DEV_PROJECT_ID: hs-levante-admin-dev
   PREVIEW_PROJECT_ID: ${{ vars.PREVIEW_PROJECT || secrets.PREVIEW_PROJECT || vars.SEED_PROJECT || secrets.SEED_PROJECT }}
+  PROD_PROJECT_ID: hs-levante-admin-prod
 
 jobs:
   deploy-indexes:
@@ -30,8 +35,17 @@ jobs:
       contents: read
 
     steps:
+      - name: Guard against non-main prod deploys
+        if: github.event.inputs.target_project == 'prod'
+        run: |
+          if [ "${{ github.event.inputs.branch }}" != "main" ]; then
+            echo "::error::Prod index deploys must use branch 'main' (got '${{ github.event.inputs.branch }}')."
+            exit 1
+          fi
+        shell: bash
+
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ github.event.inputs.branch }}
 
@@ -57,13 +71,14 @@ jobs:
         shell: bash
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
         run: npm ci
+        shell: bash
 
       - name: Validate local Firestore indexes file
         run: |
@@ -76,10 +91,12 @@ jobs:
       - name: Resolve target project
         id: resolve-target
         run: |
-          if [ "${{ github.event.inputs.target_project }}" = "preview" ]; then
-            project_id="${PREVIEW_PROJECT_ID}"
-          else
-            project_id="${DEV_PROJECT_ID}"
+          if [ "${{ github.event.inputs.target_project }}" = "dev" ]; then
+            project_id="$DEV_PROJECT_ID"
+          elif [ "${{ github.event.inputs.target_project }}" = "preview" ]; then
+            project_id="$PREVIEW_PROJECT_ID"
+          elif [ "${{ github.event.inputs.target_project }}" = "prod" ]; then
+            project_id="$PROD_PROJECT_ID"
           fi
 
           if [ -z "$project_id" ]; then
@@ -89,14 +106,11 @@ jobs:
 
           echo "project_id=$project_id" >> "$GITHUB_OUTPUT"
           echo "Resolved target project: $project_id"
-        env:
-          DEV_PROJECT_ID: ${{ env.DEV_PROJECT_ID }}
-          PREVIEW_PROJECT_ID: ${{ env.PREVIEW_PROJECT_ID }}
         shell: bash
 
       - name: Authenticate with GCP (dev)
         if: github.event.inputs.target_project == 'dev'
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           project_id: ${{ env.DEV_PROJECT_ID }}
           credentials_json: ${{ secrets.GCP_SA_CREDENTIALS_DEV }}
@@ -110,30 +124,46 @@ jobs:
           echo "GOOGLE_APPLICATION_CREDENTIALS=$RUNNER_TEMP/firebase-sa.json" >> "$GITHUB_ENV"
         shell: bash
 
-      - name: Normalize Firestore indexes for deploy
-        run: node functions/levante-admin/scripts/normalize-indexes.js
-        shell: bash
+      - name: Authenticate with GCP (prod)
+        if: github.event.inputs.target_project == 'prod'
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: ${{ env.PROD_PROJECT_ID }}
+          credentials_json: ${{ secrets.GCP_SA_CREDENTIALS_PROD }}
+          request_reason: "levante-firebase-functions/deploy-firestore-indexes run ${{ github.run_id }}"
+          access_token_scopes: "email,openid,https://www.googleapis.com/auth/cloudplatformprojects.readonly,https://www.googleapis.com/auth/firebase,https://www.googleapis.com/auth/cloud-platform"
 
       - name: Check if indexes differ from target project
         id: check-changes
         run: |
           cd functions/levante-admin
-          npx firebase firestore:indexes --project "${{ steps.resolve-target.outputs.project_id }}" > current-indexes.json
-          node scripts/normalize-indexes.js current-indexes.json
 
-          normalize_json() { jq -S '.' "$1" | sed 's/[[:space:]]//g'; }
+          # Function to normalize JSON for comparison
+          normalize_json() {
+            jq -S '.' "$1" | sed 's/[[:space:]]//g'
+          }
 
-          if cmp -s <(normalize_json firestore.indexes.json) <(normalize_json current-indexes.json); then
-            echo "has-changes=false" >> $GITHUB_OUTPUT
+          # Export deployed Firestore indexes
+          npx firebase firestore:indexes --project "${{ steps.resolve-target.outputs.project_id }}" > remote-indexes.json
+          
+          # Normalize index files for comparison
+          normalize_json "firestore.indexes.json" > local-normalized.json
+          normalize_json "remote-indexes.json" > remote-normalized.json
+
+          # Compare normalized files for index drift
+          if cmp -s local-normalized.json remote-normalized.json; then
+            echo "has-changes=false" >> "$GITHUB_OUTPUT"
             echo "No index differences detected between this branch and ${{ steps.resolve-target.outputs.project_id }}."
           else
-            echo "has-changes=true" >> $GITHUB_OUTPUT
+            echo "has-changes=true" >> "$GITHUB_OUTPUT"
             echo "Index differences detected — deploy will apply changes."
           fi
         shell: bash
 
       - name: Deploy Firestore indexes
+        if: steps.check-changes.outputs.has-changes == 'true'
         run: |
+          cd functions/levante-admin
           npx firebase deploy --only firestore:indexes --project "${{ steps.resolve-target.outputs.project_id }}" --non-interactive
         shell: bash
 
@@ -156,5 +186,5 @@ jobs:
         if: always()
         run: |
           rm -f "$RUNNER_TEMP/firebase-sa.json"
-          rm -f functions/levante-admin/current-indexes.json
+          rm -f functions/levante-admin/remote-indexes.json functions/levante-admin/local-normalized.json functions/levante-admin/remote-normalized.json
         shell: bash

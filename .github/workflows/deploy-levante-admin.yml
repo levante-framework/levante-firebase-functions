@@ -21,45 +21,55 @@ on:
           - minor
           - major
 
+concurrency:
+  group: deploy-levante-admin-${{ github.event.inputs.environment }}
+  cancel-in-progress: false
+
 env:
   HUSKY: 0
+  DEV_PROJECT_ID: hs-levante-admin-dev
+  PROD_PROJECT_ID: hs-levante-admin-prod
 
 jobs:
   deploy:
     name: Deploy to ${{ github.event.inputs.environment }}
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
     
     steps:
+      - name: Verify branch is main
+        run: |
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "::error::This workflow must be dispatched from main (got ${{ github.ref }})."
+            exit 1
+          fi
+        shell: bash
+
       - name: Generate GitHub App token
         id: generate-token
-        uses: tibdex/github-app-token@v1
+        uses: actions/create-github-app-token@v3
         with:
-          app_id: ${{ secrets.LEVANTE_BOT_APP_ID }}
-          private_key: ${{ secrets.LEVANTE_BOT_APP_PRIVATE_KEY }}
+          client-id: ${{ secrets.LEVANTE_BOT_APP_CLIENT_ID }}
+          private-key: ${{ secrets.LEVANTE_BOT_APP_PRIVATE_KEY }}
 
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           token: ${{ steps.generate-token.outputs.token }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version-file: .nvmrc
           cache: npm
 
       - name: Install dependencies
-        run: |
-          npm install -g husky
-          npm ci
-
-      - name: Install Firebase CLI
-        run: |
-          npm install -g firebase-tools
+        run: npm ci
         shell: bash
 
       - name: Check Firestore rules file exists
-        id: check-rules
         run: |
           cd functions/levante-admin
           if [ ! -f "firestore.rules" ]; then
@@ -71,73 +81,55 @@ jobs:
           fi
         shell: bash
 
-      # Self-contained: prod deploy auth must not affect this step. Some runners/repos
-      # also leave GOOGLE_CLOUD_PROJECT=prod, which breaks `firebase ... --project dev`.
-      - name: Export current Firestore indexes from Dev
-        env:
-          DEV_CREDENTIALS_JSON: ${{ secrets.GCP_SA_CREDENTIALS_DEV }}
+      - name: Check Firestore index drift status
         run: |
           set -euo pipefail
-          dev_keyfile="${RUNNER_TEMP}/levante-dev-indexes-export-sa.json"
-          printf '%s' "$DEV_CREDENTIALS_JSON" > "$dev_keyfile"
-          export GOOGLE_APPLICATION_CREDENTIALS="$dev_keyfile"
-          export CLOUDSDK_AUTH_CREDENTIAL_FILE_OVERRIDE="$dev_keyfile"
-          export CLOUDSDK_CORE_PROJECT=hs-levante-admin-dev
-          export CLOUDSDK_PROJECT=hs-levante-admin-dev
-          export GCLOUD_PROJECT=hs-levante-admin-dev
-          export GCP_PROJECT=hs-levante-admin-dev
-          export GOOGLE_CLOUD_PROJECT=hs-levante-admin-dev
-          cd functions/levante-admin
-          firebase firestore:indexes --project hs-levante-admin-dev > current-indexes.json
-          rm -f "$dev_keyfile"
+
+          main_sha=$(gh api "repos/${{ github.repository }}/git/ref/heads/main" --jq '.object.sha')
+          echo "Current main HEAD: $main_sha"
+
+          result=$(gh api \
+            "repos/${{ github.repository }}/actions/workflows/check-firestore-index-drift.yml/runs?branch=main&per_page=1" \
+            --jq '.workflow_runs[0] | {status: .status, conclusion: .conclusion, head_sha: .head_sha, html_url: .html_url}')
+
+          status=$(echo "$result" | jq -r '.status')
+          conclusion=$(echo "$result" | jq -r '.conclusion')
+          run_sha=$(echo "$result" | jq -r '.head_sha')
+          url=$(echo "$result" | jq -r '.html_url')
+
+          echo "Latest drift check: status=$status, conclusion=$conclusion, sha=$run_sha"
+          echo "Run: $url"
+
+          if [ "$status" != "completed" ]; then
+            echo "::error::Firestore index drift check is still running. Wait for it to complete before deploying."
+            exit 1
+          fi
+
+          if [ "$conclusion" != "success" ]; then
+            echo "::error::Firestore index drift check did not pass on main. Resolve index drift before deploying."
+            echo "Failed run: $url"
+            exit 1
+          fi
+
+          if [ "$run_sha" != "$main_sha" ]; then
+            echo "::error::Drift check passed on $run_sha but main is now at $main_sha."
+            echo "::error::A new commit has landed since the last drift check ran. Wait for it to complete and pass before deploying."
+            echo "Run: $url"
+            exit 1
+          fi
+
+          echo "✅ Firestore index drift check passed on current main HEAD ($main_sha)"
+        env:
+          GH_TOKEN: ${{ steps.generate-token.outputs.token }}
         shell: bash
 
       - name: Authenticate with GCP (deploy target)
-        uses: google-github-actions/auth@v2
+        uses: google-github-actions/auth@v3
         with:
           project_id: ${{ github.event.inputs.environment == 'prod' && 'hs-levante-admin-prod' || 'hs-levante-admin-dev' }}
           credentials_json: ${{ github.event.inputs.environment == 'prod' && secrets.GCP_SA_CREDENTIALS_PROD || secrets.GCP_SA_CREDENTIALS_DEV }}
           request_reason: 'levante-firebase-functions/deploy run ${{ github.run_id }}'
           access_token_scopes: 'email,openid,https://www.googleapis.com/auth/cloudplatformprojects.readonly,https://www.googleapis.com/auth/firebase,https://www.googleapis.com/auth/cloud-platform'
-
-      - name: Check if indexes have changed
-        id: check-changes
-        run: |
-          cd functions/levante-admin
-          
-          # Function to normalize JSON for comparison
-          normalize_json() {
-            jq -S '.' "$1" | sed 's/[[:space:]]//g'
-          }
-          
-          # Check if firestore.indexes.json exists
-          if [ ! -f "firestore.indexes.json" ]; then
-            echo "firestore.indexes.json not found, will create it"
-            echo "has-changes=true" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-          
-          # Normalize both files
-          normalize_json "firestore.indexes.json" > local-normalized.json
-          normalize_json "current-indexes.json" > remote-normalized.json
-          
-          # Compare the normalized files
-          if cmp -s local-normalized.json remote-normalized.json; then
-            echo "Indexes are up to date"
-            echo "has-changes=false" >> $GITHUB_OUTPUT
-          else
-            echo "Indexes have changed"
-            echo "has-changes=true" >> $GITHUB_OUTPUT
-          fi
-        shell: bash
-
-      - name: Update index file if needed
-        if: steps.check-changes.outputs.has-changes == 'true'
-        run: |
-          cd functions/levante-admin
-          cp current-indexes.json firestore.indexes.json
-          echo "Updated firestore.indexes.json with latest indexes from dev project"
-        shell: bash
 
       - name: Bump version for prod deployment
         if: github.event.inputs.environment == 'prod'
@@ -155,40 +147,24 @@ jobs:
           new_version=$(node -p "require('./package.json').version")
           
           echo "New version: $new_version"
-          echo "new-version=$new_version" >> $GITHUB_OUTPUT
+          echo "new-version=$new_version" >> "$GITHUB_OUTPUT"
         shell: bash
 
       - name: Configure Git
+        if: github.event.inputs.environment == 'prod'
         run: |
           git config --local user.email "levante-bot@github.actions"
           git config --local user.name "Levante Bot"
 
-      - name: Commit index updates and version bump
-        if: steps.check-changes.outputs.has-changes == 'true' || github.event.inputs.environment == 'prod'
+      - name: Commit version bump
+        if: github.event.inputs.environment == 'prod'
         run: |
-          git add functions/levante-admin/firestore.indexes.json
-          if [ "${{ github.event.inputs.environment }}" == "prod" ]; then
-            git add functions/levante-admin/package.json
-          fi
-          
-          commit_message="🤖 Auto-update for ${{ github.event.inputs.environment }} deployment"
-          if [ "${{ steps.check-changes.outputs.has-changes }}" == "true" ]; then
-            commit_message="$commit_message
-
-          - Updated Firestore indexes from dev project"
-          fi
-          if [ "${{ github.event.inputs.environment }}" == "prod" ]; then
-            commit_message="$commit_message
-          - Bumped version to ${{ steps.bump-version.outputs.new-version }}"
-          fi
-          
-          git commit -m "$commit_message"
-        env:
-          GITHUB_TOKEN: ${{ steps.generate-token.outputs.token }}
+          git add functions/levante-admin/package.json
+          git commit -m "🤖 Bump version to ${{ steps.bump-version.outputs.new-version }} for prod deployment"
         shell: bash
 
       - name: Push changes
-        if: steps.check-changes.outputs.has-changes == 'true' || github.event.inputs.environment == 'prod'
+        if: github.event.inputs.environment == 'prod'
         run: |
           git push origin main
         env:
@@ -198,32 +174,20 @@ jobs:
       - name: Deploy to Firebase
         run: |
           cd functions/levante-admin
-          
-          # Set the Firebase project
-          if [ "${{ github.event.inputs.environment }}" == "prod" ]; then
-            firebase use prod
+          if [ "${{ github.event.inputs.environment }}" == "dev" ]; then
+            npx firebase deploy --only functions,firestore:rules --project ${{ env.DEV_PROJECT_ID }}
+          elif [ "${{ github.event.inputs.environment }}" == "prod" ]; then
+            npx firebase deploy --only functions,firestore:rules --project ${{ env.PROD_PROJECT_ID }}
           else
-            firebase use dev
+            echo "❌ Invalid environment: ${{ github.event.inputs.environment }}"
+            exit 1
           fi
-          
-          # Deploy functions and Firestore rules
-          firebase deploy --only functions,firestore:rules
         shell: bash
 
       - name: Log deployment success
         run: |
           echo "✅ Successfully deployed to ${{ github.event.inputs.environment }}"
-          if [ "${{ steps.check-changes.outputs.has-changes }}" == "true" ]; then
-            echo "📝 Firestore indexes updated"
-          fi
           if [ "${{ github.event.inputs.environment }}" == "prod" ]; then
             echo "📦 Version bumped to ${{ steps.bump-version.outputs.new-version }}"
           fi
-        shell: bash
-
-      - name: Cleanup
-        if: always()
-        run: |
-          cd functions/levante-admin
-          rm -f current-indexes.json local-normalized.json remote-normalized.json
         shell: bash
