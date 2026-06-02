@@ -336,7 +336,6 @@ async function createUserAssignments(
         started: false,
         userData: {
           assessmentPid: user.uid,
-          assessmentUid: user.uid,
           email: user.email,
           grade: null,
           name: {
