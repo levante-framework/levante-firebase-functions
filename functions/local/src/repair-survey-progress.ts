@@ -92,6 +92,27 @@ function isValidStatus(value: string): value is SurveyProgressStatus {
   return value === "assigned" || value === "started" || value === "completed";
 }
 
+const STATUS_RANK: Record<SurveyProgressStatus, number> = {
+  assigned: 0,
+  started: 1,
+  completed: 2,
+};
+
+/**
+ * Returns true when surveyResponses trails the assignment record — i.e. the
+ * assignment already records more progress than surveyResponses does. These
+ * rows represent a distinct anomaly (not the corruption this script repairs)
+ * and must never be repaired with surveyResponsesStatus as the target,
+ * because doing so would overwrite correct assignment data.
+ */
+function isSurveyResponsesBehindAssignment(row: RepairCsvRow): boolean {
+  const surveyRank = STATUS_RANK[row.surveyResponsesStatus];
+  return (
+    STATUS_RANK[row.assessmentStatus] > surveyRank ||
+    STATUS_RANK[row.progressStatus] > surveyRank
+  );
+}
+
 function toDate(value: unknown, label: string): Date {
   if (value instanceof Timestamp) {
     return value.toDate();
@@ -205,6 +226,30 @@ async function repairRow(
     return {
       status: "error",
       message: `invalid surveyResponsesStatus: ${row.surveyResponsesStatus}`,
+    };
+  }
+
+  if (!isValidStatus(row.assessmentStatus)) {
+    return {
+      status: "error",
+      message: `invalid assessmentStatus: ${row.assessmentStatus}`,
+    };
+  }
+
+  if (!isValidStatus(row.progressStatus)) {
+    return {
+      status: "error",
+      message: `invalid progressStatus: ${row.progressStatus}`,
+    };
+  }
+
+  if (isSurveyResponsesBehindAssignment(row)) {
+    return {
+      status: "error",
+      message:
+        `anomalous row: surveyResponsesStatus (${row.surveyResponsesStatus}) trails ` +
+        `assessmentStatus (${row.assessmentStatus}) or progressStatus (${row.progressStatus}). ` +
+        `This row requires separate investigation and must be removed from the input CSV before repair.`,
     };
   }
 
