@@ -133,6 +133,19 @@ function taskIdToProgressKey(taskId: string): string {
   return taskId.replace(/-/g, "_");
 }
 
+/**
+ * An assignment is complete when it has at least one assessment and every
+ * non-optional assessment has a completedOn timestamp. Used to roll the
+ * top-level `completed` flag up after repairing assessment timestamps, so the
+ * assignment-level flag stays consistent with assessments[].completedOn.
+ */
+function allAssessmentsCompleted(assessments: AssessmentRow[]): boolean {
+  if (assessments.length === 0) return false;
+  return assessments.every(
+    (a) => Boolean(a.completedOn) || a.optional === true
+  );
+}
+
 function surveyResponseMatchesAdministration(
   data: Record<string, unknown>,
   administrationId: string,
@@ -313,6 +326,27 @@ async function repairRow(
       [progressKey]: targetStatus,
     };
     changedParts.push(`progress.${progressKey}`);
+  }
+
+  // Roll the top-level `completed` flag up so it stays consistent with the
+  // repaired assessment timestamps. Only set it to true (never downgrade), so a
+  // partial repair can't flip a legitimately completed assignment to false.
+  if (
+    assignmentData.completed !== true &&
+    allAssessmentsCompleted(assessments)
+  ) {
+    updates.completed = true;
+    if (assignmentData.started !== true) {
+      updates.started = true;
+    }
+    changedParts.push("completed");
+  }
+
+  if (Object.keys(updates).length === 0) {
+    return {
+      status: "skipped",
+      message: "no changes needed after repair evaluation",
+    };
   }
 
   if (dryRun) {
