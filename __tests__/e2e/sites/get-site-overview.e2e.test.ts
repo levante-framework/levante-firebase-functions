@@ -31,7 +31,7 @@ describe("getSiteOverview (e2e)", () => {
     await seedSystemPermissions();
     client = getClient();
     getSiteOverview = client.call<{ siteId: string }, GetSiteOverviewResult>(
-      "getSiteOverview",
+      "getSiteOverview"
     );
   });
 
@@ -47,7 +47,7 @@ describe("getSiteOverview (e2e)", () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
     await expect(
       // @ts-expect-error intentionally missing siteId
-      getSiteOverview({}),
+      getSiteOverview({})
     ).rejects.toMatchObject({
       code: "functions/invalid-argument",
       details: expect.arrayContaining([
@@ -59,7 +59,7 @@ describe("getSiteOverview (e2e)", () => {
     });
     await expect(
       // @ts-expect-error intentionally wrong type for siteId
-      getSiteOverview({ siteId: 123 }),
+      getSiteOverview({ siteId: 123 })
     ).rejects.toMatchObject({
       code: "functions/invalid-argument",
       details: expect.arrayContaining([
@@ -128,7 +128,7 @@ describe("getSiteOverview (e2e)", () => {
       expect.arrayContaining([
         { id: "school-a", name: "School A" },
         { id: "school-b", name: "School B" },
-      ]),
+      ])
     );
     expect(data.schools).toHaveLength(2);
 
@@ -137,7 +137,7 @@ describe("getSiteOverview (e2e)", () => {
         { id: "class-1", name: "Class 1", schoolId: "school-a" },
         { id: "class-2", name: "Class 2", schoolId: "school-a" },
         { id: "class-3", name: "Class 3", schoolId: "school-b" },
-      ]),
+      ])
     );
     expect(data.classes).toHaveLength(3);
 

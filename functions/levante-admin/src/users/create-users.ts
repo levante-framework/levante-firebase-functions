@@ -1,646 +1,695 @@
-import { getAuth, type UserImportResult, type Auth } from "firebase-admin/auth";
-import { getFirestore, FieldPath } from "firebase-admin/firestore";
-import type { DocumentReference, WriteResult } from "firebase-admin/firestore";
-import _get from "lodash-es/get.js";
-import _head from "lodash-es/head.js";
-import _split from "lodash-es/split.js";
-import _set from "lodash-es/set.js";
-import _isEmpty from "lodash-es/isEmpty.js";
-import _includes from "lodash-es/includes.js";
-import _chunk from "lodash-es/chunk.js";
-import { HttpsError } from "firebase-functions/v2/https";
-import { logger } from "firebase-functions/v2";
+import { createHash } from "crypto";
 import bcrypt from "bcrypt";
-import { isEmulated } from "../utils/utils.js";
+import { getAuth, type Auth, type UserImportRecord } from "firebase-admin/auth";
+import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
+import type {
+  DocumentSnapshot,
+  Firestore,
+  QuerySnapshot,
+} from "firebase-admin/firestore";
+import { getFunctions } from "firebase-admin/functions";
+import { logger } from "firebase-functions/v2";
+import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { onTaskDispatched } from "firebase-functions/v2/tasks";
+import _chunk from "lodash-es/chunk.js";
+import {
+  CreateUsersParamsSchema,
+  type CreateUsersParams,
+  type CreateUsersResult,
+} from "@levante-framework/levante-zod";
+import { ACTIONS, RESOURCES, ROLES } from "@levante-framework/permissions-core";
+import type { OrgAssociationMap, User } from "../firestore-schema.js";
 import { processUserAddedOrgs } from "../administrations/sync-administrations.js";
-import { ROLES } from "../utils/constants.js";
+import { fetchSyncStatusCounts } from "../sites/site-utils.js";
+import {
+  buildPermissionsUserFromAuthRecord,
+  ensurePermissionsLoaded,
+  filterSitesByPermission,
+} from "../utils/permission-helpers.js";
 import {
   buildRoleClaimsStructure,
-  type RoleClaimsStructure,
   type RoleDefinition,
 } from "../utils/role-helpers.js";
+import { getFunctionUrl, isEmulated } from "../utils/utils.js";
+import { LEVANTE_TO_ROAR_USERTYPE } from "./user-utils.js";
 
-interface InputUser {
-  userType: string;
-  childId?: string;
-  parentId?: string;
-  teacherId?: string;
-  month: string;
-  year: string;
-  orgIds: {
-    districts: string[];
-    schools: string[];
-    classes: string[];
-    groups: string[];
-    families: string[];
+/** Aggregates all fields needed to create a new user */
+interface NewUserRecord {
+  birthMonth?: number;
+  birthYear?: number;
+  classes: OrgAssociationMap;
+  cohorts: OrgAssociationMap;
+  customClaims: {
+    adminUid: string;
+    roarUid: string;
+    rolesSet: string[];
+    siteNames: Record<string, string>;
+    siteRoles: Record<string, string[]>;
+    useNewPermissions: boolean;
   };
-  isTestData: boolean;
-}
-
-type ClassData = {
-  districtId: string;
-  schoolId: string;
-};
-
-type Claims = {
-  roarUid: string;
-  adminUid: string;
-  assessmentUid: string;
-  useNewPermissions: boolean;
-  rolesSet: string[];
-  siteRoles: Record<string, string[]>;
-  siteNames: Record<string, string>;
-};
-
-interface BaseAuthUserData {
-  uid: string;
   email: string;
-  displayName: string;
-  emailVerified: boolean;
-  disabled: boolean;
-  passwordHash?: Buffer;
-  password?: string;
-  fromCSV: InputUser;
-  customClaims: Claims;
-  username?: string;
-}
-
-type AdminAuthUserData = BaseAuthUserData;
-
-interface ReturnUserData {
-  uid: string;
-  email: string;
+  id: string;
+  idHash: string;
   password: string;
-  username?: string;
+  passwordHash: Buffer;
+  roles: { role: string; siteId: string; siteName: string }[];
+  schools: OrgAssociationMap;
+  sites: OrgAssociationMap;
+  uid: string;
+  userType: "caregiver" | "child" | "teacher";
 }
 
-function generateRandomString(length = 10) {
-  let result = "";
-  const characters = "abcdefghijklmnopqrstuvwxyz0123456789";
-  const charactersLength = characters.length;
-  for (let i = 0; i < length; i++) {
-    result += characters.charAt(Math.floor(Math.random() * charactersLength));
+const MAX_RETRIES = 3;
+
+/** Builds an OrgAssociationMap for a user */
+function buildOrgField(orgIds: string[]): OrgAssociationMap {
+  return {
+    current: orgIds,
+    all: orgIds,
+    dates: Object.fromEntries(
+      orgIds.map((id) => [id, { from: Timestamp.now(), to: null }])
+    ),
+  };
+}
+
+/** Creates Firebase Auth users */
+export async function createAuthUsers(
+  auth: Auth,
+  users: NewUserRecord[],
+  currentRetry = 0
+) {
+  try {
+    // Auth emulator sign-in only accepts passwords created via createUser/updateUser
+    // (fakeHash format). importUsers with BCRYPT passwordHash imports successfully but
+    // signInWithEmailAndPassword fails; production uses bulk importUsers below.
+    if (isEmulated()) {
+      const results: Array<
+        | { success: true; uid: string }
+        | { success: false; error: unknown; user: NewUserRecord }
+      > = [];
+      for (const user of users) {
+        try {
+          const userRecord = await auth.createUser({
+            uid: user.uid,
+            disabled: false,
+            displayName: "",
+            email: user.email,
+            emailVerified: false,
+            password: user.password,
+          });
+          await auth.setCustomUserClaims(userRecord.uid, user.customClaims);
+          results.push({ success: true, uid: userRecord.uid });
+        } catch (error: unknown) {
+          logger.error("Failed to create user in emulator", {
+            email: user.email,
+            error,
+          });
+          results.push({ success: false, error, user });
+        }
+      }
+
+      const failures = results.filter((r) => !r.success);
+      const failedUsers = failures.map((r) => r.user);
+
+      if (failures.length === 0) return;
+
+      if (currentRetry >= MAX_RETRIES) {
+        logger.error("Maximum retries exceeded creating emulator users", {
+          failedUsers: failedUsers.map((u) => u.email),
+          maxRetries: MAX_RETRIES,
+        });
+        throw new Error(
+          `Maximum retries (${MAX_RETRIES}) exceeded. Failed to create ${failedUsers.length} users.`
+        );
+      }
+
+      logger.warn("Retrying failed emulator user creations", {
+        failedCount: failedUsers.length,
+        maxRetries: MAX_RETRIES,
+        retryCount: currentRetry + 1,
+      });
+      await createAuthUsers(auth, failedUsers, currentRetry + 1);
+    } else {
+      const failedUsers: NewUserRecord[] = [];
+      // NB: importUsers can only import up to 1000 users at a time
+      for (const chunk of _chunk(users, 1000)) {
+        const result = await auth.importUsers(
+          chunk.map(
+            (user: NewUserRecord): UserImportRecord => ({
+              uid: user.uid,
+              email: user.email,
+              emailVerified: false,
+              displayName: "",
+              disabled: false,
+              customClaims: user.customClaims,
+              passwordHash: user.passwordHash,
+            })
+          ),
+          {
+            hash: {
+              algorithm: "BCRYPT",
+            },
+          }
+        );
+
+        if (result.failureCount > 0) {
+          result.errors.forEach((error) => {
+            failedUsers.push(chunk[error.index]);
+          });
+        }
+      }
+
+      if (failedUsers.length > 0 && currentRetry < MAX_RETRIES) {
+        await createAuthUsers(auth, failedUsers, currentRetry + 1);
+      } else if (failedUsers.length > 0 && currentRetry >= MAX_RETRIES) {
+        logger.error("Maximum retries exceeded importing users", {
+          failedCount: failedUsers.length,
+          maxRetries: MAX_RETRIES,
+        });
+        throw new Error(
+          `Maximum retries (${MAX_RETRIES}) exceeded. Failed to create all users.`
+        );
+      }
+    }
+  } catch (error: unknown) {
+    logger.error("An error occurred while creating Auth users", {
+      attempt: currentRetry,
+      error,
+    });
+    throw new Error(error instanceof Error ? error.message : String(error));
   }
-  return result;
-}
-
-function generateEmail(emailDomain: string) {
-  const emailName = generateRandomString();
-  return `${emailName}${emailDomain}`;
 }
 
 /**
- * Checks an array of emails against Firebase Auth in batches of 100.
- * @param {string[]} emails - Array of email addresses to check.
- * @param {object} auth - Firebase Admin SDK Auth instance.
- * @returns {Promise<string[]>} Array of emails already in use.
+ * Creates Firestore userClaims docs
+ * TODO: remove this after permissions migration is complete
  */
-async function validateEmails(emails: string[], auth: Auth): Promise<string[]> {
-  const chunkedEmails = _chunk(emails, 100);
-  const emailsAlreadyInUse: string[] = [];
-
-  for (const chunk of chunkedEmails) {
-    try {
-      const result = await auth.getUsers(chunk.map((email) => ({ email })));
-
-      if (result.users.length > 0) {
-        result.users.forEach((user) => {
-          if (user.email) {
-            emailsAlreadyInUse.push(user.email);
-          }
+export async function createUserClaimsDocs(
+  db: Firestore,
+  users: NewUserRecord[],
+  currentRetry = 0
+) {
+  const results = await Promise.allSettled(
+    users.map((user) => {
+      return db
+        .collection("userClaims")
+        .doc(user.uid)
+        .set({
+          claims: {
+            ...user.customClaims,
+          },
         });
-      }
-    } catch (error) {
-      logger.error("Error processing emails", {
-        error,
-        chunkSize: chunk.length,
-      });
-    }
+    })
+  );
+
+  const failedUsers: NewUserRecord[] = results
+    .map((result, i) => (result.status === "rejected" ? users[i] : null))
+    .filter((e) => e !== null);
+  const failedCount = failedUsers.length;
+
+  if (failedCount === 0) return;
+
+  if (currentRetry >= MAX_RETRIES) {
+    logger.error("Maximum retries exceeded creating userClaims docs", {
+      failedCount,
+      maxRetries: MAX_RETRIES,
+    });
+    throw new Error(
+      `Maximum retries (${MAX_RETRIES}) exceeded. Failed to create ${failedCount} userClaims docs.`
+    );
   }
 
-  logger.debug("Found existing emails in use", {
-    count: emailsAlreadyInUse.length,
+  logger.warn("Retrying failed userClaims docs creation", {
+    attempt: currentRetry + 1,
+    failedCount,
+    maxRetries: MAX_RETRIES,
   });
-
-  return emailsAlreadyInUse;
+  await createUserClaimsDocs(db, failedUsers, currentRetry + 1);
 }
 
-// TODO: Update this since we are removing the ROAR code. ROAR allowed people to submit emails, we don't allow that.
-async function getValidEmails({
-  users,
-  auth,
-  emailDomain,
-}: {
-  users: InputUser[];
-  auth: Auth;
-  emailDomain: string;
-}): Promise<string[]> {
-  let validEmails: string[] = [];
+/** Creates Firestore users docs */
+export async function createUsersDocs(
+  db: Firestore,
+  users: NewUserRecord[],
+  currentRetry = 0
+) {
+  const results = await Promise.allSettled(
+    users.map((user) => {
+      const data: User = {
+        archived: false,
+        ...(user.birthMonth !== undefined && { birthMonth: user.birthMonth }),
+        ...(user.birthYear !== undefined && { birthYear: user.birthYear }),
+        classes: user.classes,
+        createdAt: FieldValue.serverTimestamp() as unknown as Timestamp,
+        disabled: false,
+        displayName: "",
+        districts: user.sites,
+        email: user.email,
+        groups: user.cohorts,
+        idHash: user.idHash,
+        roles: user.roles,
+        schools: user.schools,
+        syncStatus: "pending",
+        uid: user.uid,
+        userType: LEVANTE_TO_ROAR_USERTYPE[user.userType],
+        username: user.email.split("@")[0],
+        updatedAt: FieldValue.serverTimestamp() as unknown as Timestamp,
+      };
+      return db.collection("users").doc(user.uid).set(data);
+    })
+  );
 
-  let processedUsers = 0;
+  const failedUsers = results
+    .map((result, i) => (result.status === "rejected" ? users[i] : null))
+    .filter((e) => e !== null);
+  const failedCount = failedUsers.length;
 
-  while (validEmails.length < users.length) {
-    const remainingUsers = users.slice(processedUsers);
-    const newEmails = remainingUsers.map((user) => generateEmail(emailDomain));
+  if (failedCount === 0) return;
+
+  if (currentRetry >= MAX_RETRIES) {
+    logger.error("Maximum retries exceeded creating users docs", {
+      failedCount,
+      maxRetries: MAX_RETRIES,
+    });
+    throw new Error(
+      `Maximum retries (${MAX_RETRIES}) exceeded. Failed to create ${failedCount} users docs.`
+    );
+  }
+
+  logger.warn("Retrying failed users docs creation", {
+    attempt: currentRetry + 1,
+    failedCount,
+    maxRetries: MAX_RETRIES,
+  });
+  await createUsersDocs(db, failedUsers, currentRetry + 1);
+}
+
+/** Ensures all orgs exist and belong to site */
+export async function ensureOrgsExistInSite(
+  db: Firestore,
+  siteId: string,
+  users: CreateUsersParams["users"]
+): Promise<void> {
+  const idToOrgKey = new Map<string, string>();
+  const schoolIds = new Set(users.flatMap((u) => u.orgIds.schools));
+  for (const schoolId of schoolIds) idToOrgKey.set(schoolId, "schools");
+  const classIds = new Set(users.flatMap((u) => u.orgIds.classes));
+  for (const classId of classIds) idToOrgKey.set(classId, "classes");
+  const cohortIds = new Set(users.flatMap((u) => u.orgIds.cohorts));
+  for (const cohortId of cohortIds) idToOrgKey.set(cohortId, "cohorts");
+
+  // Get all org snapshots
+  const refs = [
+    ...Array.from(schoolIds).map((schoolId) =>
+      db.collection("schools").doc(schoolId)
+    ),
+    ...Array.from(classIds).map((classId) =>
+      db.collection("classes").doc(classId)
+    ),
+    ...Array.from(cohortIds).map((cohortId) =>
+      db.collection("groups").doc(cohortId)
+    ),
+  ];
+  const snaps = await db.getAll(...refs);
+
+  // Check if any orgs don't exist
+  const missing = snaps.filter((snap) => !snap.exists);
+  if (missing.length > 0) {
+    const orgIds: Record<string, string[]> = {
+      schools: [],
+      classes: [],
+      cohorts: [],
+    };
+    missing.forEach((snap) =>
+      orgIds[idToOrgKey.get(snap.ref.id)!].push(snap.ref.id)
+    );
+    logger.warn("Orgs not found", { orgIds });
+    throw new HttpsError("not-found", "Orgs not found", { orgIds });
+  }
+
+  // Check if any orgs don't belong to site
+  const unrelated = snaps.filter(
+    (snap) =>
+      snap.data()!.districtId !== siteId && snap.data()!.parentOrgId !== siteId
+  );
+  if (unrelated.length > 0) {
+    const orgIds: Record<string, string[]> = {
+      schools: [],
+      classes: [],
+      cohorts: [],
+    };
+    unrelated.forEach((snap) =>
+      orgIds[idToOrgKey.get(snap.ref.id)!].push(snap.ref.id)
+    );
+    logger.warn("Orgs not belonging to site found", { siteId, orgIds });
+    throw new HttpsError(
+      "invalid-argument",
+      "Orgs not belonging to site found",
+      { siteId, orgIds }
+    );
+  }
+}
+
+/** Generates a specified number of unique email addresses */
+export async function generateEmails(n: number, auth: Auth): Promise<string[]> {
+  const emails = new Set<string>();
+  while (emails.size < n) {
+    const newEmails = new Set<string>();
+    while (newEmails.size < n - emails.size) {
+      const email = `${generateRandomString()}@levante.com`;
+      if (!emails.has(email)) newEmails.add(email);
+    }
 
     try {
-      const emailsAlreadyInUse = await validateEmails(newEmails, auth);
-      logger.debug("Found new emails already in use", {
-        count: emailsAlreadyInUse.length,
-      });
-
-      // Filter out emails that are already in use
-      const newValidEmails = newEmails.filter(
-        (email: string) => !emailsAlreadyInUse.includes(email)
-      );
-      validEmails.push(...newValidEmails);
-      processedUsers += newValidEmails.length;
+      const validEmails = await validateEmails([...newEmails], auth);
+      for (const email of validEmails) emails.add(email);
     } catch (error) {
-      logger.error("Error checking new emails", { error });
+      logger.error("Error validating emails", { error });
       throw error;
     }
   }
 
-  logger.debug("Successfully validated unique emails", {
-    count: validEmails.length,
+  logger.debug("Generated emails", {
+    count: emails.size,
   });
-  return validEmails.slice(0, users.length); // Ensure we return exactly the number of emails needed
+  return Array.from(emails);
 }
 
-function getUserType(user: InputUser) {
-  const userType = user?.userType?.toLowerCase() ?? "student";
+/** Generates a random string of specified length */
+export function generateRandomString(length = 10) {
+  const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
+  const charsLength = chars.length;
 
-  return userType === "child" ? "student" : userType; // parent, teacher;
+  let result = "";
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * charsLength));
+  }
+
+  return result;
 }
 
-export const _createUsers = async (
-  requestingUid: string,
-  userData: InputUser[]
-) => {
-  const db = getFirestore();
-  const auth = getAuth();
-  // We can share the id's across projects because the id algorithm uses timestamps under the hood.
-  // Users will now have one uid across both projects
-  const userAdminDocs: DocumentReference[] = userData.map((user) =>
-    db.collection("users").doc()
-  );
+/** Looks up users by their lab-specific ID hashes */
+export async function lookupUsersByHashes(
+  db: Firestore,
+  hashes: string[]
+): Promise<Map<string, DocumentSnapshot>> {
+  // Lookup users in chunks of 30 (i.e., maximum for Firestore where-in queries)
+  const users: DocumentSnapshot[] = (
+    await Promise.all(
+      _chunk(hashes, 30).map((batch: string[]) =>
+        db.collection("users").where("idHash", "in", batch).get()
+      )
+    )
+  ).flatMap((s: QuerySnapshot) => s.docs);
 
-  const emailDomain = "@levante.com";
+  // Check for duplicate hashes (since Firestore can't enforce uniqueness)
+  const hashToUser: Map<string, DocumentSnapshot> = new Map();
+  const dupeHashes: Set<string> = new Set();
+  for (const user of users) {
+    const hash = user.get("idHash") as string;
+    if (hashToUser.has(hash)) {
+      dupeHashes.add(hash);
+    } else {
+      hashToUser.set(hash, user);
+    }
+  }
+  if (dupeHashes.size > 0) {
+    const message = "Multiple users exist with the same ID hash";
+    const hashes = Array.from(dupeHashes);
+    logger.error(message, { hashes });
+    throw new HttpsError("internal", message, { hashes });
+  }
 
-  const userEmails = await getValidEmails({
-    users: userData,
-    auth: auth,
-    emailDomain,
-  });
+  return hashToUser;
+}
 
-  const adminAuthUsers: AdminAuthUserData[] = [];
-  const adminUserClaimsDocs: Promise<WriteResult>[] = [];
-  const returnUserData: ReturnUserData[] = [];
+/** Best-effort rollback of Auth and Firestore users */
+export async function rollbackUsers(auth: Auth, db: Firestore, uids: string[]) {
+  if (uids.length === 0) return;
 
-  // Prepare a map of districtId -> name (bulk fetch unique IDs to populate siteName)
-  const uniqueDistrictIds = Array.from(
-    new Set(userData.flatMap((u) => u.orgIds.districts || []))
-  );
-  const districtIdToName = new Map<string, string>();
-  if (uniqueDistrictIds.length > 0) {
-    const chunk = <T>(arr: T[], size: number): T[][] => {
-      const chunks: T[][] = [];
-      for (let i = 0; i < arr.length; i += size) {
-        chunks.push(arr.slice(i, i + size));
-      }
-      return chunks;
-    };
-    const idChunks = chunk(uniqueDistrictIds, 30);
-    for (const ids of idChunks) {
-      const snap = await db
-        .collection("districts")
-        .where(FieldPath.documentId(), "in", ids)
-        .get();
-      for (const doc of snap.docs) {
-        const data = doc.data();
-        districtIdToName.set(doc.id, (data?.name as string) ?? "");
-      }
+  // auth.deleteUsers accepts at most 1000 UIDs per call.
+  for (const chunk of _chunk(uids, 1000)) {
+    await auth.deleteUsers(chunk).catch((error) => {
+      logger.error("Failed to roll back Auth users", { uids: chunk, error });
+    });
+  }
+
+  // Each user is 2 deletes and a batch caps at 500 ops, so 250 users per batch.
+  for (const chunk of _chunk(uids, 250)) {
+    const batch = db.batch();
+    for (const uid of chunk) {
+      batch.delete(db.collection("userClaims").doc(uid));
+      batch.delete(db.collection("users").doc(uid));
+    }
+    await batch.commit().catch((error) => {
+      logger.error("Failed to roll back Firestore user docs", {
+        uids: chunk,
+        error,
+      });
+    });
+  }
+}
+
+/** Checks emails against Firebase Auth, filtering out those that are already registered */
+export async function validateEmails(
+  emails: string[],
+  auth: Auth
+): Promise<string[]> {
+  const existingEmails = new Set<string>();
+  for (const chunk of _chunk(emails, 100)) {
+    const result = await auth.getUsers(chunk.map((email) => ({ email })));
+    for (const user of result.users) {
+      if (user.email) existingEmails.add(user.email);
     }
   }
 
-  let roleClaims: RoleClaimsStructure;
+  const validEmails = emails.filter((email) => !existingEmails.has(email));
 
-  // Add relavent data to the auth user object
-  for (let i = 0; i < userData.length; i++) {
-    const user = userData[i];
+  logger.debug("Validated emails", {
+    validCount: validEmails.length,
+    invalidCount: existingEmails.size,
+  });
+  return validEmails;
+}
 
-    let displayName = "";
+export const createUsers = onCall(async (req): Promise<CreateUsersResult> => {
+  const uid = req.auth?.uid;
+  if (!uid)
+    throw new HttpsError("unauthenticated", "User must be authenticated");
 
-    // generate random password
+  const parsed = CreateUsersParamsSchema.safeParse(req.data);
+  if (!parsed.success) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Invalid input",
+      parsed.error.issues.map((i) => ({
+        path: i.path.join("."),
+        message: i.message,
+      }))
+    );
+  }
+  const { siteId, users } = parsed.data;
+
+  const auth = getAuth();
+  const userRecord = await auth.getUser(uid);
+  // Legacy permissions
+  // TODO: remove after migration
+  if (userRecord.customClaims?.useNewPermissions !== true) {
+    logger.warn("Permission denied for creating users: legacy permissions", {
+      requestingUid: uid,
+      siteId,
+    });
+    throw new HttpsError(
+      "permission-denied",
+      "New permission system must be enabled to view site overview"
+    );
+  }
+  await ensurePermissionsLoaded();
+  const user = buildPermissionsUserFromAuthRecord(userRecord);
+  if (
+    !filterSitesByPermission(user, [siteId], {
+      resource: RESOURCES.USERS,
+      action: ACTIONS.CREATE,
+    }).length
+  ) {
+    logger.warn("Permission denied for creating users", {
+      requestingUid: uid,
+      siteId,
+    });
+    throw new HttpsError(
+      "permission-denied",
+      `You do not have permission to create users in site ${siteId}`
+    );
+  }
+
+  const db = getFirestore();
+
+  const syncStatus = await fetchSyncStatusCounts(db, siteId);
+  if (syncStatus.assignments.pending > 0 || syncStatus.users.pending > 0) {
+    throw new HttpsError(
+      "failed-precondition",
+      "Site is not ready to create users"
+    );
+  }
+
+  // Get existing users by their ID hashes
+  const idToHash: Record<string, string> = {};
+  for (const user of users) {
+    idToHash[user.id] = createHash("sha256")
+      .update(`${siteId}-${user.id}`)
+      .digest("hex");
+  }
+  const hashToUser = await lookupUsersByHashes(db, Object.values(idToHash));
+  const existingUsers = users.filter((user) =>
+    hashToUser.has(idToHash[user.id])
+  );
+  if (existingUsers.length > 0) {
+    logger.warn("Existing users found", {
+      hashes: existingUsers.map((u) => idToHash[u.id]),
+    });
+    throw new HttpsError("already-exists", "Users already exist", {
+      users: existingUsers,
+    });
+  }
+
+  await ensureOrgsExistInSite(db, siteId, users);
+
+  // Prepare user data for Auth and Firestore
+  const newEmails = await generateEmails(users.length, auth);
+  // TODO: siteName is used to populate auth claims, but it's not necessary.
+  // Remove this once we clean up the auth claims shape.
+  const siteDoc = await db.collection("districts").doc(siteId).get();
+  const siteName = (siteDoc.data()?.name as string) ?? "";
+
+  const newUserRecords: NewUserRecord[] = [];
+  for (let i = 0; i < users.length; i++) {
+    const ref = db.collection("users").doc();
+
+    const roles: RoleDefinition[] = [
+      {
+        siteId,
+        role: ROLES.PARTICIPANT,
+        siteName,
+      },
+    ];
+    const roleClaims = buildRoleClaimsStructure(roles);
     const stringPassword = generateRandomString();
 
-    const roles: RoleDefinition[] = [];
-    user.orgIds.districts.forEach((districtId) => {
-      roles.push({
-        siteId: districtId,
-        role: ROLES.PARTICIPANT,
-        siteName: districtIdToName.get(districtId) ?? "",
-      });
-    });
-
-    roleClaims = buildRoleClaimsStructure(roles);
-
-    const claims = {
-      roarUid: userAdminDocs[i].id,
-      adminUid: userAdminDocs[i].id,
-      assessmentUid: userAdminDocs[i].id,
-      useNewPermissions: true,
-      rolesSet: roleClaims.rolesSet,
-      siteRoles: roleClaims.siteRoles,
-      siteNames: roleClaims.siteNames,
-    };
-
-    const authUserData: BaseAuthUserData = {
-      uid: userAdminDocs[i].id,
-      email: userEmails[i],
-      displayName: displayName,
-      emailVerified: false,
-      disabled: false,
-      fromCSV: user,
-      customClaims: claims,
-    };
-
-    // Handle password differently for emulator vs production
-    if (isEmulated()) {
-      // For emulators, use plain text password
-      authUserData.password = stringPassword;
-    } else {
-      // For production, use hashed password
-      const hashedPassword = await bcrypt.hash(stringPassword, 1);
-      authUserData.passwordHash = Buffer.from(hashedPassword);
-    }
-
-    logger.debug("Prepared auth user data", {
-      uid: authUserData.uid,
-      email: authUserData.email,
-      rolesCount: authUserData.customClaims.siteRoles.length,
-    });
-
-    // TODO: Migrate to using username for login
-    let username = "";
-
-    adminAuthUsers.push(authUserData);
-
-    const adminUserClaimDoc = db
-      .collection("userClaims")
-      .doc(userAdminDocs[i].id);
-    adminUserClaimsDocs.push(
-      adminUserClaimDoc.set({
-        claims: {
-          ...claims,
-          useNewPermissions: true,
-        },
-      })
-    );
-
-    returnUserData.push({
-      uid: authUserData.uid,
-      email: authUserData.email,
+    const user = users[i];
+    newUserRecords.push({
+      ...(user.userType === "child" && { birthMonth: user.month }),
+      ...(user.userType === "child" && { birthYear: user.year }),
+      classes: buildOrgField(user.orgIds.classes),
+      cohorts: buildOrgField(user.orgIds.cohorts),
+      customClaims: {
+        adminUid: ref.id,
+        roarUid: ref.id,
+        rolesSet: roleClaims.rolesSet,
+        siteNames: roleClaims.siteNames,
+        siteRoles: roleClaims.siteRoles,
+        useNewPermissions: true,
+      },
+      email: newEmails[i],
+      id: user.id,
+      idHash: idToHash[user.id],
       password: stringPassword,
+      passwordHash: Buffer.from(await bcrypt.hash(stringPassword, 1)),
+      roles,
+      schools: buildOrgField(user.orgIds.schools),
+      sites: buildOrgField([siteId]),
+      uid: ref.id,
+      userType: user.userType,
     });
   }
 
-  const maxRetries = 3; // Set a maximum number of retries to avoid infinite loops
+  // Create Auth, userClaims, and users docs
+  try {
+    await createAuthUsers(auth, newUserRecords);
+    await createUserClaimsDocs(db, newUserRecords);
+    await createUsersDocs(db, newUserRecords);
+  } catch (error) {
+    await rollbackUsers(
+      auth,
+      db,
+      newUserRecords.map((u) => u.uid)
+    );
+    throw error;
+  }
 
-  async function createAuthUsers(
-    usersToRegister: AdminAuthUserData[],
-    project: string,
-    currentRetry = 0
-  ) {
-    // TODO: This is a workaround, the importUsers method doesn't seem to work in the emulator. .
-    try {
-      if (isEmulated()) {
-        // For emulators, create users individually using createUser
-        logger.debug("Creating users individually for emulator", {
-          count: usersToRegister.length,
-          project,
-        });
-        const results: Array<
-          | { success: true; uid: string }
-          | { success: false; error: any; user: AdminAuthUserData }
-        > = [];
-
-        for (const user of usersToRegister) {
-          try {
-            const userRecord = await auth.createUser({
-              uid: user.uid,
-              email: user.email,
-              password: user.password!,
-              displayName: user.displayName,
-              emailVerified: user.emailVerified,
-              disabled: user.disabled,
-            });
-
-            // Set custom claims after user creation
-            await auth.setCustomUserClaims(userRecord.uid, user.customClaims);
-
-            results.push({ success: true, uid: userRecord.uid });
-          } catch (error: any) {
-            logger.error("Failed to create user in emulator", {
-              email: user.email,
-              error,
-              project,
-            });
-            results.push({ success: false, error, user });
-          }
-        }
-
-        const failureCount = results.filter((r) => !r.success).length;
-        const successCount = results.filter((r) => r.success).length;
-
-        if (failureCount > 0 && currentRetry < maxRetries) {
-          const failedUsers = results
-            .filter((r) => !r.success)
-            .map(
-              (r) =>
-                (r as { success: false; error: any; user: AdminAuthUserData })
-                  .user
-            );
-
-          logger.warn("Retrying failed emulator user creations", {
-            retryCount: currentRetry + 1,
-            maxRetries,
-            failedCount: failedUsers.length,
-            project,
-          });
-          await createAuthUsers(failedUsers, project, currentRetry + 1);
-        } else if (failureCount > 0 && currentRetry >= maxRetries) {
-          logger.error("Maximum retries exceeded creating emulator users", {
-            maxRetries,
-            project,
-            failedUsers: results
-              .filter((r) => !r.success)
-              .map(
-                (r) =>
-                  (r as { success: false; error: any; user: AdminAuthUserData })
-                    .user.email
-              ),
-          });
-          throw new Error(
-            `Maximum retries (${maxRetries}) exceeded. Failed to create ${failureCount} users`
-          );
-        }
-
-        return;
-      }
-
-      // For production, use bulk importUsers
-      let res: UserImportResult;
-      res = await auth.importUsers(usersToRegister, {
-        hash: {
-          algorithm: "BCRYPT",
+  // Enqueue tasks to sync assignments to created users
+  const taskName = "syncCreatedUsersTask";
+  const queue = getFunctions().taskQueue(taskName);
+  const targetUri = await getFunctionUrl(taskName);
+  await Promise.all(
+    newUserRecords.map((u) =>
+      queue.enqueue(
+        {
+          uid: u.uid,
+          addedOrgs: {
+            sites: u.sites.current,
+            schools: u.schools.current,
+            classes: u.classes.current,
+            cohorts: u.cohorts.current,
+          },
         },
-      });
+        { dispatchDeadlineSeconds: 60 * 30, uri: targetUri }
+      )
+    )
+  );
 
-      const failedUsers: any[] = []; // Reset the failedUsers array for each retry
-
-      if (res.failureCount > 0) {
-        // The index property maps to the index of the user in the usersToRegister array
-        res.errors.forEach((error) => {
-          failedUsers.push(usersToRegister[error.index]);
-        });
-      }
-
-      // If there are failures and we haven't reached the max number of retries
-      if (failedUsers.length > 0 && currentRetry < maxRetries) {
-        // Retry with failed users
-        await createAuthUsers(failedUsers, project, currentRetry + 1);
-      } else if (failedUsers.length > 0 && currentRetry >= maxRetries) {
-        logger.error("Maximum retries exceeded importing users", {
-          maxRetries,
-          project,
-          failedCount: failedUsers.length,
-        });
-        throw new Error(
-          `Maximum retries (${maxRetries}) exceeded. Failed to create all users`
-        );
-      }
-    } catch (error: any) {
-      logger.error("An error occurred while creating users", {
-        error,
-        project,
-        attempt: currentRetry,
-      });
-      throw new Error(error.message);
-    }
-  }
-
-  await createAuthUsers(adminAuthUsers, "admin");
-
-  const retryDelay = 1000; // 1 second
-
-  async function setClaimsDocs(claimsDocs: Promise<WriteResult>[], db: string) {
-    let remainingDocs = claimsDocs;
-
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      if (remainingDocs.length === 0) break;
-
-      const results = await Promise.allSettled(remainingDocs);
-
-      const failedDocs = results
-        .map((result, index) =>
-          result.status === "rejected" ? remainingDocs[index] : null
-        )
-        // Type guard. It's telling TypeScript that any non-null value that passes this filter
-        // is guaranteed to be a Promise<WriteResult>
-        .filter((doc): doc is Promise<WriteResult> => doc !== null);
-
-      if (failedDocs.length === 0) {
-        return;
-      }
-
-      logger.warn("Retrying failed UID claims doc writes", {
-        database: db,
-        failedCount: failedDocs.length,
-        attempt: attempt + 1,
-        maxRetries,
-      });
-      remainingDocs = failedDocs;
-
-      if (attempt < maxRetries - 1) {
-        await new Promise((resolve) => setTimeout(resolve, retryDelay));
-      }
-    }
-
-    if (remainingDocs.length > 0) {
-      throw new Error(
-        `Failed to set ${remainingDocs.length} ${db} UID claims docs after ${maxRetries} attempts`
-      );
-    }
-  }
-
-  try {
-    await setClaimsDocs(adminUserClaimsDocs, "admin");
-  } catch (error) {
-    logger.error("Fatal error setting UID claims docs", { error });
-    throw error;
-  }
-
-  // Once the Auth User is created, populate the corresponding user's doc in firestore
-  const adminUserDocs: Promise<WriteResult>[] = [];
-
-  function prepareUserDocs() {
-    for (let i = 0; i < adminAuthUsers.length; i++) {
-      let currentUser = adminAuthUsers[i];
-
-      const adminUserDocRef: DocumentReference = userAdminDocs[i];
-
-      // Avoid storing password & identifiable information in user doc
-      const { uid, fromCSV, email, displayName, emailVerified, disabled } =
-        currentUser;
-
-      const userType = getUserType(fromCSV);
-
-      const userObj = {
-        uid,
-        email,
-        displayName,
-        emailVerified,
-        disabled,
-        username: email.split("@")[0],
-        userType: userType,
-        grade: "",
-        archived: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        lastUpdated: new Date(), // keeping this until we migrate to updatedAt
-        roles: roleClaims.roles,
-      };
-
-      const validUserTypes = ["student", "child", "teacher", "parent"];
-
-      const userOrgs = {
-        districts: fromCSV.orgIds.districts,
-        schools: fromCSV.orgIds.schools,
-        classes: fromCSV.orgIds.classes,
-        groups: fromCSV.orgIds.groups,
-      };
-
-      // Add orgs to user object
-      // Helper function to ensure we always work with arrays
-      // Future plans to support multiple classes, potentially other orgs as well.
-      const ensureArray = (value: string | string[]): string[] => {
-        if (Array.isArray(value)) {
-          return value;
-        } else if (typeof value === "string") {
-          return value.length > 0 ? [value] : [];
-        } else {
-          return [value];
-        }
-      };
-
-      // Add orgs to user object
-      if (validUserTypes.includes(userType)) {
-        for (const [orgType, orgIds] of Object.entries(userOrgs)) {
-          const orgIdsArray = ensureArray(orgIds);
-          userObj[orgType] = {
-            current: orgIdsArray,
-            all: orgIdsArray,
-            dates: orgIdsArray.reduce(
-              (
-                acc: Record<string, { from: Date; to: null }>,
-                orgId: string
-              ) => {
-                acc[orgId] = {
-                  from: new Date(),
-                  to: null,
-                };
-                return acc;
-              },
-              {}
-            ),
-          };
-        }
-      }
-
-      // Levante holds birthMonth and birthYear in admin user doc
-      if ("month" in fromCSV && "year" in fromCSV) {
-        userObj["birthMonth"] = (fromCSV as InputUser).month;
-        userObj["birthYear"] = (fromCSV as InputUser).year;
-      }
-
-      // console.log("userObj after adding dob: ", userObj);
-
-      adminUserDocs.push(adminUserDocRef.set(userObj, { merge: true }));
-    }
-  }
-
-  try {
-    prepareUserDocs();
-  } catch (error) {
-    logger.error("Error preparing user docs", { error });
-  }
-
-  async function createUserDocs(userDocs: Promise<WriteResult>[], db: string) {
-    let remainingDocs = userDocs;
-
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      if (remainingDocs.length === 0) break;
-
-      const results = await Promise.allSettled(remainingDocs);
-
-      const failedDocs = results
-        .map((result, index) =>
-          result.status === "rejected" ? remainingDocs[index] : null
-        )
-        .filter((doc): doc is Promise<WriteResult> => doc !== null);
-
-      if (failedDocs.length === 0) {
-        logger.debug(`Successfully created all ${db} user docs`);
-        return;
-      }
-
-      logger.warn("Retrying failed user doc writes", {
-        database: db,
-        failedCount: failedDocs.length,
-        attempt: attempt + 1,
-        maxRetries,
-      });
-      remainingDocs = failedDocs;
-
-      if (attempt < maxRetries - 1) {
-        await new Promise((resolve) => setTimeout(resolve, retryDelay));
-      }
-    }
-
-    if (remainingDocs.length > 0) {
-      throw new Error(
-        `Failed to create ${remainingDocs.length} ${db} user docs after ${maxRetries} attempts`
-      );
-    }
-  }
-
-  // Create user docs in the admin database
-  try {
-    await createUserDocs(adminUserDocs, "admin");
-  } catch (error) {
-    logger.error("Error creating user docs", { error });
-    throw error;
-  }
-
-  for (let i = 0; i < adminAuthUsers.length; i++) {
-    const uid = adminAuthUsers[i].uid;
-    const orgIds = adminAuthUsers[i].fromCSV.orgIds;
-    const addedOrgs = {
-      districts: orgIds.districts || [],
-      schools: orgIds.schools || [],
-      classes: orgIds.classes || [],
-      groups: orgIds.groups || [],
-    };
-    const hasOrgs = Object.values(addedOrgs).some((arr) => arr.length > 0);
-    if (hasOrgs) {
-      await processUserAddedOrgs(uid, addedOrgs);
-    }
-  }
-
+  // Return created users
   return {
-    status: "success",
-    message: "Users created successfully",
-    data: returnUserData,
+    users: newUserRecords.map((u) => ({
+      id: u.id,
+      email: u.email,
+      password: u.password,
+      uid: u.uid,
+    })),
   };
-};
+});
+
+export const syncCreatedUsersTask = onTaskDispatched<{
+  uid: string;
+  addedOrgs: {
+    sites: string[];
+    schools: string[];
+    classes: string[];
+    cohorts: string[];
+  };
+}>(
+  {
+    retryConfig: {
+      maxAttempts: 5,
+      minBackoffSeconds: 60,
+    },
+    rateLimits: {
+      maxConcurrentDispatches: 10,
+    },
+    memory: "256MiB",
+    timeoutSeconds: 60,
+  },
+  async (request) => {
+    const { uid, addedOrgs } = request.data;
+    const db = getFirestore();
+    const userRef = db.collection("users").doc(uid);
+    try {
+      await processUserAddedOrgs(uid, {
+        districts: addedOrgs.sites,
+        schools: addedOrgs.schools,
+        classes: addedOrgs.classes,
+        groups: addedOrgs.cohorts,
+      });
+      await userRef.update({
+        syncStatus: "complete",
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    } catch (error) {
+      logger.error("Failed to sync user orgs", { uid, error });
+      await userRef.update({
+        syncStatus: "failed",
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+      throw error;
+    }
+  }
+);

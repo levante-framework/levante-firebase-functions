@@ -17,13 +17,11 @@ import {
 } from "./utils/permission-helpers.js";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import {
-  appendOrRemoveAdminOrgs,
   setUidClaimsInBothProjects,
   getRoarUid,
 } from "./users/set-custom-claims.js";
 import { createAdminUser } from "./users/admin-user.js";
 import { updateUserRecordHandler } from "./users/edit-users.js";
-import { _createUsers } from "./users/create-users.js";
 import { _createAdministratorWithRoles } from "./users/create-administrator.js";
 import {
   loadAdministratorContext,
@@ -417,61 +415,6 @@ export const softDeleteUserAssignment = createSoftDeleteCloudFunction([
   "users",
   "assignments",
 ]);
-
-export const createUsers = onCall(
-  { memory: "2GiB", timeoutSeconds: 540 },
-  async (request) => {
-    const userData = request.data.users;
-    const requestingUid = request.auth!.uid;
-
-    // New permission system gate: ensure caller can create users in the requested site
-    try {
-      const auth = getAuth();
-      const userRecord = await auth.getUser(requestingUid);
-      const customClaims: any = userRecord.customClaims || {};
-      const useNewPermissions = customClaims.useNewPermissions === true;
-
-      if (useNewPermissions) {
-        await ensurePermissionsLoaded();
-        const user = buildPermissionsUserFromAuthRecord(userRecord);
-
-        // Expect a single site identifier on the request
-        const siteId: string | undefined = (request.data.siteId ||
-          request.data.districtId) as string | undefined;
-
-        if (!siteId) {
-          throw new HttpsError(
-            "invalid-argument",
-            "A siteId (or districtId) is required to create users"
-          );
-        }
-
-        const allowed =
-          filterSitesByPermission(user, [siteId], {
-            resource: RESOURCES.USERS,
-            action: ACTIONS.CREATE,
-          }).length > 0;
-
-        if (!allowed) {
-          throw new HttpsError(
-            "permission-denied",
-            `You do not have permission to create users in site ${siteId}`
-          );
-        }
-      }
-    } catch (err) {
-      if (err instanceof HttpsError) throw err;
-      // For unexpected errors in permission path, surface as internal
-      throw new HttpsError(
-        "internal",
-        (err as Error)?.message || "Permission check failed"
-      );
-    }
-
-    const result = await _createUsers(requestingUid, userData);
-    return result;
-  }
-);
 
 export const saveSurveyResponses = onCall(async (request) => {
   const requestingUid = request.auth!.uid;
@@ -1049,3 +992,5 @@ export const syncOnRunDocUpdate = onDocumentWritten(
 );
 
 export { getSiteOverview } from "./sites/get-site-overview.js";
+export { getSyncStatus } from "./sites/get-sync-status.js";
+export { createUsers, syncCreatedUsersTask } from "./users/create-users.js";
