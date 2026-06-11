@@ -683,8 +683,8 @@ describe("createUsers", () => {
     });
 
     it("accumulates failures across enqueue chunks", async () => {
-      // > ENQUEUE_CHUNK_SIZE (50) so the work spans multiple chunks; fail one
-      // uid in the first chunk and one in the second.
+      // 60 users exceeds the chunk size of 50, so the work spans two chunks;
+      // fail one uid in each chunk to confirm failures accumulate across them.
       const records = Array.from({ length: 60 }, (_, i) =>
         makeNewUserRecord(`uid${i}`)
       );
