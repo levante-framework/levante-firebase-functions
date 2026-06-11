@@ -416,6 +416,18 @@ export const softDeleteUserAssignment = createSoftDeleteCloudFunction([
   "assignments",
 ]);
 
+export const getOrgUsers = onCall(async (request) => {
+  if (!request?.auth?.uid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated");
+  }
+
+  if (!request?.data) {
+    throw new HttpsError("internal", "Invalid request object");
+  }
+
+  return await _getOrgUsers(request?.data);
+});
+
 export const saveSurveyResponses = onCall(async (request) => {
   const requestingUid = request.auth!.uid;
 
