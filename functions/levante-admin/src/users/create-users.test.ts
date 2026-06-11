@@ -4,6 +4,7 @@ import {
   createUserClaimsDocs,
   createUsersDocs,
   ensureOrgsExistInSite,
+  enqueueUserSyncTasks,
   generateEmails,
   generateRandomString,
   lookupUsersByHashes,
@@ -617,6 +618,82 @@ describe("createUsers", () => {
 
       await expect(rollbackUsers(auth, db, ["uid1"])).resolves.toBeUndefined();
       expect(commit).toHaveBeenCalled();
+    });
+  });
+
+  describe("enqueueUserSyncTasks", () => {
+    type Queue = Parameters<typeof enqueueUserSyncTasks>[0];
+
+    function mockQueue(failUids = new Set<string>()) {
+      const enqueued: string[] = [];
+      const enqueue = vi.fn(async (payload: { uid: string }) => {
+        if (failUids.has(payload.uid)) throw new Error("enqueue failed");
+        enqueued.push(payload.uid);
+      });
+      return { queue: { enqueue } as unknown as Queue, enqueue, enqueued };
+    }
+
+    function mockMarkDb() {
+      const updates: { uid: string; data: Record<string, unknown> }[] = [];
+      const commit = vi.fn().mockResolvedValue(undefined);
+      const batch = {
+        update: vi.fn((ref: { uid: string }, data: Record<string, unknown>) => {
+          updates.push({ uid: ref.uid, data });
+        }),
+        commit,
+      };
+      const db = {
+        batch: () => batch,
+        collection: () => ({ doc: (uid: string) => ({ uid }) }),
+      } as unknown as Firestore;
+      return { db, updates, commit };
+    }
+
+    it("marks only the failed-enqueue users and leaves successful ones untouched", async () => {
+      const records = [
+        makeNewUserRecord("uid1"),
+        makeNewUserRecord("uid2"),
+        makeNewUserRecord("uid3"),
+      ];
+      const { queue, enqueue, enqueued } = mockQueue(new Set(["uid2"]));
+      const { db, updates, commit } = mockMarkDb();
+
+      await enqueueUserSyncTasks(queue, db, records, "uri", "site1");
+
+      expect(enqueue).toHaveBeenCalledTimes(3);
+      expect(enqueued).toEqual(["uid1", "uid3"]);
+      expect(commit).toHaveBeenCalledTimes(1);
+      expect(updates).toEqual([
+        {
+          uid: "uid2",
+          data: expect.objectContaining({ syncStatus: "failed" }),
+        },
+      ]);
+    });
+
+    it("does not touch Firestore when every enqueue succeeds", async () => {
+      const records = [makeNewUserRecord("uid1"), makeNewUserRecord("uid2")];
+      const { queue } = mockQueue();
+      const { db, updates, commit } = mockMarkDb();
+
+      await enqueueUserSyncTasks(queue, db, records, "uri", "site1");
+
+      expect(updates).toEqual([]);
+      expect(commit).not.toHaveBeenCalled();
+    });
+
+    it("accumulates failures across enqueue chunks", async () => {
+      // > ENQUEUE_CHUNK_SIZE (50) so the work spans multiple chunks; fail one
+      // uid in the first chunk and one in the second.
+      const records = Array.from({ length: 60 }, (_, i) =>
+        makeNewUserRecord(`uid${i}`)
+      );
+      const { queue } = mockQueue(new Set(["uid10", "uid55"]));
+      const { db, updates } = mockMarkDb();
+
+      await enqueueUserSyncTasks(queue, db, records, "uri", "site1");
+
+      expect(updates.map((u) => u.uid).sort()).toEqual(["uid10", "uid55"]);
     });
   });
 

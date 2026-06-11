@@ -7,7 +7,7 @@ import type {
   Firestore,
   QuerySnapshot,
 } from "firebase-admin/firestore";
-import { getFunctions } from "firebase-admin/functions";
+import { getFunctions, type TaskQueue } from "firebase-admin/functions";
 import { logger } from "firebase-functions/v2";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
@@ -57,6 +57,17 @@ interface NewUserRecord {
   sites: OrgAssociationMap;
   uid: string;
   userType: "caregiver" | "child" | "teacher";
+}
+
+/** Payload for the syncCreatedUsersTask queue */
+interface SyncCreatedUserTaskPayload {
+  uid: string;
+  addedOrgs: {
+    sites: string[];
+    schools: string[];
+    classes: string[];
+    cohorts: string[];
+  };
 }
 
 const MAX_RETRIES = 3;
@@ -472,6 +483,62 @@ export async function validateEmails(
   return validEmails;
 }
 
+/**
+ * Enqueues one sync task per user in bounded chunks so a large batch doesn't
+ * fire thousands of concurrent CreateTask calls from one instance. Any user
+ * whose task fails to enqueue is marked syncStatus "failed" rather than left
+ * "pending": a "pending" user with no task would never sync and would block all
+ * future createUsers calls for the site (via the readiness precondition).
+ */
+export async function enqueueUserSyncTasks(
+  queue: TaskQueue<SyncCreatedUserTaskPayload>,
+  db: Firestore,
+  users: NewUserRecord[],
+  targetUri: string,
+  siteId: string
+): Promise<void> {
+  const failedToEnqueue: NewUserRecord[] = [];
+  for (const chunk of _chunk(users, 50)) {
+    const results = await Promise.allSettled(
+      chunk.map((u: NewUserRecord) =>
+        queue.enqueue(
+          {
+            uid: u.uid,
+            addedOrgs: {
+              sites: u.sites.current,
+              schools: u.schools.current,
+              classes: u.classes.current,
+              cohorts: u.cohorts.current,
+            },
+          },
+          { dispatchDeadlineSeconds: 60 * 30, uri: targetUri }
+        )
+      )
+    );
+    results.forEach((result: PromiseSettledResult<void>, i: number) => {
+      if (result.status === "rejected") failedToEnqueue.push(chunk[i]);
+    });
+  }
+
+  if (failedToEnqueue.length === 0) return;
+
+  logger.error("Failed to enqueue user sync tasks", {
+    siteId,
+    uids: failedToEnqueue.map((u) => u.uid),
+  });
+  // Batches cap at 500 ops and each user is one update.
+  for (const chunk of _chunk(failedToEnqueue, 500)) {
+    const batch = db.batch();
+    for (const u of chunk) {
+      batch.update(db.collection("users").doc(u.uid), {
+        syncStatus: "failed",
+        updatedAt: FieldValue.serverTimestamp(),
+      });
+    }
+    await batch.commit();
+  }
+}
+
 export const createUsers = onCall(async (req): Promise<CreateUsersResult> => {
   const uid = req.auth?.uid;
   if (!uid)
@@ -501,7 +568,7 @@ export const createUsers = onCall(async (req): Promise<CreateUsersResult> => {
     });
     throw new HttpsError(
       "permission-denied",
-      "New permission system must be enabled to view site overview"
+      "New permission system must be enabled to create users"
     );
   }
   await ensurePermissionsLoaded();
@@ -618,24 +685,9 @@ export const createUsers = onCall(async (req): Promise<CreateUsersResult> => {
 
   // Enqueue tasks to sync assignments to created users
   const taskName = "syncCreatedUsersTask";
-  const queue = getFunctions().taskQueue(taskName);
+  const queue = getFunctions().taskQueue<SyncCreatedUserTaskPayload>(taskName);
   const targetUri = await getFunctionUrl(taskName);
-  await Promise.all(
-    newUserRecords.map((u) =>
-      queue.enqueue(
-        {
-          uid: u.uid,
-          addedOrgs: {
-            sites: u.sites.current,
-            schools: u.schools.current,
-            classes: u.classes.current,
-            cohorts: u.cohorts.current,
-          },
-        },
-        { dispatchDeadlineSeconds: 60 * 30, uri: targetUri }
-      )
-    )
-  );
+  await enqueueUserSyncTasks(queue, db, newUserRecords, targetUri, siteId);
 
   // Return created users
   return {
@@ -648,48 +700,41 @@ export const createUsers = onCall(async (req): Promise<CreateUsersResult> => {
   };
 });
 
-export const syncCreatedUsersTask = onTaskDispatched<{
-  uid: string;
-  addedOrgs: {
-    sites: string[];
-    schools: string[];
-    classes: string[];
-    cohorts: string[];
-  };
-}>(
-  {
-    retryConfig: {
-      maxAttempts: 5,
-      minBackoffSeconds: 60,
+export const syncCreatedUsersTask =
+  onTaskDispatched<SyncCreatedUserTaskPayload>(
+    {
+      retryConfig: {
+        maxAttempts: 5,
+        minBackoffSeconds: 60,
+      },
+      rateLimits: {
+        maxConcurrentDispatches: 10,
+      },
+      memory: "256MiB",
+      timeoutSeconds: 60,
     },
-    rateLimits: {
-      maxConcurrentDispatches: 10,
-    },
-    memory: "256MiB",
-    timeoutSeconds: 60,
-  },
-  async (request) => {
-    const { uid, addedOrgs } = request.data;
-    const db = getFirestore();
-    const userRef = db.collection("users").doc(uid);
-    try {
-      await processUserAddedOrgs(uid, {
-        districts: addedOrgs.sites,
-        schools: addedOrgs.schools,
-        classes: addedOrgs.classes,
-        groups: addedOrgs.cohorts,
-      });
-      await userRef.update({
-        syncStatus: "complete",
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-    } catch (error) {
-      logger.error("Failed to sync user orgs", { uid, error });
-      await userRef.update({
-        syncStatus: "failed",
-        updatedAt: FieldValue.serverTimestamp(),
-      });
-      throw error;
+    async (request) => {
+      const { uid, addedOrgs } = request.data;
+      const db = getFirestore();
+      const userRef = db.collection("users").doc(uid);
+      try {
+        await processUserAddedOrgs(uid, {
+          districts: addedOrgs.sites,
+          schools: addedOrgs.schools,
+          classes: addedOrgs.classes,
+          groups: addedOrgs.cohorts,
+        });
+        await userRef.update({
+          syncStatus: "complete",
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+      } catch (error) {
+        logger.error("Failed to sync user orgs", { uid, error });
+        await userRef.update({
+          syncStatus: "failed",
+          updatedAt: FieldValue.serverTimestamp(),
+        });
+        throw error;
+      }
     }
-  }
-);
+  );
