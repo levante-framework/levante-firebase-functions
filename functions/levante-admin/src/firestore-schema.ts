@@ -226,7 +226,7 @@ export interface User {
   userType: "admin" | "teacher" | "student" | "parent";
   username?: string;
   testData?: boolean;
-  uid: string;
+  uid?: string;
   updatedAt: Timestamp;
 }
 
