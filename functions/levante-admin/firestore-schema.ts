@@ -136,6 +136,74 @@ export interface District {
   schools?: string[];
 }
 
+// Interface for documents in the `siteInformation` subcollection of `districts`.
+// Optional subcollection: a district document may or may not have siteInformation.
+// Allowed values for select fields are sourced from the runtime form definition,
+// so they are typed as strings here rather than hardcoded literal unions.
+export interface SiteInformation {
+  sampleApproach: string[];
+  sampleApproachOther?: string; // only populated when sampleApproach includes "other"
+  siteRecruitment: string;
+  adminApproach: string[];
+  adminApproachOther?: string; // only populated when adminApproach includes "other"
+  testConditions: string;
+  equipmentType: string[];
+  equipmentDevices: string;
+  siteGeoArea: string;
+  siteGeoType: string;
+  sitePopulationSize: string;
+  siteRaceEthnicity: string;
+  siteSES: string;
+  siteLifestyle: string;
+  siteTech: string;
+  siteLanguages: string;
+  siteSubsistence: string[];
+  schoolingAgeStart: number;
+  schoolingAgeEnd: number;
+  schoolingProgression: string;
+  schoolingTeacherQuals: string;
+  anythingElse?: string;
+}
+
+// A single field within the Site Information form. Describes how to render and
+// validate one question. Field order is the array order. Built from one row of
+// the site survey source spreadsheet.
+export interface SiteInformationFormField {
+  itemId: string; // stable spreadsheet id, e.g. "site_02"
+  key: keyof SiteInformation; // response property this field populates
+  kind: "text" | "number" | "single-select" | "multi-select";
+  required: boolean;
+  label: string; // question text shown to the user
+  // Value/label pairs for select fields; omitted for text/number fields.
+  options?: { value: string; label: string }[];
+  // Conditional visibility: only render/collect this field when another field's
+  // value satisfies the rule (e.g. show "sampleApproachOther" when
+  // "sampleApproach" includes "other").
+  visibleWhen?: { field: keyof SiteInformation; includes: string };
+  infoExample?: string;
+}
+
+// Interface for the `formDefinitions/siteInformation` document.
+// Holds the current published definition inline plus a pointer to the current version.
+export interface SiteInformationFormDefinition {
+  fields: SiteInformationFormField[];
+  currentVersion: string; // matches a version snapshot document ID
+  updatedAt: Timestamp;
+  updatedBy: string; // User UID
+}
+
+// Interface for the Site Information form version snapshot documents
+// (`formDefinitions/siteInformation/{versionId}`). Immutable snapshot of a
+// published definition, kept so responses stamped with this version stay interpretable.
+export interface SiteInformationFormVersion {
+  fields: SiteInformationFormField[];
+  version: string; // same as document ID
+  createdAt: Timestamp;
+  createdBy: string; // User UID
+  liveFrom: Timestamp; // when this version became the active form
+  liveUntil: Timestamp | null; // when superseded; null while it is the current live version
+}
+
 // Interface for documents in the `groups` collection
 // Purpose: Manages group (cohort) data, potentially representing subgroups within a district (site).
 // This is a catch all type group for when a group of users does not fit into the traditional group type.
