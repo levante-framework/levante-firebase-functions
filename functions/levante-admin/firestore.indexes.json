@@ -907,25 +907,6 @@
           "arrayConfig": "CONTAINS"
         },
         {
-          "fieldPath": "assessmentUid",
-          "order": "DESCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "DESCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "users",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
-          "fieldPath": "groups.all",
-          "arrayConfig": "CONTAINS"
-        },
-        {
           "fieldPath": "lastUpdated",
           "order": "ASCENDING"
         },

@@ -168,7 +168,6 @@ export interface School {
 export interface Claims {
   adminOrgs: OrgRefMap;
   adminUid?: string; // Purpose needs clarification
-  assessmentUid?: string;
   minimalAdminOrgs: OrgRefMap;
   roarUid?: string; // Purpose needs clarification
   super_admin: boolean;
@@ -248,7 +247,6 @@ export interface AssignmentAssessment {
     testData: boolean;
     userData: {
       assessmentPid: string | null;
-      assessmentUid: string | null;
       email: string;
       name: string | null;
       username: string;
@@ -375,12 +373,11 @@ export interface VariantDoc {
 /**
  * Interface for documents in the `guests` collection.
  * Manages temporary or guest user data, often used for one-off assessments without full user registration.
- * Document ID: Guest assessmentUid.
+ * Document ID: guest UID.
  */
 export interface GuestDoc {
   age?: number;
   assessmentPid?: string;
-  assessmentUid?: string;
   created?: Timestamp;
   lastUpdated?: Timestamp;
   tasks?: string[]; // Task IDs interacted with
@@ -426,7 +423,6 @@ export interface RunDoc {
   timeFinished?: Timestamp;
   timeStarted?: Timestamp;
   userData?: {
-    assessmentUid?: string; // Guest UID
     variantId?: string;
   };
 }

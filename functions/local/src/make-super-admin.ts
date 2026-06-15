@@ -10,7 +10,7 @@ if (!adminCredentialFile) {
     - ROAR_ADMIN_FIREBASE_CREDENTIALS
     - ROAR_ASSESSMENT_FIREBASE_CREDENTIALS
     Please set these environment variables using
-    export ROAR_ADMIN_FIREBASE_CREDENTIALS=path/to/credentials/for/admin/project.json`
+    export ROAR_ADMIN_FIREBASE_CREDENTIALS=path/to/credentials/for/admin/project.json`,
   );
   process.exit(1);
 }
@@ -42,7 +42,7 @@ const adminFirestore = getFirestore(adminApp);
 // Get the target user's current custom claims.
 await adminAuth.getUserByEmail(email).then((targetRecord) => {
   const targetUid = targetRecord.uid;
-  
+
   return toggleSuperAdmin({
     targetUid: targetUid,
     db: adminFirestore,
@@ -68,7 +68,6 @@ export interface ICustomClaims {
   super_admin?: boolean;
   roarUid: string;
   adminUid: string;
-  assessmentUid: string;
   adminOrgs?: IAdminClaims;
 }
 
