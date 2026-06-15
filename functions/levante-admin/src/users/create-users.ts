@@ -335,7 +335,10 @@ export async function ensureOrgsExistInSite(
       orgIds[idToOrgKey.get(snap.ref.id)!].push(snap.ref.id)
     );
     logger.warn("Orgs not found", { orgIds });
-    throw new HttpsError("not-found", "Orgs not found", { orgIds });
+    throw new HttpsError("not-found", "Orgs not found", {
+      code: "orgs",
+      orgIds,
+    });
   }
 
   // Check if any orgs don't belong to site
@@ -356,7 +359,11 @@ export async function ensureOrgsExistInSite(
     throw new HttpsError(
       "invalid-argument",
       "Orgs not belonging to site found",
-      { siteId, orgIds }
+      {
+        code: "orgs-site-mismatch",
+        siteId,
+        orgIds,
+      }
     );
   }
 }
@@ -546,14 +553,13 @@ export const createUsers = onCall(async (req): Promise<CreateUsersResult> => {
 
   const parsed = CreateUsersParamsSchema.safeParse(req.data);
   if (!parsed.success) {
-    throw new HttpsError(
-      "invalid-argument",
-      "Invalid input",
-      parsed.error.issues.map((i) => ({
+    throw new HttpsError("invalid-argument", "Invalid input", {
+      code: "schema",
+      issues: parsed.error.issues.map((i) => ({
         path: i.path.join("."),
         message: i.message,
-      }))
-    );
+      })),
+    });
   }
   const { siteId, users } = parsed.data;
 
@@ -595,7 +601,8 @@ export const createUsers = onCall(async (req): Promise<CreateUsersResult> => {
   if (syncStatus.assignments.pending > 0 || syncStatus.users.pending > 0) {
     throw new HttpsError(
       "failed-precondition",
-      "Site is not ready to create users"
+      "Site is not ready to create users",
+      { code: "sync-pending" }
     );
   }
 
@@ -612,10 +619,11 @@ export const createUsers = onCall(async (req): Promise<CreateUsersResult> => {
   );
   if (existingUsers.length > 0) {
     logger.warn("Existing users found", {
-      hashes: existingUsers.map((u) => idToHash[u.id]),
+      idHashes: existingUsers.map((u) => idToHash[u.id]),
     });
     throw new HttpsError("already-exists", "Users already exist", {
-      users: existingUsers,
+      code: "users",
+      ids: existingUsers.map((u) => u.id),
     });
   }
 

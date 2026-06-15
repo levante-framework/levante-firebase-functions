@@ -391,21 +391,30 @@ describe("createUsers", () => {
       const db = mockDb([{ id: "school1", exists: false }]);
       await expect(
         ensureOrgsExistInSite(db, "site1", makeUsers({ schools: ["school1"] }))
-      ).rejects.toMatchObject({ code: "not-found" });
+      ).rejects.toMatchObject({
+        code: "not-found",
+        details: { code: "orgs", orgIds: { schools: ["school1"] } },
+      });
     });
 
     it("throws not-found when a class is missing", async () => {
       const db = mockDb([{ id: "class1", exists: false }]);
       await expect(
         ensureOrgsExistInSite(db, "site1", makeUsers({ classes: ["class1"] }))
-      ).rejects.toMatchObject({ code: "not-found" });
+      ).rejects.toMatchObject({
+        code: "not-found",
+        details: { code: "orgs", orgIds: { classes: ["class1"] } },
+      });
     });
 
     it("throws not-found when a cohort is missing", async () => {
       const db = mockDb([{ id: "cohort1", exists: false }]);
       await expect(
         ensureOrgsExistInSite(db, "site1", makeUsers({ cohorts: ["cohort1"] }))
-      ).rejects.toMatchObject({ code: "not-found" });
+      ).rejects.toMatchObject({
+        code: "not-found",
+        details: { code: "orgs", orgIds: { cohorts: ["cohort1"] } },
+      });
     });
 
     it("throws invalid-argument when an org belongs to a different site", async () => {
@@ -414,7 +423,14 @@ describe("createUsers", () => {
       ]);
       await expect(
         ensureOrgsExistInSite(db, "site1", makeUsers({ schools: ["school1"] }))
-      ).rejects.toMatchObject({ code: "invalid-argument" });
+      ).rejects.toMatchObject({
+        code: "invalid-argument",
+        details: {
+          code: "orgs-site-mismatch",
+          siteId: "site1",
+          orgIds: { schools: ["school1"] },
+        },
+      });
     });
 
     it("deduplicates org IDs across users before fetching", async () => {

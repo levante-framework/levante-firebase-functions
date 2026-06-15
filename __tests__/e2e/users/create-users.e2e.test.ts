@@ -104,12 +104,15 @@ describe("createUsers (e2e)", () => {
       createUsers({ siteId: SITE })
     ).rejects.toMatchObject({
       code: "functions/invalid-argument",
-      details: expect.arrayContaining([
-        expect.objectContaining({
-          path: "users",
-          message: expect.any(String),
-        }),
-      ]),
+      details: {
+        code: "schema",
+        issues: expect.arrayContaining([
+          expect.objectContaining({
+            path: "users",
+            message: expect.any(String),
+          }),
+        ]),
+      },
     });
   });
 
@@ -143,7 +146,10 @@ describe("createUsers (e2e)", () => {
 
     await expect(
       createUsers({ siteId: SITE, users: [teacher("ext-1")] })
-    ).rejects.toMatchObject({ code: "functions/failed-precondition" });
+    ).rejects.toMatchObject({
+      code: "functions/failed-precondition",
+      details: { code: "sync-pending" },
+    });
   });
 
   it("rejects when a user with the same external id already exists", async () => {
@@ -158,7 +164,10 @@ describe("createUsers (e2e)", () => {
 
     await expect(
       createUsers({ siteId: SITE, users: [teacher("ext-1")] })
-    ).rejects.toMatchObject({ code: "functions/already-exists" });
+    ).rejects.toMatchObject({
+      code: "functions/already-exists",
+      details: { code: "users", ids: ["ext-1"] },
+    });
   });
 
   it("rejects when a referenced org does not exist", async () => {
@@ -175,7 +184,13 @@ describe("createUsers (e2e)", () => {
           }),
         ],
       })
-    ).rejects.toMatchObject({ code: "functions/not-found" });
+    ).rejects.toMatchObject({
+      code: "functions/not-found",
+      details: {
+        code: "orgs",
+        orgIds: expect.objectContaining({ schools: ["missing-school"] }),
+      },
+    });
   });
 
   it("creates Auth, claims, and Firestore docs and returns credentials", async () => {
