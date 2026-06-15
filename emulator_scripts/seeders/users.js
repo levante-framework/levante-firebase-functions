@@ -102,7 +102,6 @@ async function createUsers(adminApp) {
         // Create user document according to schema
         const userData = {
           archived: false,
-          assessmentUid: uid,
           createdAt: admin.firestore.FieldValue.serverTimestamp(),
           displayName: userDef.displayName,
           email: userDef.email,

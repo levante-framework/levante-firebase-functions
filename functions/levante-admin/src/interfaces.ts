@@ -294,8 +294,6 @@ export interface IUids {
   roarUid: string;
   /* The auth UID of the user in the admin Firebase project. */
   adminUid: string;
-  /* The auth UID of the user in the assessment Firebase project. */
-  assessmentUid: string;
 }
 
 /**

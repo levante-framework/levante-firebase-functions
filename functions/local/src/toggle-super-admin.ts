@@ -9,7 +9,7 @@ if (!adminCredentialFile) {
     `Missing required environment variables:
     - LEVANTE_ADMIN_FIREBASE_CREDENTIALS
     Please set these environment variables using
-    export LEVANTE_ADMIN_FIREBASE_CREDENTIALS=path/to/credentials/for/admin/project.json`
+    export LEVANTE_ADMIN_FIREBASE_CREDENTIALS=path/to/credentials/for/admin/project.json`,
   );
   process.exit(1);
 }
@@ -68,7 +68,6 @@ export interface ICustomClaims {
   super_admin?: boolean;
   roarUid: string;
   adminUid: string;
-  assessmentUid: string;
   adminOrgs?: IAdminClaims;
 }
 

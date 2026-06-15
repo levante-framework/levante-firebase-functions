@@ -188,7 +188,6 @@ describe("Admin User Management", () => {
             districts: { current: ["d1"] },
             schools: { current: ["s1"] },
             classes: { current: ["c1"] },
-            assessmentUid: "uid123",
           }),
       );
     });
@@ -267,33 +266,6 @@ describe("Admin User Management", () => {
       await assertFails(
         admin.firestore().doc("users/student1").update({
           archived: true,
-        }),
-      );
-    });
-
-    test("admin cannot update assessmentUid field", async () => {
-      await setupTestData(testEnv, async (ctx) => {
-        await ctx
-          .firestore()
-          .doc("users/student1")
-          .set({
-            userType: "student",
-            name: "Student 1",
-            districts: { current: ["d1"] },
-            assessmentUid: "original-uid",
-          });
-        await ctx
-          .firestore()
-          .doc("userClaims/admin1")
-          .set({
-            claims: { adminOrgs: { districts: ["d1"] } },
-          });
-      });
-
-      const admin = createUserWithClaims(testEnv, "admin1");
-      await assertFails(
-        admin.firestore().doc("users/student1").update({
-          assessmentUid: "new-uid",
         }),
       );
     });
