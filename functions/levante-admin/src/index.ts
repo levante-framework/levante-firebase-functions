@@ -1049,3 +1049,5 @@ export const syncOnRunDocUpdate = onDocumentWritten(
 );
 
 export { getSiteOverview } from "./sites/get-site-overview.js";
+
+export { buildSchoolSurvey, buildSiteSurvey } from "./forms/build-survey.js";

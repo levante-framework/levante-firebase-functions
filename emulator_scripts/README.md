@@ -3,6 +3,7 @@
 ## Emulator (local)
 
 - **Seed:** `npm run emulator:seed` — populates the local emulator (run with emulator started).
+- **Seed forms only:** `npm run emulator:seed:forms` — reloads `emulator_scripts/seed-data/org-information-forms/*.seed.json` into `formDefinitions` (handy after editing the JSON by hand).
 - **Clear:** `npm run emulator:clear` — wipes Auth + Firestore in the emulator.
 - **Reset:** `npm run emulator:reset` — clear then seed.
 

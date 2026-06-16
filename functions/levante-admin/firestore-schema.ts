@@ -204,6 +204,7 @@ export interface SchoolInformation {
   siteName: string;
   schoolId: string;
   schoolPseudonym: string;
+  numStudents: string;
   studentAgeYoungest: number;
   studentAgeOldest: number;
   numTeachers: string;
@@ -212,7 +213,7 @@ export interface SchoolInformation {
   schoolFunding: string;
   schoolReligious: string;
   schoolTuition: string;
-  schoolSelectiveness: string;
+  schoolSelectiveness: string[];
   schoolSelectivenessOther?: string; // only populated when schoolSelectiveness includes "other"
   instructionLanguages: string;
   schoolDayLength: number;

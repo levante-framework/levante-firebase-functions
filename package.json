@@ -21,6 +21,7 @@
     "deploy:levante-admin:assessment-dev": "npm run build && (cd functions/levante-admin && firebase deploy --only functions --project hs-levante-assessment-dev)",
     "dev": "EMULATOR=TRUE firebase emulators:start --import=./emulator_data --export-on-exit=./emulator_data",
     "emulator:seed": "EMULATOR=1 node emulator_scripts/seed-emulator.js",
+    "emulator:seed:forms": "EMULATOR=1 node emulator_scripts/seed-form-definitions.js",
     "emulator:clear": "EMULATOR=1 node emulator_scripts/clear-emulator.js",
     "emulator:export": "firebase emulators:export ./emulator_data --force",
     "emulator:reset": "npm run emulator:clear && npm run emulator:seed",
