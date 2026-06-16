@@ -5,11 +5,18 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 // Mirrors FullInformationFormField in firestore-schema.ts. Duplicated here (rather
 // than imported) so the deployed function does not depend on the schema doc file.
 // TODO: replace with the shared zod contract once it exists.
+interface FormSectionInfo {
+  sectionId: string;
+  title: string;
+  description: string;
+}
+
 interface InformationFormField {
   itemId: string;
   variableName: string;
   kind: "text" | "number" | "single-select" | "multi-select";
   required: boolean;
+  sectionId: string;
   questionText: string;
   options?: { value: string; label: string }[];
   displayLogic?: { field: string; includes: string };
@@ -23,6 +30,8 @@ export interface BuildSurveyResult {
   versionNumber: number;
   formDescription: string;
   fieldsDescription: Record<string, string>;
+  generalPrompt: string;
+  sectionInfo: FormSectionInfo[];
   fullFields: InformationFormField[];
 }
 
@@ -79,6 +88,8 @@ async function buildSurvey(formId: string): Promise<BuildSurveyResult> {
 
   const version = versionSnap.data() as {
     versionNumber?: number;
+    generalPrompt?: string;
+    sectionInfo?: FormSectionInfo[];
     fullFields?: InformationFormField[];
   };
 
@@ -88,6 +99,8 @@ async function buildSurvey(formId: string): Promise<BuildSurveyResult> {
     versionNumber: version.versionNumber ?? 0,
     formDescription: form.formDescription ?? "",
     fieldsDescription: form.fieldsDescription ?? {},
+    generalPrompt: version.generalPrompt ?? "",
+    sectionInfo: version.sectionInfo ?? [],
     fullFields: version.fullFields ?? [],
   };
 }

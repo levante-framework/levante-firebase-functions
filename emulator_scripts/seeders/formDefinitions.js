@@ -74,7 +74,7 @@ async function createFormDefinitions(adminApp) {
 
     created.push({ formId: documentId, versionIds });
     console.log(
-      `  ✓ formDefinitions/${documentId} (${versionIds.length} version(s), ${versions[versionIds[0]]?.fullFields?.length ?? 0} fields)`,
+      `  ✓ formDefinitions/${documentId} (${versionIds.length} version(s), ${versions[versionIds[0]]?.sectionInfo?.length ?? 0} sections, ${versions[versionIds[0]]?.fullFields?.length ?? 0} fields)`,
     );
   }
 
