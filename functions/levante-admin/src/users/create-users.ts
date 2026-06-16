@@ -366,6 +366,8 @@ export async function ensureOrgsExistInSite(
       }
     );
   }
+
+  // TODO: validate school/class consistency (e.g., class must be in school)
 }
 
 /** Generates a specified number of unique email addresses */
@@ -551,6 +553,7 @@ export const createUsers = onCall(async (req): Promise<CreateUsersResult> => {
   if (!uid)
     throw new HttpsError("unauthenticated", "User must be authenticated");
 
+  // TODO: CreateUsersParamsSchema should enforce max users (1000?)
   const parsed = CreateUsersParamsSchema.safeParse(req.data);
   if (!parsed.success) {
     throw new HttpsError("invalid-argument", "Invalid input", {
@@ -597,6 +600,14 @@ export const createUsers = onCall(async (req): Promise<CreateUsersResult> => {
 
   const db = getFirestore();
 
+  // TODO: this readiness gate (and the idHash dedup below) is a non-atomic
+  // read-then-write. Concurrent createUsers calls for the same site can both
+  // pass before either marks its users "pending". For distinct batches this is
+  // harmless (just more pending work); the only corrupting case is two
+  // concurrent calls with the SAME external ids, which would create users with
+  // duplicate idHashes and poison future createUsers via the dupe-hash guard.
+  // We rely on the client to prevent double-submit. If server-side protection is
+  // ever needed, claim a per-batch idempotency key or per-site lock here.
   const syncStatus = await fetchSyncStatusCounts(db, siteId);
   if (syncStatus.assignments.pending > 0 || syncStatus.users.pending > 0) {
     throw new HttpsError(

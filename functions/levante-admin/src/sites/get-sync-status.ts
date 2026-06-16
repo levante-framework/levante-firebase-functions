@@ -37,13 +37,13 @@ export const getSyncStatus = onCall(
     // Legacy permissions
     // TODO: remove after migration
     if (userRecord.customClaims?.useNewPermissions !== true) {
-      logger.warn("Permission denied for site overview: legacy permissions", {
+      logger.warn("Permission denied for sync status: legacy permissions", {
         requestingUid: uid,
         siteId,
       });
       throw new HttpsError(
         "permission-denied",
-        "New permission system must be enabled to view site overview"
+        "New permission system must be enabled to view sync status"
       );
     }
     await ensurePermissionsLoaded();
