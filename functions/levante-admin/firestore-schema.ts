@@ -204,6 +204,7 @@ export interface SchoolInformation {
   siteName: string;
   schoolId: string;
   schoolPseudonym: string;
+  numStudents: string;
   studentAgeYoungest: number;
   studentAgeOldest: number;
   numTeachers: string;
@@ -212,7 +213,7 @@ export interface SchoolInformation {
   schoolFunding: string;
   schoolReligious: string;
   schoolTuition: string;
-  schoolSelectiveness: string;
+  schoolSelectiveness: string[];
   schoolSelectivenessOther?: string; // only populated when schoolSelectiveness includes "other"
   instructionLanguages: string;
   schoolDayLength: number;
@@ -227,11 +228,18 @@ export type InformationFieldKey =
 // A single field within an org-information form version. Describes how to render
 // and validate one question. `variableName` matches a SiteInformation or
 // SchoolInformation response property for that form.
+export interface FormSectionInfo {
+  sectionId: string;
+  title: string;
+  description: string;
+}
+
 export interface FullInformationFormField {
   itemId: string; // stable spreadsheet id, e.g. "site_02"
   variableName: InformationFieldKey;
   kind: "text" | "number" | "single-select" | "multi-select";
   required: boolean;
+  sectionId: string;
   questionText: string;
   // Value/label pairs for select fields; omitted for text/number fields.
   options?: { value: string; label: string }[];
@@ -263,6 +271,8 @@ export interface FormDefinitionVersion {
   updatedAt: Timestamp;
   liveFrom: Timestamp | null; // null if/when this version is awaiting registration
   liveUntil: Timestamp | null; // null while this is the current live version
+  generalPrompt?: string;
+  sectionInfo: FormSectionInfo[];
   fullFields: FullInformationFormField[];
 }
 
