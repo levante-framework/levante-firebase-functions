@@ -1,9 +1,9 @@
 import * as admin from "firebase-admin";
 
-/** Firestore Timestamp type alias. */
+// Type alias for Firestore Timestamp
 export type Timestamp = admin.firestore.Timestamp;
 
-/** Generic structure for organization references used in multiple places. */
+// Generic structure for organization references used in multiple places
 export interface OrgRefMap {
   classes: string[];
   districts: string[];
@@ -12,39 +12,30 @@ export interface OrgRefMap {
   schools: string[];
 }
 
-/** Assessment condition rule within an administration. */
+// Structure for Assessment Condition Rules within Administrations
 export interface AssessmentConditionRule {
-  /** e.g. `"userType"`. */
-  field: string;
-  /** e.g. `"EQUAL"`, `"AND"`. */
-  op: string;
-  /** e.g. `"student"`. */
-  value: string | number | boolean | null;
+  field: string; // e.g., "userType"
+  op: string; // e.g., "EQUAL", "AND"
+  value: string | number | boolean | null; // e.g., "student"
 }
 
-/** Assessment conditions within an administration. */
+// Structure for Assessment Conditions within Administrations
 export interface AssessmentConditions {
-  /** Structure needs clarification based on usage. */
-  assigned: Record<string, unknown>;
+  assigned: Record<string, unknown>; // Structure needs clarification based on usage
   conditions: AssessmentConditionRule[];
 }
 
-/** Individual assessment within an administration. */
+// Structure for individual Assessments within Administrations
 export interface Assessment {
   conditions: AssessmentConditions;
-  /** Parameters specific to the task. */
-  params: Record<string, unknown>;
-  /** e.g. `"egma-math"`. */
-  taskName: string;
-  /** e.g. `"egma-math"`. */
-  taskId: string;
-  /** Reference to a task variant. */
-  variantId: string;
-  /** e.g. `"es-CO"`. */
-  variantName: string;
+  params: Record<string, unknown>; // Parameters specific to the task
+  taskName: string; // e.g., "egma-math"
+  taskId: string; // e.g., "egma-math"
+  variantId: string; // Reference to a task variant
+  variantName: string; // e.g., "es-CO"
 }
 
-/** Legal information within administrations and assignedOrgs. */
+// Structure for Legal information within Administrations and AssignedOrgs
 export interface LegalInfo {
   amount: string;
   assent: string | null;
@@ -52,36 +43,25 @@ export interface LegalInfo {
   expectedTime: string;
 }
 
-/**
- * Document in the `administrations` collection.
- * Stores metadata about each administration (assignment) including the sequence of
- * tasks, involved organizations, and visibility control.
- */
+// Interface for documents in the `administrations` collection
+// Stores metadata about each administration (assignment) including the sequence of tasks, involved organizations, and visibility control.
 export interface Administration {
   assessments: Assessment[];
-  /** Document IDs from the `classes` collection. */
-  classes: string[];
-  /** User UID. */
-  createdBy: string;
+  classes: string[]; // Document IDs from `classes` collection
+  createdBy: string; // User UID
   creatorName: string;
   dateClosed: Timestamp;
   dateCreated: Timestamp;
   dateOpened: Timestamp;
-  /** Document IDs from the `districts` collection. */
-  districts: string[];
-  /** Document IDs from the `families` collection. */
-  families: string[];
-  /** Document IDs from the `groups` collection. */
-  groups: string[];
+  districts: string[]; // Document IDs from `districts` collection
+  families: string[]; // Document IDs from `families` collection
+  groups: string[]; // Document IDs from `groups` collection
   legal: LegalInfo;
   minimalOrgs: OrgRefMap;
-  /** Internal name. */
-  name: string;
-  /** Public-facing name. */
-  publicName: string;
+  name: string; // Internal name
+  publicName: string; // Public-facing name
   readOrgs: OrgRefMap;
-  /** Document IDs from the `schools` collection. */
-  schools: string[];
+  schools: string[]; // Document IDs from `schools` collection
   sequential: boolean;
   siteId: string;
   syncChunksCompleted?: number;
@@ -92,92 +72,63 @@ export interface Administration {
   testData: boolean;
 }
 
-/** Document in the `assignedOrgs` subcollection of `administrations`. */
+// Interface for documents in the `assignedOrgs` subcollection of `administrations`
 export interface AssignedOrg {
   administrationId: string;
-  /** User UID of the administration creator. */
-  createdBy: string;
-  /** Copied from administration. */
-  dateClosed: Timestamp;
-  /** Timestamp of assignment creation or copied from admin; needs clarification. */
-  dateCreated: Timestamp;
-  /** Copied from administration. */
-  dateOpened: Timestamp;
-  /** Copied from administration. */
-  legal: LegalInfo;
-  /** Copied from administration. */
-  name: string;
-  /** Document ID of the assigned organization. */
-  orgId: string;
-  /** Type of the assigned organization. */
-  orgType: "classes" | "districts" | "families" | "groups" | "schools";
-  /** Copied from administration. */
-  publicName: string;
-  /** Copied from administration. */
-  testData: boolean;
-  /** Timestamp of assignment creation/update. */
-  timestamp: Timestamp;
+  createdBy: string; // User UID of the administration creator
+  dateClosed: Timestamp; // Copied from administration
+  dateCreated: Timestamp; // Timestamp of assignment creation or copied from admin? Needs clarification
+  dateOpened: Timestamp; // Copied from administration
+  legal: LegalInfo; // Copied from administration
+  name: string; // Copied from administration
+  orgId: string; // Document ID of the assigned organization
+  orgType: "classes" | "districts" | "families" | "groups" | "schools"; // Type of the assigned organization
+  publicName: string; // Copied from administration
+  testData: boolean; // Copied from administration
+  timestamp: Timestamp; // Timestamp of assignment creation/update
 }
 
-/** Document in the `readOrgs` subcollection of `administrations`. */
+// Interface for documents in the `readOrgs` subcollection of `administrations`
 export interface ReadOrg {
   administrationId: string;
-  /** User UID of the administration creator. */
-  createdBy: string;
-  /** Copied from administration. */
-  dateClosed: Timestamp;
-  /** Timestamp of assignment creation or copied from admin; needs clarification. */
-  dateCreated: Timestamp;
-  /** Copied from administration. */
-  dateOpened: Timestamp;
-  /** Copied from administration. */
-  legal: LegalInfo;
-  /** Copied from administration. */
-  name: string;
-  /** Document ID of the assigned organization. */
-  orgId: string;
-  /** Type of the assigned organization. */
-  orgType: "classes" | "districts" | "families" | "groups" | "schools";
-  /** Copied from administration. */
-  publicName: string;
-  /** Copied from administration. */
-  testData: boolean;
-  /** Timestamp of assignment creation/update. */
-  timestamp: Timestamp;
+  createdBy: string; // User UID of the administration creator
+  dateClosed: Timestamp; // Copied from administration
+  dateCreated: Timestamp; // Timestamp of assignment creation or copied from admin? Needs clarification
+  dateOpened: Timestamp; // Copied from administration
+  legal: LegalInfo; // Copied from administration
+  name: string; // Copied from administration
+  orgId: string; // Document ID of the assigned organization
+  orgType: "classes" | "districts" | "families" | "groups" | "schools"; // Type of the assigned organization
+  publicName: string; // Copied from administration
+  testData: boolean; // Copied from administration
+  timestamp: Timestamp; // Timestamp of assignment creation/update
 }
 
-/** Document in the `stats` subcollection of `administrations`. */
+// Interface for the stats subcollection of `administrations`
 export interface Stat {
   assignment: Record<string, number>;
   survey: Record<string, number>;
 }
 
-/**
- * Document in the `classes` collection.
- * Details about classes, including school affiliation and optional educational details.
- */
+// Interface for documents in the `classes` collection
+// Details about classes, including school affiliation and optional educational details
 export interface Class {
   archived: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
-  /** User UID. */
-  createdBy: string;
+  createdBy: string; // User UID
   districtId: string;
-  /** Same as document ID. */
-  id: string;
+  id: string; // Same as document ID
   name: string;
   schoolId: string;
 }
 
-/**
- * Document in the `districts` collection.
- * Manages information about districts (sites), including associated schools.
- */
+// Interface for documents in the `districts` collection
+// Manages information about districts (sites), including associated schools.
 export interface District {
   archived: boolean;
   createdAt: Timestamp;
-  /** User UID. */
-  createdBy: string;
+  createdBy: string; // User UID
   updatedAt: Timestamp;
   name: string;
   tags: string[];
@@ -185,46 +136,34 @@ export interface District {
   schools?: string[];
 }
 
-/**
- * Document in the `groups` collection.
- * Manages group (cohort) data, potentially representing subgroups within a district (site).
- * Catch-all type for when a group of users does not fit into a traditional org type.
- */
+// Interface for documents in the `groups` collection
+// Purpose: Manages group (cohort) data, potentially representing subgroups within a district (site).
+// This is a catch all type group for when a group of users does not fit into the traditional group type.
 export interface Group {
   archived: boolean;
   createdAt: Timestamp;
   updatedAt: Timestamp;
-  /** User UID. */
-  createdBy: string;
-  /** Document ID of the parent organization. */
-  parentOrgId: string;
-  /** Type of the parent organization. */
-  parentOrgType: "district";
+  createdBy: string; // User UID
+  parentOrgId: string; // Document ID of the parent organization
+  parentOrgType: "district"; // Type of the parent organization
   name: string;
   tags: string[];
 }
 
-/**
- * Document in the `schools` collection.
- * Contains data about schools, including their districts.
- */
+// Interface for documents in the `schools` collection
+// Contains data about schools, including their districts.
 export interface School {
   archived: boolean;
-  /** Document IDs of classes. */
-  classes?: string[];
+  classes?: string[]; // Document IDs of classes
   createdAt: Timestamp;
   updatedAt: Timestamp;
-  /** User UID. */
-  createdBy: string;
+  createdBy: string; // User UID
   districtId: string;
-  /** Same as document ID. */
-  id: string;
+  id: string; // Same as document ID
   name: string;
 }
 
-/**
- * Org information forms: the `formDefinitions` collection and response subcollections.
- */
+// --- Org information forms (`formDefinitions` collection and response subcollections) ---
 
 /**
  * Document in the `siteInformation` subcollection of `districts`.
@@ -369,67 +308,51 @@ export interface FormDefinitionVersion {
   fullFields: FullInformationFormField[];
 }
 
-/**
- * Claims structure within `UserClaims`.
- * Manages custom claims for users, facilitating access control based on administrative
- * roles or organizational (group) affiliations.
- */
+// Structure for Claims within UserClaims
+// Manages custom claims for users, facilitating access control based on administrative roles or organizational (Group) affiliations.
 export interface Claims {
   adminOrgs: OrgRefMap;
-  /** Purpose needs clarification. */
-  adminUid?: string;
+  adminUid?: string; // Purpose needs clarification
   assessmentUid?: string;
   minimalAdminOrgs: OrgRefMap;
-  /** Purpose needs clarification. */
-  roarUid?: string;
+  roarUid?: string; // Purpose needs clarification
   super_admin: boolean;
 }
 
-/** Document in the `userClaims` collection. Document ID is the user UID. */
+// Interface for documents in the `userClaims` collection (Document ID is User UID)
 export interface UserClaims {
   claims: Claims;
-  /** Unix milliseconds timestamp. */
-  lastUpdated: number;
+  lastUpdated: number; // Unix milliseconds timestamp?
   testData?: boolean;
 }
 
-/** Admin-specific data within `users` documents. */
+// Structure for Admin-specific data within Users
 export interface AdminData {
-  /** IDs of administrations. */
-  administrationsCreated: string[];
+  administrationsCreated: string[]; // IDs of administrations
 }
 
-/** Organizational associations within `users` documents. */
+// Structure for organizational associations within Users
 export interface OrgAssociationMap {
   all: string[];
   current: string[];
-  /** Structure needs clarification. */
-  dates: Record<string, Timestamp>;
+  dates: Record<string, Timestamp>; // Structure needs clarification
 }
 
-/** User legal document acceptance within `users` documents. */
+// Structure for user legal document acceptance within Users
 export interface UserLegal {
-  /** Keyed by form hash/identifier. */
-  assent: Record<string, Timestamp>;
-  /** Keyed by ToS version hash/identifier. */
-  tos: Record<string, Timestamp>;
+  assent: Record<string, Timestamp>; // Keyed by form hash/identifier
+  tos: Record<string, Timestamp>; // Keyed by ToS version hash/identifier
 }
 
-/**
- * Document in the `users` collection. Document ID is the user UID.
- * Stores comprehensive user data including assignments and organizational affiliations.
- */
+// Interface for documents in the `users` collection (Document ID is User UID)
+// Stores comprehensive user data including assignments and organizational affiliations.
 export interface User {
-  /** Only for admin users. */
-  adminData?: AdminData;
-  /** Only for participants. */
+  adminData?: AdminData; // only for admin users
   assignments?: {
-    /** Document IDs from `administrations` that are assigned. */
-    assigned: string[];
-    /** Document IDs from `administrations` that are completed. */
-    completed: string[];
-    /** Document IDs from `administrations` that are started. */
-    started: string[];
+    // only for participants
+    assigned: string[]; // Document IDs from `administrations` collection that are assigned
+    completed: string[]; // Document IDs from `administrations` collection that are completed
+    started: string[]; // Document IDs from `administrations` collection that are started
   };
   archived: boolean;
   assessmentUid: string;
@@ -442,17 +365,14 @@ export interface User {
   groups: OrgAssociationMap;
   legal: UserLegal;
   schools: OrgAssociationMap;
-  /** e.g. `"google"`; only for admin users. */
-  sso?: string;
+  sso?: string; // e.g., "google" only for admin users
   userType: "admin" | "teacher" | "student" | "parent";
   testData?: boolean;
   roles: { siteId: string; role: string; siteName: string }[];
 }
 
-/**
- * Document in the `assignments` subcollection of `users`.
- * Represents a specific administration assigned to a user.
- */
+// Interface for the assignments subcollection of `users`
+// Represents a specific administration assigned to a user.
 export interface AssignmentAssessment {
   progress: {
     survey: string;
@@ -506,14 +426,16 @@ export interface AssignmentAssessment {
   demoData: boolean;
   id: string;
   name: string;
-  /** Mirrors administration `syncStatus`. Only show `"complete"` assignments to users. */
+  /** Mirrors administration syncStatus. Only show "complete" assignments to users. */
   syncStatus?: "pending" | "complete" | "failed";
 }
 
-/** Tracks versions of legal documents using GitHub as a reference point. */
+// Tracks versions of legal documents using GitHub as a reference point.
 export interface Legal {}
 
-/** Permission action types allowed in the system. */
+/**
+ * Permission action types allowed in the system.
+ */
 export type PermissionAction =
   | "create"
   | "read"
@@ -522,7 +444,7 @@ export type PermissionAction =
   | "exclude";
 
 /**
- * Permissions structure within the `system/permissions` document.
+ * Interface for the permissions structure within the system/permissions document.
  * Defines granular permissions for different admin roles.
  */
 export interface RolePermissions {
@@ -544,7 +466,7 @@ export interface RolePermissions {
 }
 
 /**
- * Document in the `system` collection.
+ * Interface for documents in the `system` collection.
  * Currently only contains the permissions document.
  */
 export interface SystemPermissions {
@@ -556,49 +478,45 @@ export interface SystemPermissions {
     participant: RolePermissions;
   };
   updatedAt: Timestamp;
-  /** e.g. `"1.1.0"`. */
-  version: string;
+  version: string; // e.g., "1.1.0"
 }
 
-/** Assessment and task data interfaces. */
+// --- Assessment & Task Data --- interfaces
 
 /**
- * Document in the `tasks` collection.
+ * Interface for documents in the `tasks` collection.
  * Defines tasks used in assessments, including descriptions and variant configurations.
- * Document ID: task identifier (e.g. `matrix-reasoning`).
+ * Document ID: Task identifier (e.g., `matrix-reasoning`).
  */
 export interface TaskDoc {
   description?: string;
-  /** URL. */
-  image?: string;
+  image?: string; // URL
   lastUpdated?: Timestamp;
   name?: string;
   registered?: boolean;
-  taskURL?: string;
+  taskURL?: string; // Optional
 }
 
 /**
- * Document in the `tasks/{taskId}/variants` subcollection.
- * Manages different configurations or versions of a task.
- * Document ID: variant identifier.
+ * Interface for documents in the `tasks/{taskId}/variants` subcollection.
+ * Manages different configurations or versions of a task, allowing for customization of the assessment experience.
+ * Document ID: Variant identifier.
  */
 export interface VariantDoc {
   lastUpdated?: Timestamp;
-  /** e.g. `"default"`, `"adaptive"`. */
-  name?: string;
-  /** Task-specific; variable structure. */
-  params?: Record<string, any>;
+  name?: string; // e.g., "default", "adaptive"
+  params?: Record<string, any>; // Task-specific, variable structure
   registered?: boolean;
-  taskURL?: string;
-  variantURL?: string;
+  taskURL?: string; // Optional
+  variantURL?: string; // Optional
 }
 
-/** Guest and assessment run data interfaces. */
+// --- Guest & Assessment Run Data --- interfaces
 
 /**
- * Document in the `guests` collection.
- * Manages temporary or guest user data for one-off assessments without full registration.
- * Document ID: guest `assessmentUid`.
+ * Interface for documents in the `guests` collection.
+ * Manages temporary or guest user data, often used for one-off assessments without full user registration.
+ * Document ID: Guest assessmentUid.
  */
 export interface GuestDoc {
   age?: number;
@@ -606,23 +524,20 @@ export interface GuestDoc {
   assessmentUid?: string;
   created?: Timestamp;
   lastUpdated?: Timestamp;
-  /** Task IDs interacted with. */
-  tasks?: string[];
+  tasks?: string[]; // Task IDs interacted with
   userType?: "guest";
-  /** Variant IDs assigned. */
-  variants?: string[];
+  variants?: string[]; // Variant IDs assigned
 }
 
 /**
- * Document in the `guests/{guestId}/runs` or `users/{userId}/runs` subcollection.
- * Document ID: unique run ID.
+ * Interface for documents in the `guests/{guestId}/runs` and `users/{userId}/runs` subcollection.
+ * Document ID: Unique Run ID.
  */
 export interface RunDoc {
   assigningOrgs?: string[] | null;
   assignmentId?: string | null;
   completed?: boolean;
-  /** Run ID. */
-  id?: string;
+  id?: string; // Run ID
   readOrgs?: string[] | null;
   reliable?: boolean;
   scores?: {
@@ -648,25 +563,22 @@ export interface RunDoc {
       };
     };
   };
-  /** e.g. `"matrix-reasoning"`. */
-  taskId?: string;
+  taskId?: string; // e.g., "matrix-reasoning"
   timeFinished?: Timestamp;
   timeStarted?: Timestamp;
   userData?: {
-    /** Guest UID. */
-    assessmentUid?: string;
+    assessmentUid?: string; // Guest UID
     variantId?: string;
   };
 }
 
 /**
- * Document in the `guests/{guestId}/runs/{runId}/trials` or
- * `users/{userId}/runs/{runId}/trials` subcollection.
- * Document ID: trial ID or unique identifier within the run.
- * Structure varies significantly based on the parent run's `taskId`.
+ * Interface for documents in the `guests/{guestId}/runs/{runId}/trials` and `users/{userId}/runs/{runId}/trials` subcollection.
+ * Document ID: Trial ID or unique identifier within the run.
+ * Note: The structure of this document varies significantly based on the parent run's taskId.
  */
 export interface TrialDoc {
-  /** Common fields exist, but many are task-dependent. */
+  // Common fields exist, but many are task-dependent.
   [key: string]: any;
   assessment_stage?: string;
   correct?: boolean;
