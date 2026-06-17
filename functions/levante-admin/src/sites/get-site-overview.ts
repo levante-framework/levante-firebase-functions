@@ -25,14 +25,13 @@ export const getSiteOverview = onCall(
 
     const parsed = GetSiteOverviewParamsSchema.safeParse(req.data);
     if (!parsed.success) {
-      throw new HttpsError(
-        "invalid-argument",
-        "Invalid input",
-        parsed.error.issues.map((i) => ({
+      throw new HttpsError("invalid-argument", "Invalid input", {
+        code: "schema",
+        issues: parsed.error.issues.map((i) => ({
           path: i.path.join("."),
           message: i.message,
         })),
-      );
+      });
     }
     const { siteId } = parsed.data;
 
@@ -46,7 +45,7 @@ export const getSiteOverview = onCall(
       });
       throw new HttpsError(
         "permission-denied",
-        "New permission system must be enabled to view site overview",
+        "New permission system must be enabled to view site overview"
       );
     }
     await ensurePermissionsLoaded();
@@ -86,7 +85,7 @@ export const getSiteOverview = onCall(
       });
       throw new HttpsError(
         "permission-denied",
-        `You do not have permission to view site ${siteId}`,
+        `You do not have permission to view site ${siteId}`
       );
     }
 
@@ -105,7 +104,7 @@ export const getSiteOverview = onCall(
           .where(
             new FieldPath("districts", "current"),
             "array-contains",
-            siteId,
+            siteId
           )
           .where("archived", "==", false)
           .where("disabled", "==", false)
@@ -203,5 +202,5 @@ export const getSiteOverview = onCall(
         name: d.get("name"),
       })),
     };
-  },
+  }
 );
