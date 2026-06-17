@@ -223,7 +223,6 @@ const prepareNewAssignment = async (
       studentData = {},
       name = null,
       assessmentPid = null,
-      assessmentUid = null,
       email = null,
       username = null,
     } = userData.data()!;
@@ -232,7 +231,6 @@ const prepareNewAssignment = async (
       ...studentData,
       name,
       assessmentPid,
-      assessmentUid,
       email,
       username,
     };
@@ -706,7 +704,6 @@ export const updateAssignmentForUser = async (
         studentData = {},
         name = null,
         assessmentPid = null,
-        assessmentUid = null,
         email = null,
         username = null,
       } = userData.data()!;
@@ -715,7 +712,6 @@ export const updateAssignmentForUser = async (
         ...studentData,
         name,
         assessmentPid,
-        assessmentUid,
         email,
         username,
       };
@@ -991,7 +987,6 @@ const readPhaseForUser = async (
       studentData = {},
       name = null,
       assessmentPid = null,
-      assessmentUid = null,
       email = null,
       username = null,
     } = userData.data()!;
@@ -999,7 +994,6 @@ const readPhaseForUser = async (
       ...studentData,
       name,
       assessmentPid,
-      assessmentUid,
       email,
       username,
     };
