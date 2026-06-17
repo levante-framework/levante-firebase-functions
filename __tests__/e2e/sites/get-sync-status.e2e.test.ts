@@ -68,24 +68,30 @@ describe("getSyncStatus (e2e)", () => {
       getSyncStatus({})
     ).rejects.toMatchObject({
       code: "functions/invalid-argument",
-      details: expect.arrayContaining([
-        expect.objectContaining({
-          path: "siteId",
-          message: expect.any(String),
-        }),
-      ]),
+      details: {
+        code: "schema",
+        issues: expect.arrayContaining([
+          expect.objectContaining({
+            path: "siteId",
+            message: expect.any(String),
+          }),
+        ]),
+      },
     });
     await expect(
       // @ts-expect-error intentionally wrong type for siteId
       getSyncStatus({ siteId: 123 })
     ).rejects.toMatchObject({
       code: "functions/invalid-argument",
-      details: expect.arrayContaining([
-        expect.objectContaining({
-          path: "siteId",
-          message: expect.any(String),
-        }),
-      ]),
+      details: {
+        code: "schema",
+        issues: expect.arrayContaining([
+          expect.objectContaining({
+            path: "siteId",
+            message: expect.any(String),
+          }),
+        ]),
+      },
     });
   });
 

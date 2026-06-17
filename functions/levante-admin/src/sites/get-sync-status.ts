@@ -22,14 +22,13 @@ export const getSyncStatus = onCall(
 
     const parsed = GetSyncStatusParamsSchema.safeParse(req.data);
     if (!parsed.success) {
-      throw new HttpsError(
-        "invalid-argument",
-        "Invalid input",
-        parsed.error.issues.map((i) => ({
+      throw new HttpsError("invalid-argument", "Invalid input", {
+        code: "schema",
+        issues: parsed.error.issues.map((i) => ({
           path: i.path.join("."),
           message: i.message,
-        }))
-      );
+        })),
+      });
     }
     const { siteId } = parsed.data;
 
