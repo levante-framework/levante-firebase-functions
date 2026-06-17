@@ -10,6 +10,7 @@ export interface UpsertVariantData {
   name: string;
   params: Record<string, VariantParamValue>;
   registered: boolean;
+  schemaVersion?: string;
 }
 
 function isVariantParamValue(v: unknown): v is VariantParamValue {
@@ -45,7 +46,7 @@ export const upsertVariantHandler = async (
   data: UpsertVariantData
 ): Promise<{ taskId: string; variantId: string }> => {
   const db = getFirestore();
-  const { taskId, variantId, name, params, registered } = data;
+  const { taskId, variantId, name, params, registered, schemaVersion } = data;
 
   if (!taskId || typeof taskId !== "string" || taskId.trim().length === 0) {
     throw new HttpsError("invalid-argument", "taskId is required and must be a non-empty string.");
@@ -68,6 +69,7 @@ export const upsertVariantHandler = async (
     name: name.trim(),
     params,
     registered,
+    schemaVersion,
     lastUpdated: FieldValue.serverTimestamp(),
   };
 
