@@ -357,6 +357,7 @@ export interface User {
   birthMonth?: number;
   birthYear?: number;
   childIdentifier?: string;
+  childIds?: string[]; // TODO: backfill `studentIds` -> `childIds` in db
   classes: OrgAssociationMap;
   createdAt: Timestamp;
   disabled: boolean;
@@ -365,9 +366,11 @@ export interface User {
   email: string;
   groups: OrgAssociationMap;
   idHash?: string;
+  parentIds?: string[];
   roles: { siteId: string; role: string; siteName: string }[];
   schools: OrgAssociationMap;
   syncStatus?: "pending" | "complete" | "failed";
+  teacherIds?: string[];
   userType: "admin" | "teacher" | "student" | "parent";
   username?: string;
   testData?: boolean;
