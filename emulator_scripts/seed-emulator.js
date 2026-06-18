@@ -1,34 +1,38 @@
-const admin = require('firebase-admin');
-const { getSeedConfig } = require('./config');
+const admin = require("firebase-admin");
+const { getSeedConfig } = require("./config");
 
 const { projectId, isEmulator } = getSeedConfig();
 
 if (isEmulator) {
-  process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8180';
-  process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:9199';
+  process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8180";
+  process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9199";
 }
 
-const adminApp = admin.initializeApp({ projectId }, 'admin-seeder');
+const adminApp = admin.initializeApp({ projectId }, "admin-seeder");
 
 // Import seeding modules
-const { createGroups } = require('./seeders/groups');
-const { createUsers } = require('./seeders/users');
-const { createUserClaims } = require('./seeders/userClaims');
-const { linkUsersToGroups } = require('./seeders/associations');
-const { updateUserRoles } = require('./seeders/roles');
-const { createTasks } = require('./seeders/tasks');
-const { createAdministrations } = require('./seeders/administrations');
-const { createSystemPermissions } = require('./seeders/permissions');
+const { createGroups } = require("./seeders/groups");
+const { createUsers } = require("./seeders/users");
+const { createUserClaims } = require("./seeders/userClaims");
+const { linkUsersToGroups } = require("./seeders/associations");
+const { updateUserRoles } = require("./seeders/roles");
+const { createTasks } = require("./seeders/tasks");
+const { createAdministrations } = require("./seeders/administrations");
+const { createSystemPermissions } = require("./seeders/permissions");
 
 async function seedDatabase() {
   try {
-    console.log(isEmulator ? '=== STARTING EMULATOR SEEDING ===\n' : `=== STARTING SEEDING (project: ${projectId}) ===\n`);
-    
+    console.log(
+      isEmulator
+        ? "=== STARTING EMULATOR SEEDING ===\n"
+        : `=== STARTING SEEDING (project: ${projectId}) ===\n`
+    );
+
     // Step 1: Create system permissions
     console.log("Step 1: Creating system permissions...");
     const permissions = await createSystemPermissions(adminApp);
     console.log("✅ System permissions created successfully\n");
-    
+
     // Step 2: Create Auth users and user documents
     console.log("Step 2: Creating users...");
     const users = await createUsers(adminApp);
@@ -36,38 +40,45 @@ async function seedDatabase() {
 
     // Step 3: Create groups (districts, schools, classes, groups)
     console.log("Step 3: Creating groups...");
-    const adminUser = users.find(user => user.userKey === 'admin');
+    const adminUser = users.find((user) => user.userKey === "admin");
     const groups = await createGroups(adminApp, adminUser.uid);
     console.log("✅ Groups created successfully\n");
-    
+
     // Step 4: Create userClaims documents
     console.log("Step 4: Creating user claims...");
     await createUserClaims(adminApp, users, groups);
     console.log("✅ User claims created successfully\n");
-    
+
     // Step 5: Link users to groups
     console.log("Step 5: Linking users to groups...");
     await linkUsersToGroups(adminApp, users, groups);
     console.log("✅ User-group associations created successfully\n");
-    
+
     // Step 6: Update user roles based on associations
     console.log("Step 6: Updating user roles...");
     await updateUserRoles(adminApp, users, groups);
     console.log("✅ User roles updated successfully\n");
-    
+
     // Step 7: Create tasks and variants
     console.log("Step 7: Creating tasks and variants...");
     const tasks = await createTasks(adminApp);
     console.log("✅ Tasks and variants created successfully\n");
-    
+
     // Step 8: Create administrations with subcollections
     console.log("Step 8: Creating administrations...");
-    const administrations = await createAdministrations(adminApp, tasks, users, groups);
+    const administrations = await createAdministrations(
+      adminApp,
+      tasks,
+      users,
+      groups
+    );
     console.log("✅ Administrations created successfully\n");
-    
+
     console.log("=== DATABASE SEEDING COMPLETE ===");
     console.log("\nCreated data summary:");
-    console.log(`- System permissions: ${Object.keys(permissions).length} roles`);
+    console.log(
+      `- System permissions: ${Object.keys(permissions).length} roles`
+    );
     console.log(`- Districts: ${groups.districts.length}`);
     console.log(`- Schools: ${groups.schools.length}`);
     console.log(`- Classes: ${groups.classes.length}`);
@@ -75,34 +86,53 @@ async function seedDatabase() {
     console.log(`- Users: ${Object.keys(users).length}`);
     console.log(`- Tasks: ${tasks.length}`);
     console.log(`- Administrations: ${administrations.length}`);
-    
+
     console.log("\nUser credentials:");
     users.forEach((user) => {
-      console.log(`- ${user.userKey}: ${user.email} (password: ${user.password})`);
+      console.log(
+        `- ${user.userKey}: ${user.email} (password: ${user.password})`
+      );
     });
-    
+
     console.log("\nCreated administrations:");
-    administrations.forEach(admin => {
-      console.log(`- ${admin.name} (${admin.taskCount} tasks, ${admin.sequential ? 'sequential' : 'parallel'})`);
+    administrations.forEach((admin) => {
+      console.log(
+        `- ${admin.name} (${admin.taskCount} tasks, ${
+          admin.sequential ? "sequential" : "parallel"
+        })`
+      );
     });
-    
-    const studentCount = users.filter(user => user.userType === 'student').length;
-    const allParticipantCount = users.filter(user => 
-      ['student', 'teacher', 'parent'].includes(user.userType)
+
+    const studentCount = users.filter(
+      (user) => user.userType === "student"
+    ).length;
+    const allParticipantCount = users.filter((user) =>
+      ["student", "teacher", "parent"].includes(user.userType)
     ).length;
     console.log(`\nAssignment distribution:`);
-    console.log(`- Academic assessments assigned to ${studentCount} student(s)`);
-    console.log(`- Survey administration assigned to ${allParticipantCount} participant(s) (students, teachers, parents)`);
-    
+    console.log(
+      `- Academic assessments assigned to ${studentCount} student(s)`
+    );
+    console.log(
+      `- Survey administration assigned to ${allParticipantCount} participant(s) (students, teachers, parents)`
+    );
+
     console.log("\n=== READY FOR TESTING ===");
-    
   } catch (error) {
     console.error("\n❌ SEEDING FAILED!");
     console.error("Error:", error.message);
-    if (error?.code === 'app/invalid-credential' || error?.message?.includes('metadata.google.internal') || error?.message?.includes('fetch a valid Google OAuth2 access token')) {
-      console.error("\nTo run against a live project locally, authenticate first:");
+    if (
+      error?.code === "app/invalid-credential" ||
+      error?.message?.includes("metadata.google.internal") ||
+      error?.message?.includes("fetch a valid Google OAuth2 access token")
+    ) {
+      console.error(
+        "\nTo run against a live project locally, authenticate first:"
+      );
       console.error("  gcloud auth application-default login");
-      console.error("Or set GOOGLE_APPLICATION_CREDENTIALS to the path of a service account JSON file.");
+      console.error(
+        "Or set GOOGLE_APPLICATION_CREDENTIALS to the path of a service account JSON file."
+      );
     }
     if (error.stack) {
       console.error("Stack trace:", error.stack);
@@ -112,4 +142,4 @@ async function seedDatabase() {
 }
 
 // Run the seeding process
-seedDatabase(); 
+seedDatabase();

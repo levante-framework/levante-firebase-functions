@@ -1,27 +1,33 @@
-const admin = require('firebase-admin');
-const { getAuth } = require('firebase-admin/auth');
-const { getSeedConfig } = require('./config');
+const admin = require("firebase-admin");
+const { getAuth } = require("firebase-admin/auth");
+const { getSeedConfig } = require("./config");
 
 const { projectId, isEmulator } = getSeedConfig();
 
 if (isEmulator) {
-  process.env.FIRESTORE_EMULATOR_HOST = '127.0.0.1:8180';
-  process.env.FIREBASE_AUTH_EMULATOR_HOST = '127.0.0.1:9199';
+  process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8180";
+  process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9199";
 }
 
-if (!isEmulator && process.env.CONFIRM_CLEAR !== '1') {
-  console.error('Refusing to clear a live Firebase project without CONFIRM_CLEAR=1.');
-  console.error(`To clear project "${projectId}", run: CONFIRM_CLEAR=1 npm run clear:dev`);
+if (!isEmulator && process.env.CONFIRM_CLEAR !== "1") {
+  console.error(
+    "Refusing to clear a live Firebase project without CONFIRM_CLEAR=1."
+  );
+  console.error(
+    `To clear project "${projectId}", run: CONFIRM_CLEAR=1 npm run clear:dev`
+  );
   process.exit(1);
 }
 
-const adminApp = admin.initializeApp({ projectId }, 'admin-clearer');
+const adminApp = admin.initializeApp({ projectId }, "admin-clearer");
 
 async function clearDatabase() {
   try {
-    const title = isEmulator ? 'CLEARING EMULATOR DATABASE' : `CLEARING PROJECT: ${projectId}`;
+    const title = isEmulator
+      ? "CLEARING EMULATOR DATABASE"
+      : `CLEARING PROJECT: ${projectId}`;
     console.log(`=== ${title} ===\n`);
-    
+
     const auth = getAuth(adminApp);
     const db = adminApp.firestore();
 
@@ -55,7 +61,9 @@ async function clearDatabase() {
         await batch.commit();
       }
 
-      console.log(`    ✅ Deleted ${deleted} document(s) from collectionGroup(${groupId})`);
+      console.log(
+        `    ✅ Deleted ${deleted} document(s) from collectionGroup(${groupId})`
+      );
       return deleted;
     }
 
@@ -73,22 +81,24 @@ async function clearDatabase() {
         await db.recursiveDelete(doc.ref);
         deleted += 1;
       }
-      console.log(`    ✅ Recursively deleted ${deleted} document(s) from ${collectionName}`);
+      console.log(
+        `    ✅ Recursively deleted ${deleted} document(s) from ${collectionName}`
+      );
       return deleted;
     }
-    
+
     console.log("Step 1: Clearing Auth users...");
-    
+
     // List all users and delete them
     let listUsersResult = await auth.listUsers(1000);
     let deletedCount = 0;
-    
+
     while (listUsersResult.users.length > 0) {
-      const uids = listUsersResult.users.map(user => user.uid);
+      const uids = listUsersResult.users.map((user) => user.uid);
       await auth.deleteUsers(uids);
       deletedCount += uids.length;
       console.log(`  Deleted ${uids.length} auth users`);
-      
+
       // Get next batch if there's a page token
       if (listUsersResult.pageToken) {
         listUsersResult = await auth.listUsers(1000, listUsersResult.pageToken);
@@ -96,9 +106,9 @@ async function clearDatabase() {
         break;
       }
     }
-    
+
     console.log(`✅ Cleared ${deletedCount} Auth users\n`);
-    
+
     console.log("Step 2: Clearing Firestore collections...");
 
     // IMPORTANT:
@@ -121,12 +131,19 @@ async function clearDatabase() {
     await deleteCollectionGroup("stats");
     await deleteCollectionGroup("variants");
 
-    await recursiveDeleteCollection('users');
-    await recursiveDeleteCollection('administrations');
-    await recursiveDeleteCollection('tasks');
+    await recursiveDeleteCollection("users");
+    await recursiveDeleteCollection("administrations");
+    await recursiveDeleteCollection("tasks");
 
     // These collections should not have deep subcollections in the emulator seed data.
-    const flatCollections = ['system', 'userClaims', 'districts', 'schools', 'classes', 'groups'];
+    const flatCollections = [
+      "system",
+      "userClaims",
+      "districts",
+      "schools",
+      "classes",
+      "groups",
+    ];
     for (const collectionName of flatCollections) {
       console.log(`  Clearing ${collectionName}...`);
       const snapshot = await db.collection(collectionName).get();
@@ -137,22 +154,33 @@ async function clearDatabase() {
           batch.delete(doc.ref);
         });
         await batch.commit();
-        console.log(`    ✅ Deleted ${snapshot.size} documents from ${collectionName}`);
+        console.log(
+          `    ✅ Deleted ${snapshot.size} documents from ${collectionName}`
+        );
       } else {
         console.log(`    ⚪ No documents found in ${collectionName}`);
       }
     }
-    
+
     console.log("\n=== DATABASE CLEARED SUCCESSFULLY ===");
-    console.log("You can now run the seeding script to populate with fresh test data.");
-    
+    console.log(
+      "You can now run the seeding script to populate with fresh test data."
+    );
   } catch (error) {
     console.error("\n❌ CLEARING FAILED!");
     console.error("Error:", error.message);
-    if (error?.code === 'app/invalid-credential' || error?.message?.includes('metadata.google.internal') || error?.message?.includes('fetch a valid Google OAuth2 access token')) {
-      console.error("\nTo run against a live project locally, authenticate first:");
+    if (
+      error?.code === "app/invalid-credential" ||
+      error?.message?.includes("metadata.google.internal") ||
+      error?.message?.includes("fetch a valid Google OAuth2 access token")
+    ) {
+      console.error(
+        "\nTo run against a live project locally, authenticate first:"
+      );
       console.error("  gcloud auth application-default login");
-      console.error("Or set GOOGLE_APPLICATION_CREDENTIALS to the path of a service account JSON file.");
+      console.error(
+        "Or set GOOGLE_APPLICATION_CREDENTIALS to the path of a service account JSON file."
+      );
     }
     if (error.stack) {
       console.error("Stack trace:", error.stack);
@@ -162,4 +190,4 @@ async function clearDatabase() {
 }
 
 // Run the clearing process
-clearDatabase(); 
+clearDatabase();

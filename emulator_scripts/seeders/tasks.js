@@ -1,354 +1,360 @@
-const admin = require('firebase-admin');
+const admin = require("firebase-admin");
 
 // Task definitions
 const TASK_DEFINITIONS = {
   // Type 1 tasks - with standard variant properties
-  'matrix-reasoning': {
-    description: 'Matrix reasoning assessment task',
-    name: 'Matrix Reasoning',
+  "matrix-reasoning": {
+    description: "Matrix reasoning assessment task",
+    name: "Matrix Reasoning",
     variants: {
-      corpus: 'matrix-reasoning-item-bank',
+      corpus: "matrix-reasoning-item-bank",
       maxIncorrect: 3,
       maxTime: 10,
       numberOfTrials: 20,
-      sequentialStimulus: true
-    }
+      sequentialStimulus: true,
+    },
   },
-  'mental-rotation': {
-    description: 'Mental rotation assessment task',
-    name: 'Mental Rotation',
+  "mental-rotation": {
+    description: "Mental rotation assessment task",
+    name: "Mental Rotation",
     variants: {
-      corpus: 'mental-rotation-item-bank',
+      corpus: "mental-rotation-item-bank",
       maxIncorrect: 6,
       maxTime: 8,
       numberOfTrials: 300,
-      sequentialStimulus: false
-    }
+      sequentialStimulus: false,
+    },
   },
-  'intro': {
-    description: 'Introduction and practice task',
-    name: 'Introduction',
+  intro: {
+    description: "Introduction and practice task",
+    name: "Introduction",
     variants: {
       corpus: null,
       maxIncorrect: 100,
       maxTime: 100,
       numberOfTrials: 20,
       sequentialStimulus: true,
-      storeItemId: true
-    }
+      storeItemId: true,
+    },
   },
-  'memory-game': {
-    description: 'Memory game assessment task',
-    name: 'Memory Game',
+  "memory-game": {
+    description: "Memory game assessment task",
+    name: "Memory Game",
     variants: {
       corpus: null,
       maxIncorrect: 3,
       maxTime: 15,
       numberOfTrials: 200,
-      sequentialStimulus: true
-    }
+      sequentialStimulus: true,
+    },
   },
-  'hearts-and-flowers': {
-    description: 'Hearts and flowers executive function task',
-    name: 'Hearts and Flowers',
+  "hearts-and-flowers": {
+    description: "Hearts and flowers executive function task",
+    name: "Hearts and Flowers",
     variants: {
       corpus: null,
       maxIncorrect: 3,
       maxTime: 10,
       numberOfTrials: 20,
       sequentialStimulus: true,
-      storeItemId: true
-    }
+      storeItemId: true,
+    },
   },
-  'egma-math': {
-    description: 'EGMA mathematics assessment',
-    name: 'EGMA Math',
+  "egma-math": {
+    description: "EGMA mathematics assessment",
+    name: "EGMA Math",
     variants: {
       corpus: null,
       maxIncorrect: 6,
       maxTime: 15,
       numberOfTrials: 200,
-      sequentialStimulus: false
-    }
+      sequentialStimulus: false,
+    },
   },
-  'trog': {
-    description: 'Test for Reception of Grammar',
-    name: 'TROG',
+  trog: {
+    description: "Test for Reception of Grammar",
+    name: "TROG",
     variants: {
       corpus: null,
       maxIncorrect: 3,
       maxTime: 8,
       numberOfTrials: 20,
-      sequentialStimulus: true
-    }
+      sequentialStimulus: true,
+    },
   },
-  'theory-of-mind': {
-    description: 'Theory of mind assessment task',
-    name: 'Theory of Mind',
+  "theory-of-mind": {
+    description: "Theory of mind assessment task",
+    name: "Theory of Mind",
     variants: {
       corpus: null,
       maxIncorrect: 3,
       maxTime: 10,
       numberOfTrials: 20,
       sequentialStimulus: true,
-      storeItemId: true
-    }
+      storeItemId: true,
+    },
   },
-  'vocab': {
-    description: 'Vocabulary assessment task',
-    name: 'Vocabulary',
+  vocab: {
+    description: "Vocabulary assessment task",
+    name: "Vocabulary",
     variants: {
       corpus: null,
       maxIncorrect: 6,
       maxTime: 15,
       numberOfTrials: 300,
       sequentialStimulus: false,
-      storeItemId: true
-    }
+      storeItemId: true,
+    },
   },
-  'same-different-selection': {
-    description: 'Same different selection task',
-    name: 'Same Different Selection',
+  "same-different-selection": {
+    description: "Same different selection task",
+    name: "Same Different Selection",
     variants: {
       corpus: null,
       maxIncorrect: 3,
       maxTime: 10,
       numberOfTrials: 20,
-      sequentialStimulus: true
-    }
-  }
+      sequentialStimulus: true,
+    },
+  },
 };
 
 // Type 2 tasks - with different variant properties
 const READING_TASK_DEFINITIONS = {
-  'pa': {
-    description: 'Phonological awareness assessment',
-    name: 'Phonological Awareness',
+  pa: {
+    description: "Phonological awareness assessment",
+    name: "Phonological Awareness",
     variants: {
       consent: true,
-      recruitment: 'pilot',
+      recruitment: "pilot",
       storyOption: false,
-      userMode: '3min1Block',
-      timerLength: 180000
-    }
+      userMode: "3min1Block",
+      timerLength: 180000,
+    },
   },
-  'sre': {
-    description: 'Sentence reading efficiency assessment',
-    name: 'Sentence Reading Efficiency',
+  sre: {
+    description: "Sentence reading efficiency assessment",
+    name: "Sentence Reading Efficiency",
     variants: {
       consent: false,
-      recruitment: 'co-pilot',
+      recruitment: "co-pilot",
       storyOption: true,
-      userMode: 'shortRandom',
+      userMode: "shortRandom",
       addNoResponse: false,
-      audioFeedbackOption: 'binary',
+      audioFeedbackOption: "binary",
       numAdaptive: 150,
       numNew: 25,
-      numValidated: 100
-    }
+      numValidated: 100,
+    },
   },
-  'swr': {
-    description: 'Sight word reading assessment',
-    name: 'Sight Word Reading',
+  swr: {
+    description: "Sight word reading assessment",
+    name: "Sight Word Reading",
     variants: {
       consent: true,
-      recruitment: 'pilot',
-      storyOption: 'false',
-      userMode: 'fixed',
+      recruitment: "pilot",
+      storyOption: "false",
+      userMode: "fixed",
       numTestItems: 19,
-      story: null
-    }
-  }
+      story: null,
+    },
+  },
 };
 
 // Special tasks with unique structures
 const SPECIAL_TASK_DEFINITIONS = {
-  'MEFS': {
-    description: 'MEFS assessment task',
-    name: 'MEFS',
+  MEFS: {
+    description: "MEFS assessment task",
+    name: "MEFS",
     variants: {
-      taskURL: 'https://apps.reflectionsciences.com/launch/d38cfed9-f303-4c02-80e5-a10528968033?',
-      variantURL: 'https://apps.reflectionsciences.com/launch/d38cfed9-f303-4c02-80e5-a10528968033?'
-    }
+      taskURL:
+        "https://apps.reflectionsciences.com/launch/d38cfed9-f303-4c02-80e5-a10528968033?",
+      variantURL:
+        "https://apps.reflectionsciences.com/launch/d38cfed9-f303-4c02-80e5-a10528968033?",
+    },
   },
-  'survey': {
-    description: 'Survey task',
-    name: 'Survey',
-    variants: {}
-  }
+  survey: {
+    description: "Survey task",
+    name: "Survey",
+    variants: {},
+  },
 };
 
 // Common variant properties for Type 1 tasks
 const COMMON_TYPE1_VARIANT_PROPS = {
   age: null,
-  corpus: 'default',
+  corpus: "default",
   keyHelpers: true,
-  language: 'en',
+  language: "en",
   numOfPracticeTrials: 2,
   sequentialPractice: true,
   skipInstructions: true,
-  stimulusBlocks: 3
+  stimulusBlocks: 3,
 };
 
 // Common variant properties for Type 2 tasks
 const COMMON_TYPE2_VARIANT_PROPS = {
-  language: 'en',
-  skipInstructions: true
+  language: "en",
+  skipInstructions: true,
 };
 
 async function createTasks(adminApp) {
   const db = adminApp.firestore();
   const createdTasks = [];
-  
+
   console.log("  Creating tasks and variants...");
-  
+
   // Create Type 1 tasks (standard assessment tasks)
   for (const [taskId, taskDef] of Object.entries(TASK_DEFINITIONS)) {
     try {
       console.log(`    Creating task: ${taskId}...`);
-      
+
       // Create task document
       const taskData = {
         description: taskDef.description,
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         name: taskDef.name,
         registered: true,
-        image: ''
+        image: "",
       };
-      
-      const taskRef = db.collection('tasks').doc(taskId);
+
+      const taskRef = db.collection("tasks").doc(taskId);
       await taskRef.set(taskData);
       console.log(`      ✅ Created task document: ${taskId}`);
-      
+
       // Create variant document in subcollection
-      const variantRef = taskRef.collection('variants').doc();
+      const variantRef = taskRef.collection("variants").doc();
       const variantData = {
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-        name: 'en',
+        name: "en",
         registered: true,
         params: {
           ...COMMON_TYPE1_VARIANT_PROPS,
           ...taskDef.variants,
-          taskName: taskId
-        }
+          taskName: taskId,
+        },
       };
-      
+
       await variantRef.set(variantData);
       const variantId = variantRef.id;
       console.log(`      ✅ Created variant: ${variantId}`);
-      
+
       createdTasks.push({
         id: taskId,
         name: taskDef.name,
-        type: 'standard',
-        variantId
+        type: "standard",
+        variantId,
       });
-      
     } catch (error) {
       console.error(`      ❌ Failed to create task ${taskId}:`, error.message);
       throw error;
     }
   }
-  
+
   // Create Type 2 tasks (reading assessment tasks)
   for (const [taskId, taskDef] of Object.entries(READING_TASK_DEFINITIONS)) {
     try {
       console.log(`    Creating reading task: ${taskId}...`);
-      
+
       // Create task document
       const taskData = {
         description: taskDef.description,
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         name: taskDef.name,
         registered: true,
-        image: ''
+        image: "",
       };
-      
-      const taskRef = db.collection('tasks').doc(taskId);
+
+      const taskRef = db.collection("tasks").doc(taskId);
       await taskRef.set(taskData);
       console.log(`      ✅ Created task document: ${taskId}`);
-      
+
       // Create variant document in subcollection
-      const variantRef = taskRef.collection('variants').doc();
+      const variantRef = taskRef.collection("variants").doc();
       const variantData = {
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-        name: 'en',
+        name: "en",
         registered: true,
         params: {
           ...COMMON_TYPE2_VARIANT_PROPS,
-          ...taskDef.variants
-        }
+          ...taskDef.variants,
+        },
       };
-      
+
       await variantRef.set(variantData);
       const variantId = variantRef.id;
       console.log(`      ✅ Created variant: ${variantId}`);
-      
+
       createdTasks.push({
         id: taskId,
         name: taskDef.name,
-        type: 'reading',
-        variantId
+        type: "reading",
+        variantId,
       });
-      
     } catch (error) {
-      console.error(`      ❌ Failed to create reading task ${taskId}:`, error.message);
+      console.error(
+        `      ❌ Failed to create reading task ${taskId}:`,
+        error.message
+      );
       throw error;
     }
   }
-  
+
   // Create Special tasks (MEFS and survey)
   for (const [taskId, taskDef] of Object.entries(SPECIAL_TASK_DEFINITIONS)) {
     try {
       console.log(`    Creating special task: ${taskId}...`);
-      
+
       // Create task document
       const taskData = {
         description: taskDef.description,
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         name: taskDef.name,
         registered: true,
-        image: ''
+        image: "",
       };
 
-      if (taskId === 'MEFS') {
-        taskData.taskURL = 'https://apps.reflectionsciences.com/launch/d38cfed9-f303-4c02-80e5-a10528968033?';
+      if (taskId === "MEFS") {
+        taskData.taskURL =
+          "https://apps.reflectionsciences.com/launch/d38cfed9-f303-4c02-80e5-a10528968033?";
       }
-      
-      const taskRef = db.collection('tasks').doc(taskId);
+
+      const taskRef = db.collection("tasks").doc(taskId);
       await taskRef.set(taskData);
       console.log(`      ✅ Created task document: ${taskId}`);
-      
+
       // Create variant document in subcollection
-      const variantRef = taskRef.collection('variants').doc();
+      const variantRef = taskRef.collection("variants").doc();
       const variantData = {
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
-        name: 'All Languages',
+        name: "All Languages",
         registered: true,
         params: {},
-        ...taskDef.variants
+        ...taskDef.variants,
       };
-      
+
       await variantRef.set(variantData);
       const variantId = variantRef.id;
       console.log(`      ✅ Created variant: ${variantId}`);
-      
+
       createdTasks.push({
         id: taskId,
         name: taskDef.name,
-        type: 'special',
-        variantId
+        type: "special",
+        variantId,
       });
-      
     } catch (error) {
-      console.error(`      ❌ Failed to create special task ${taskId}:`, error.message);
+      console.error(
+        `      ❌ Failed to create special task ${taskId}:`,
+        error.message
+      );
       throw error;
     }
   }
-  
+
   console.log(`  ✅ Created ${createdTasks.length} tasks with variants`);
-  
+
   return createdTasks;
 }
 
-module.exports = { createTasks }; 
+module.exports = { createTasks };

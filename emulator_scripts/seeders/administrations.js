@@ -1,77 +1,78 @@
-const admin = require('firebase-admin');
+const admin = require("firebase-admin");
 
 // Administration templates with different task combinations
 const ADMINISTRATION_TEMPLATES = [
   {
-    templateId: 'reading-assessment-1',
-    name: 'Basic Reading Assessment',
-    publicName: 'Reading Skills Evaluation',
-    taskIds: ['pa', 'sre', 'swr'],
+    templateId: "reading-assessment-1",
+    name: "Basic Reading Assessment",
+    publicName: "Reading Skills Evaluation",
+    taskIds: ["pa", "sre", "swr"],
     sequential: false,
-    tags: ['reading', 'literacy', 'basic'],
+    tags: ["reading", "literacy", "basic"],
     daysToClose: 30,
   },
   {
-    templateId: 'cognitive-assessment-1',
-    name: 'Cognitive Assessment Battery',
-    publicName: 'Thinking Skills Assessment',
-    taskIds: ['matrix-reasoning', 'mental-rotation', 'memory-game'],
+    templateId: "cognitive-assessment-1",
+    name: "Cognitive Assessment Battery",
+    publicName: "Thinking Skills Assessment",
+    taskIds: ["matrix-reasoning", "mental-rotation", "memory-game"],
     sequential: false,
-    tags: ['cognitive', 'reasoning', 'memory'],
+    tags: ["cognitive", "reasoning", "memory"],
     daysToClose: 21,
   },
   {
-    templateId: 'comprehensive-assessment-1',
-    name: 'Comprehensive Academic Assessment',
-    publicName: 'Complete Learning Evaluation',
-    taskIds: ['vocab', 'egma-math', 'trog', 'theory-of-mind'],
+    templateId: "comprehensive-assessment-1",
+    name: "Comprehensive Academic Assessment",
+    publicName: "Complete Learning Evaluation",
+    taskIds: ["vocab", "egma-math", "trog", "theory-of-mind"],
     sequential: false,
-    tags: ['comprehensive', 'academic', 'language'],
+    tags: ["comprehensive", "academic", "language"],
     daysToClose: 45,
   },
   {
-    templateId: 'executive-function-assessment',
-    name: 'Executive Function Assessment',
-    publicName: 'Focus and Control Skills Test',
-    taskIds: ['hearts-and-flowers', 'MEFS', 'same-different-selection'],
+    templateId: "executive-function-assessment",
+    name: "Executive Function Assessment",
+    publicName: "Focus and Control Skills Test",
+    taskIds: ["hearts-and-flowers", "MEFS", "same-different-selection"],
     sequential: false,
-    tags: ['executive-function', 'attention', 'control'],
+    tags: ["executive-function", "attention", "control"],
     daysToClose: 14,
   },
   {
-    templateId: 'mixed-assessment-battery',
-    name: 'Mixed Skills Assessment',
-    publicName: 'General Skills Evaluation',
-    taskIds: ['intro', 'pa', 'matrix-reasoning', 'vocab'],
+    templateId: "mixed-assessment-battery",
+    name: "Mixed Skills Assessment",
+    publicName: "General Skills Evaluation",
+    taskIds: ["intro", "pa", "matrix-reasoning", "vocab"],
     sequential: false,
-    tags: ['mixed', 'general', 'evaluation'],
+    tags: ["mixed", "general", "evaluation"],
     daysToClose: 60,
   },
   {
-    templateId: 'survey-administration',
-    name: 'Background Survey',
-    publicName: 'Background Information Survey',
-    taskIds: ['survey'],
+    templateId: "survey-administration",
+    name: "Background Survey",
+    publicName: "Background Information Survey",
+    taskIds: ["survey"],
     sequential: true,
-    tags: ['survey', 'background', 'information'],
+    tags: ["survey", "background", "information"],
     daysToClose: 90,
-    userTypes: ['student', 'teacher', 'parent'], // For all participant types
+    userTypes: ["student", "teacher", "parent"], // For all participant types
   },
 ];
 
 // Default legal information
 const DEFAULT_LEGAL = {
-  amount: '0',
+  amount: "0",
   assent: null,
-  consent: 'I consent to the terms of the Levante Privacy Policy and Terms of Service.',
-  expectedTime: '30 minutes',
+  consent:
+    "I consent to the terms of the Levante Privacy Policy and Terms of Service.",
+  expectedTime: "30 minutes",
 };
 
 async function createAdministrations(adminApp, createdTasks, users, groups) {
   const db = adminApp.firestore();
   const createdAdministrations = [];
 
-  console.log('  Creating administrations...');
+  console.log("  Creating administrations...");
 
   // Create organization references using the generated IDs (both classes; site has all users)
   const testOrgs = {
@@ -90,18 +91,22 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
 
   // Get participant users (excluding admin users)
   const participantUsers = users.filter((user) =>
-    ['student', 'parent', 'teacher'].includes(user.userType),
+    ["student", "parent", "teacher"].includes(user.userType)
   );
 
   for (const template of ADMINISTRATION_TEMPLATES) {
     try {
       // Generate administration ID
-      const administrationId = db.collection('administrations').doc().id;
+      const administrationId = db.collection("administrations").doc().id;
 
-      console.log(`    Creating administration: ${administrationId} (${template.name})...`);
+      console.log(
+        `    Creating administration: ${administrationId} (${template.name})...`
+      );
 
       const now = new Date();
-      const closeDate = new Date(now.getTime() + template.daysToClose * 24 * 60 * 60 * 1000);
+      const closeDate = new Date(
+        now.getTime() + template.daysToClose * 24 * 60 * 60 * 1000
+      );
 
       // Build assessments array from task IDs.
       const assessments = template.taskIds.map((taskId) => {
@@ -117,7 +122,7 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
           variantName: getVariantNameForTask(taskId),
         };
       });
-      const adminUser = users.find(user => user.userKey === 'admin');
+      const adminUser = users.find((user) => user.userKey === "admin");
 
       // Create administration document
       const administrationData = {
@@ -140,18 +145,30 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
         sequential: template.sequential,
         tags: template.tags,
         testData: false,
-        siteId: testOrgs.districts[0]
+        siteId: testOrgs.districts[0],
       };
 
-      const adminRef = db.collection('administrations').doc(administrationId);
+      const adminRef = db.collection("administrations").doc(administrationId);
       await adminRef.set(administrationData);
-      console.log(`      ✅ Created administration document: ${administrationId}`);
+      console.log(
+        `      ✅ Created administration document: ${administrationId}`
+      );
 
       // Create assignedOrgs subcollection
-      await createAssignedOrgs(adminRef, administrationId, template, administrationData);
+      await createAssignedOrgs(
+        adminRef,
+        administrationId,
+        template,
+        administrationData
+      );
 
       // Create readOrgs subcollection
-      await createReadOrgs(adminRef, administrationId, template, administrationData);
+      await createReadOrgs(
+        adminRef,
+        administrationId,
+        template,
+        administrationData
+      );
 
       // Create stats subcollection
       await createStats(adminRef, template);
@@ -164,7 +181,7 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
         template,
         administrationData,
         participantUsers,
-        taskVariantMap,
+        taskVariantMap
       );
 
       createdAdministrations.push({
@@ -176,20 +193,30 @@ async function createAdministrations(adminApp, createdTasks, users, groups) {
         sequential: template.sequential,
       });
     } catch (error) {
-      console.error(`      ❌ Failed to create administration ${template.templateId}:`, error.message);
+      console.error(
+        `      ❌ Failed to create administration ${template.templateId}:`,
+        error.message
+      );
       throw error;
     }
   }
 
-  console.log(`  ✅ Created ${createdAdministrations.length} administrations with subcollections`);
+  console.log(
+    `  ✅ Created ${createdAdministrations.length} administrations with subcollections`
+  );
   return createdAdministrations;
 }
 
-async function createAssignedOrgs(adminRef, administrationId, template, administrationData) {
+async function createAssignedOrgs(
+  adminRef,
+  administrationId,
+  template,
+  administrationData
+) {
   console.log(`      Creating assignedOrgs subcollection...`);
 
   // Create assigned orgs for each organization type
-  const orgTypes = ['districts', 'schools', 'classes', 'groups'];
+  const orgTypes = ["districts", "schools", "classes", "groups"];
 
   for (const orgType of orgTypes) {
     const orgIds = administrationData[orgType];
@@ -210,7 +237,7 @@ async function createAssignedOrgs(adminRef, administrationId, template, administ
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       };
 
-      const assignedOrgRef = adminRef.collection('assignedOrgs').doc();
+      const assignedOrgRef = adminRef.collection("assignedOrgs").doc();
       await assignedOrgRef.set(assignedOrgData);
     }
   }
@@ -218,11 +245,16 @@ async function createAssignedOrgs(adminRef, administrationId, template, administ
   console.log(`      ✅ Created assignedOrgs subcollection`);
 }
 
-async function createReadOrgs(adminRef, administrationId, template, administrationData) {
+async function createReadOrgs(
+  adminRef,
+  administrationId,
+  template,
+  administrationData
+) {
   console.log(`      Creating readOrgs subcollection...`);
 
   // Create read orgs for each organization type
-  const orgTypes = ['districts', 'schools', 'classes', 'groups'];
+  const orgTypes = ["districts", "schools", "classes", "groups"];
 
   for (const orgType of orgTypes) {
     const orgIds = administrationData[orgType];
@@ -243,7 +275,7 @@ async function createReadOrgs(adminRef, administrationId, template, administrati
         timestamp: admin.firestore.FieldValue.serverTimestamp(),
       };
 
-      const readOrgRef = adminRef.collection('readOrgs').doc();
+      const readOrgRef = adminRef.collection("readOrgs").doc();
       await readOrgRef.set(readOrgData);
     }
   }
@@ -268,7 +300,7 @@ async function createStats(adminRef, template) {
     },
   };
 
-  const statsRef = adminRef.collection('stats').doc('summary');
+  const statsRef = adminRef.collection("stats").doc("summary");
   await statsRef.set(statsData);
 
   console.log(`      ✅ Created stats subcollection`);
@@ -281,7 +313,7 @@ async function createUserAssignments(
   template,
   administrationData,
   participantUsers,
-  taskVariantMap,
+  taskVariantMap
 ) {
   console.log(`      Creating user assignments...`);
 
@@ -301,7 +333,7 @@ async function createUserAssignments(
       return template.userTypes.includes(user.userType);
     } else {
       // If no user types specified, only assign to students (exclude teacher/parent from academic assessments)
-      return user.userType === 'student';
+      return user.userType === "student";
     }
   });
 
@@ -340,26 +372,31 @@ async function createUserAssignments(
           email: user.email,
           grade: null,
           name: {
-            first: user.displayName.split(' ')[0] || '',
+            first: user.displayName.split(" ")[0] || "",
             middle: null,
-            last: user.displayName.split(' ').slice(1).join(' ') || '',
+            last: user.displayName.split(" ").slice(1).join(" ") || "",
           },
           schoolLevel: null,
-          username: user.email.split('@')[0],
+          username: user.email.split("@")[0],
         },
       };
 
       // Create assignment document in user's assignments subcollection
       const assignmentRef = db
-        .collection('users')
+        .collection("users")
         .doc(user.uid)
-        .collection('assignments')
+        .collection("assignments")
         .doc(administrationId);
       await assignmentRef.set(assignmentData);
 
-      console.log(`        ✅ Created assignment for ${user.userKey} (${user.email})`);
+      console.log(
+        `        ✅ Created assignment for ${user.userKey} (${user.email})`
+      );
     } catch (error) {
-      console.error(`        ❌ Failed to create assignment for ${user.email}:`, error.message);
+      console.error(
+        `        ❌ Failed to create assignment for ${user.email}:`,
+        error.message
+      );
       throw error;
     }
   }
@@ -369,12 +406,12 @@ async function createUserAssignments(
 
 function getDefaultParamsForTask(taskId) {
   // Return appropriate default parameters based on task type
-  const readingTasks = ['pa', 'sre', 'swr'];
-  const specialTasks = ['MEFS', 'survey'];
+  const readingTasks = ["pa", "sre", "swr"];
+  const specialTasks = ["MEFS", "survey"];
 
   if (readingTasks.includes(taskId)) {
     return {
-      language: 'en',
+      language: "en",
       skipInstructions: true,
     };
   } else if (specialTasks.includes(taskId)) {
@@ -382,7 +419,7 @@ function getDefaultParamsForTask(taskId) {
   } else {
     // Standard tasks
     return {
-      language: 'en',
+      language: "en",
       skipInstructions: true,
       keyHelpers: true,
       numOfPracticeTrials: 2,
@@ -395,21 +432,21 @@ function getDefaultParamsForTask(taskId) {
 function getVariantNameForTask(taskId) {
   // Return appropriate variant name based on task type
   const taskNames = {
-    pa: 'Phonological Awareness - English',
-    sre: 'Sentence Reading Efficiency - English',
-    swr: 'Sight Word Reading - English',
-    'matrix-reasoning': 'Matrix Reasoning - English',
-    'mental-rotation': 'Mental Rotation - English',
-    intro: 'Introduction - English',
-    'memory-game': 'Memory Game - English',
-    'hearts-and-flowers': 'Hearts and Flowers - English',
-    'egma-math': 'EGMA Math - English',
-    trog: 'TROG - English',
-    'theory-of-mind': 'Theory of Mind - English',
-    vocab: 'Vocabulary - English',
-    'same-different-selection': 'Same Different Selection - English',
-    MEFS: 'MEFS - All Languages',
-    survey: 'Survey - All Languages',
+    pa: "Phonological Awareness - English",
+    sre: "Sentence Reading Efficiency - English",
+    swr: "Sight Word Reading - English",
+    "matrix-reasoning": "Matrix Reasoning - English",
+    "mental-rotation": "Mental Rotation - English",
+    intro: "Introduction - English",
+    "memory-game": "Memory Game - English",
+    "hearts-and-flowers": "Hearts and Flowers - English",
+    "egma-math": "EGMA Math - English",
+    trog: "TROG - English",
+    "theory-of-mind": "Theory of Mind - English",
+    vocab: "Vocabulary - English",
+    "same-different-selection": "Same Different Selection - English",
+    MEFS: "MEFS - All Languages",
+    survey: "Survey - All Languages",
   };
 
   return taskNames[taskId] || `${taskId} - English`;

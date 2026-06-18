@@ -29,13 +29,33 @@
       "updatedAt": "2026-06-16T00:00:00.000Z",
       "liveFrom": "2026-06-16T00:00:00.000Z",
       "liveUntil": null,
-      "generalPrompt":"<p>Before creating your school, we need to know some basic information to help us understand the data we collect. Any responses here will not be released with the general data until they have been deemed non-identifying according to LEVANTE policies.</p><p>There are 12 questions in this form and it should take about 5-10 minutes to complete, but you can save your progress and come back later if needed.</p>",
-      "sectionInfo":[
-        {"sectionId":"studentStats","title":"Students","description":"Provide some information about who attends this school."},
-        {"sectionId":"teacherStats","title":"Teachers","description":"Provide some information abotu teachers at the school."},
-        {"sectionId":"schoolFunding","title":"Funding, Admissions & Affiliations","description":"Provide some information about how the school is funded, how students are selected, and whether it is religiously affiliated."},
-        {"sectionId":"instructionStats","title":"Instruction","description":"These questions are about the instruction at this school."},
-        {"sectionId":"schoolExperience","title":"School Experience","description":"Finally, provide some information about languages spoken at the shchool and the length of the school day."}
+      "generalPrompt": "<p>Before creating your school, we need to know some basic information to help us understand the data we collect. Any responses here will not be released with the general data until they have been deemed non-identifying according to LEVANTE policies.</p><p>There are 12 questions in this form and it should take about 5-10 minutes to complete, but you can save your progress and come back later if needed.</p>",
+      "sectionInfo": [
+        {
+          "sectionId": "studentStats",
+          "title": "Students",
+          "description": "Provide some information about who attends this school."
+        },
+        {
+          "sectionId": "teacherStats",
+          "title": "Teachers",
+          "description": "Provide some information abotu teachers at the school."
+        },
+        {
+          "sectionId": "schoolFunding",
+          "title": "Funding, Admissions & Affiliations",
+          "description": "Provide some information about how the school is funded, how students are selected, and whether it is religiously affiliated."
+        },
+        {
+          "sectionId": "instructionStats",
+          "title": "Instruction",
+          "description": "These questions are about the instruction at this school."
+        },
+        {
+          "sectionId": "schoolExperience",
+          "title": "School Experience",
+          "description": "Finally, provide some information about languages spoken at the shchool and the length of the school day."
+        }
       ],
       "fullFields": [
         {
