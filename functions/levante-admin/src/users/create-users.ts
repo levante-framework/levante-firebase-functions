@@ -553,7 +553,6 @@ export const createUsers = onCall(async (req): Promise<CreateUsersResult> => {
   if (!uid)
     throw new HttpsError("unauthenticated", "User must be authenticated");
 
-  // TODO: CreateUsersParamsSchema should enforce max users (1000?)
   const parsed = CreateUsersParamsSchema.safeParse(req.data);
   if (!parsed.success) {
     throw new HttpsError("invalid-argument", "Invalid input", {
