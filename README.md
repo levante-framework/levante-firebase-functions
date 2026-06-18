@@ -1,13 +1,13 @@
 # Levante Firebase Functions
 
 This repository contains a collection of Firebase functions for the Levante platform. The functions are organized into separate directories:
-                        |
+|
 
-| `levante-admin`      | Contains Firebase functions for the hs-levante-admin and hs-levante-admin-dev projects                           |
+| `levante-admin` | Contains Firebase functions for the hs-levante-admin and hs-levante-admin-dev projects |
 
-| `levante-assessment` | Contains Firebase functions for hs-levante-assessment and hs-levante-assessment-dev projects. (To be sunset.)                    |
+| `levante-assessment` | Contains Firebase functions for hs-levante-assessment and hs-levante-assessment-dev projects. (To be sunset.) |
 
-| `local`         | Contains "local" functions for one off use cases (ex. transfering user data to another account).
+| `local` | Contains "local" functions for one off use cases (ex. transfering user data to another account).
 
 ## Getting Started
 
@@ -49,37 +49,44 @@ NOTE: Current version numbers above are LTS versions at the time of writing.
 # Start emulators with data persistence
 npm run dev
 
-# Fill the emulator environment with seed data
+# Fill the emulator environment with seed data (functions-driven)
 npm run emulator:seed
 ```
 
-
 ### Database Seeding Scripts
 
-The emulator includes a comprehensive seeding system that creates test users, groups, and data relationships:
+The default emulator seed is functions-driven. It copies registered tasks/variants from the configured source project, then creates dashboard-visible users, orgs, administrations, and assignments through Firebase callable functions.
 
 #### Test Users Created
-| User Type | Email | Password | Description |
-|-----------|-------|----------|-------------|
-| Super Admin | superadmin@levante.test | super123 | Super Admin user |
-| Admin | admin@levante.test | admin123 | Admin user |
-| Teacher | teacher@levante.test | teach123 | Participant user (teacher) |
-| Student | student@levante.test | student123 | Participant user (student) |
-| Parent | parent@levante.test | parent123 | Participant user (parent) |
+
+| User Type          | Email                   | Password                     | Description                                |
+| ------------------ | ----------------------- | ---------------------------- | ------------------------------------------ |
+| Super Admin        | superadmin@levante.test | super123                     | Super Admin user                           |
+| Admin              | admin@levante.test      | Set by `createAdministrator` | Site admin fixture user                    |
+| Site Admin         | siteadmin@levante.test  | Set by `createAdministrator` | Site admin fixture user                    |
+| Research Assistant | ra@levante.test         | Set by `createAdministrator` | Research assistant fixture user            |
+| Participants       | Generated seed users    | N/A                          | Teacher, parent, and generated child users |
 
 #### Groups Created
-- **District**: "Test District" (ID: test-district-1)
-- **School**: "Test Elementary School" (ID: test-school-1)  
-- **Class**: "3rd Grade - Room 101" (ID: test-class-1)
-- **Group**: "Reading Intervention Cohort" (ID: test-group-1)
+
+- **District/Site**: "Function Seed District"
+- **School**: "Function Seed Elementary School"
+- **Classes**: "3rd Grade - Room 101", "4th Grade - Room 102"
+- **Group**: "Reading Intervention Cohort"
 
 #### Available Commands
 
 ```bash
 # Database Management
 npm run emulator:clear           # Clear all data from emulator
-npm run emulator:seed            # Seed database with test data
+npm run emulator:seed            # Seed via Firebase callable functions
+npm run emulator:seed:functions  # Explicit functions-driven seed (same as emulator:seed)
+npm run emulator:seed:tasks      # Copy registered tasks/variants from source project
+npm run emulator:seed:ui         # Seed through dashboard UI automation (Cypress)
+npm run emulator:seed:legacy     # Legacy direct Auth/Firestore seed
 npm run emulator:reset           # Clear + seed (fresh start)
+npm run emulator:start:dashboard # Start emulators + dashboard with seeded data
+npm run emulator:test:admin-login # Smoke-test seeded super-admin login
 
 # Utility Commands
 npm run emulator:export          # Export current emulator data for backup
@@ -94,21 +101,42 @@ rm -rf emulator_data && npm run dev:clean
 ### Typical Development Workflow
 
 1. **Start emulators**:
+
    ```bash
    npm run dev
    ```
 
 2. **Set up test data**:
+
    ```bash
-   npm run emulator:setup
+   npm run emulator:seed
    ```
 
 3. **Develop and test** your application with the created users
 
 4. **Reset data when needed**:
    ```bash
-   npm run emulator:setup  # Fresh start
+   npm run emulator:reset  # Fresh start
    ```
+
+Task/variant bootstrap for functions-driven seeding copies only `registered == true` tasks and variants from `hs-levante-admin-dev` by default. Override with:
+
+```bash
+SEED_TASK_SOURCE_PROJECT=hs-levante-admin-prod npm run emulator:seed
+```
+
+The functions-driven seeder also supports profiles for larger or more targeted local datasets:
+
+```bash
+SEED_PROFILE=large npm run emulator:seed              # Same shape, 200 generated students
+SEED_PROFILE=no-administrations npm run emulator:seed # Users/orgs only
+SEED_PROFILE=tasks-only npm run emulator:seed         # Registered tasks/variants only
+SEED_STUDENT_COUNT=50 npm run emulator:seed           # Override generated student count
+SEED_INCLUDE_OPTIONAL_ADMINISTRATION_TEMPLATES=true npm run emulator:seed # Try optional templates
+SEED_VALIDATE=false npm run emulator:seed             # Skip final validation checks
+```
+
+Optional administration templates reference `survey`, which is skipped by default because the `-dev` source data currently does not provide a registered variant for it.
 
 ### User Claims & Permissions
 
@@ -117,7 +145,6 @@ rm -rf emulator_data && npm run dev:clean
 - **Participants** (Teacher/Student/Parent): No admin claims, associated with groups via user document associations
 
 All participant users are automatically linked to the test group (cohort) and groups according to their user type.
-
 
 ## Deployment
 
@@ -134,7 +161,6 @@ Levante functions are deployed automatically when merged to the `main` branch. I
    ```
 
 3. Deploy the functions
-
 
    ~To deploy only certain functions, first select either the dev or prod environment. For example, to select the dev environment, use
 
@@ -165,7 +191,6 @@ Levante functions are deployed automatically when merged to the `main` branch. I
    npm run deploy:prod  # For deployment to the prod environment
    ```
 
-
 ## License
 
-This project is a derivative of ROAR's original version, which is licensed under the [Stanford Academic Software License for ROAR](LICENSE). 
+This project is a derivative of ROAR's original version, which is licensed under the [Stanford Academic Software License for ROAR](LICENSE).

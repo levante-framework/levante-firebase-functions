@@ -1,0 +1,347 @@
+{
+  "collection": "formDefinitions",
+  "documentId": "siteInformation",
+  "definition": {
+    "currentVersionId": "v1",
+    "formDescription": "Site information survey for researchers characterizing a LEVANTE data collection site.",
+    "fieldsDescription": {
+      "sampleApproach": "Description of site sampling approach.",
+      "sampleApproachOther": "If you selected \"Other,\" please explain.",
+      "siteRecruitment": "Description of site recruitment approach.",
+      "adminApproach": "Information regarding where data collection/task administration took place.",
+      "adminApproachOther": "Where data collection/task administration took place, other than school, home, or laboratory.",
+      "testConditions": "Description of the testing conditions that participants experienced at this site.",
+      "equipmentType": "Kind of equipment used for data collection/task administration.",
+      "equipmentDevices": "Specific devices used for data collection/task administration.",
+      "siteGeoArea": "General geographic area of the site.",
+      "siteGeoType": "Description of the geographic area's urbanicity.",
+      "sitePopulationSize": "Approximate population size.",
+      "siteRaceEthnicity": "General description of the population's racial/ethnic composition.",
+      "siteSES": "General description of the population's socioeconomic status.",
+      "siteLifestyle": "General description of the population's living styles, including household style and composition.",
+      "siteTech": "General description of the exposure and prevalence of technology among children and caregivers, especially smartphones and other touchscreen devices",
+      "siteLanguages": "Commonly spoken languages in the targeted geographic area.",
+      "siteSubsistence": "Subsistence styles of the population.",
+      "schoolingAgeStart": "Age at which formal school attendance typically starts.",
+      "schoolingAgeEnd": "Age at which formal school attendance typically ends.",
+      "schoolingProgression": "Description of the typical progression of schooling at the site.",
+      "schoolingTeacherQuals": "Description of teacher qualifications",
+      "anythingElse": "Additional information regarding site's sampling, recruitment, population, or administration?"
+    }
+  },
+  "versions": {
+    "v1": {
+      "registered": true,
+      "versionNumber": 1,
+      "createdAt": "2026-06-16T00:00:00.000Z",
+      "updatedAt": "2026-06-16T00:00:00.000Z",
+      "liveFrom": "2026-06-16T00:00:00.000Z",
+      "liveUntil": null,
+      "generalPrompt":"<p>This form collects information, including open-ended text responses, to characterize site(s) in detail. The form contains 22 questions and should take about 10-15 minutes to complete, but you can save your progress and come back later if needed.</p><p>Where it meets the conditions of non-identifiability in our policies, text you provide may be used to describe this site or it's characteristics in our data releases and scientific publications. However, note that this text will not be released with the general data until it has been anonymized according to LEVANTE policies.</p><p>For open text repsonses, please describe the site accurately in full sentences. For examples, click the '?' icon next to a question.</p>",
+      "sectionInfo":[
+        {"sectionId":"sampleRecruit","title":"Sampling & Recruitment","description":"Provide some information about the sampling and recruitment methods in your site."},
+        {"sectionId":"testingInfo","title":"Testing Locations & Devices","description":"Describe testing conditions and equipment used for data collection"},
+        {"sectionId":"locationInfo","title":"Site Area","description":"Your responses to the following questions will help the research community understand the population(s) studied at this site."},
+        {"sectionId":"demographicInfo","title":"Demographic Information","description":"This section asks for some information about the population(s) studied at this site."},
+        {"sectionId":"lifestyleInfo","title":"Lifestyle Information","description":"This section asks for some information about the lifestyle of the population(s) studied at this site."},
+        {"sectionId":"languageEducationInfo","title":"Language & Education","description":"This section asks for some information about schooling and language use in population(s) studied at this site. Your responses to the following questions will help the research community understand the education system at this site."},
+        {"sectionId":"anythingElse","title":"Anything Else?","description":"Is there anything else you would like us to know about your site's sampling, recruitment, population, or administration?"}
+      ],
+      "fullFields": [
+        {
+          "itemId": "site_02",
+          "variableName": "sampleApproach",
+          "kind": "multi-select",
+          "required": true,
+          "questionText": "What was this site's sampling approach?",
+          "sectionId": "sampleRecruit",
+          "options": [
+            {
+              "value": "representative",
+              "label": "Representative"
+            },
+            {
+              "value": "convenience",
+              "label": "Convenience"
+            },
+            {
+              "value": "school-based",
+              "label": "School-Based"
+            },
+            {
+              "value": "other",
+              "label": "Other"
+            }
+          ]
+        },
+        {
+          "itemId": "site_02a",
+          "variableName": "sampleApproachOther",
+          "kind": "text",
+          "required": true,
+          "sectionId": "sampleRecruit",
+          "questionText": "If you selected \"Other,\" please explain.",
+          "displayLogic": {
+            "field": "sampleApproach",
+            "includes": "other"
+          }
+        },
+        {
+          "itemId": "site_03",
+          "variableName": "siteRecruitment",
+          "kind": "text",
+          "required": true,
+          "sectionId": "sampleRecruit",
+          "questionText": "How were participants recruited?",
+          "infoExample": "For example, <ul><li>Data were collected using family-based remote assessment. Families were recruited through an existing database of residents who were first contacted by telephone to invite participation.</li><li>Our team conducted school-based data collection at four schools, selected for convenience from schools that had participated in previous projects with the university.</li></ul>"
+        },
+        {
+          "itemId": "site_04",
+          "variableName": "adminApproach",
+          "kind": "multi-select",
+          "required": true,
+          "sectionId": "sampleRecruit",
+          "questionText": "Did this site collect data at schools, at home, or in the lab? Select all that apply.",
+          "options": [
+            {
+              "value": "school",
+              "label": "School"
+            },
+            {
+              "value": "home",
+              "label": "Home"
+            },
+            {
+              "value": "lab",
+              "label": "Lab"
+            },
+            {
+              "value": "other",
+              "label": "Other"
+            }
+          ]
+        },
+        {
+          "itemId": "site_04a",
+          "variableName": "adminApproachOther",
+          "kind": "text",
+          "required": true, 
+          "sectionId": "sampleRecruit",
+          "questionText": "If you selected \"Other,\" please explain.",
+          "displayLogic": {
+            "field": "adminApproach",
+            "includes": "other"
+          }
+        },
+        {
+          "itemId": "site_05",
+          "variableName": "testConditions",
+          "kind": "text",
+          "required": true,
+          "sectionId": "testingInfo",
+          "questionText": "Describe the testing conditions that participants experienced at this site.",
+          "infoExample": "For example, <ul><li>The research team oversaw data collection using a group testing format on tablets provided by the team, with larger groups for older children and smaller groups for younger children.</li><li>Families who agreed to partake received login instructions to complete the assigned LEVANTE tasks at home using their own computer or tablet.</li></ul>"
+        },
+        {
+          "itemId": "site_06",
+          "variableName": "equipmentType",
+          "kind": "multi-select",
+          "required": true,
+          "sectionId": "testingInfo",
+          "questionText": "What types of equipment were used to administer tasks at this site?",
+          "options": [
+            {
+              "value": "tablet",
+              "label": "Tablet"
+            },
+            {
+              "value": "computer",
+              "label": "Computer (laptop or desktop)"
+            }
+          ]
+        },
+        {
+          "itemId": "site_07",
+          "variableName": "equipmentDevices",
+          "kind": "text",
+          "required": true,
+          "sectionId": "testingInfo",
+          "questionText": "What device(s) were used for data collection? If possible, please state the make and model."
+        },
+        {
+          "itemId": "site_08",
+          "variableName": "siteGeoArea",
+          "kind": "text",
+          "required": true,
+          "sectionId":"locationInfo",
+          "questionText": "For this site, what geographic area(s) were participants recruited from?"
+        },
+        {
+          "itemId": "site_09",
+          "variableName": "siteGeoType",
+          "kind": "text",
+          "required": true,
+          "sectionId":"locationInfo",
+          "questionText": "Describe this area in terms of its urbanicity. Is the area urban or rural? If it is a city, is it considered to be small, mid-sized, or large? (e.g., \"Participants were drawn from Leipzig, a medium-sized urban center.\""
+        },
+        {
+          "itemId": "site_10",
+          "variableName": "sitePopulationSize",
+          "kind": "text",
+          "required": true,
+          "sectionId":"locationInfo",
+          "questionText": "What is the approximate population size of the geographic area that participants were recruited from?"
+        },
+        {
+          "itemId": "site_11",
+          "variableName": "siteRaceEthnicity",
+          "kind": "text",
+          "required": true,
+          "sectionId":"demographicInfo",
+          "questionText": "Provide a general description of the population's racial/ethnic composition.",
+          "infoExample": "For example, \"Leipzig is culturally diverse, with around 17% of the population having a migration background (primarily from Syria, Ukraine, and the Russian Federation).\""
+        },
+        {
+          "itemId": "site_12",
+          "variableName": "siteSES",
+          "kind": "text",
+          "required": true,
+          "sectionId":"demographicInfo",
+          "questionText": "Provide a general description of the population's socioeconomic status. Include information about resident's education status, income, or other indicators of socioeconomic status when available.",
+          "infoExample": "For example, \"According to recent census estimates, London residents have a mean education level of some postsecondary education, and the median household income is approximately $80,000 CAD.\""
+        },
+        {
+          "itemId": "site_13",
+          "variableName": "siteLifestyle",
+          "kind": "text",
+          "required": true,
+          "sectionId":"demographicInfo",
+          "questionText": "Provide a general description of the population's living styles, including household style and composition. (e.g., \"The majority of households live in apartments, and multi-generational housing is common.\")"
+        },
+        {
+          "itemId": "site_16",
+          "variableName": "siteSubsistence",
+          "kind": "multi-select",
+          "required": true,
+          "sectionId":"lifestyleInfo",
+          "questionText": "What are the main subsistence style(s) (means of satisfying food and survival needs) of this population?",
+          "options": [
+            {
+              "value": "foraging",
+              "label": "Foraging"
+            },
+            {
+              "value": "horticultural",
+              "label": "Horticultural"
+            },
+            {
+              "value": "pastoral",
+              "label": "Pastoral"
+            },
+            {
+              "value": "agricultural",
+              "label": "Agricultural"
+            },
+            {
+              "value": "industrial",
+              "label": "Industrial food production"
+            }
+          ]
+        },
+        {
+          "itemId": "site_14",
+          "variableName": "siteTech",
+          "kind": "text",
+          "required": true,
+          "sectionId":"lifestyleInfo",
+          "questionText": "Provide a general description of the exposure and prevalence of technology among children and caregivers, especially smartphones and other touchscreen devices.",
+          "infoExample": "For example, \"Technology prevalence, including touchscreens and mobile phones, is high. Most caregivers have a personal device and/or tablet, as do about a third of the children in our study's age range.\""
+        },
+        {
+          "itemId": "site_15",
+          "variableName": "siteLanguages",
+          "kind": "text",
+          "required": true,
+          "sectionId":"languageEducationInfo",
+          "questionText": "What are most commonly spoken languages in this population? Please include any languages spoken by >5% of the population in your targeted geographic area."
+        },
+
+        {
+          "itemId": "site_17",
+          "variableName": "schoolingAgeStart",
+          "kind": "number",
+          "required": true,
+          "sectionId":"languageEducationInfo",
+          "questionText": "At this site, at what age does formal school attendance typically start?"
+        },
+        {
+          "itemId": "site_18",
+          "variableName": "schoolingAgeEnd",
+          "kind": "number",
+          "required": true,
+          "sectionId":"languageEducationInfo",
+          "questionText": "At this site, at what age does formal school attendance typically end?"
+        },
+        {
+          "itemId": "site_19",
+          "variableName": "schoolingProgression",
+          "kind": "text",
+          "required": true,
+          "sectionId":"languageEducationInfo",
+          "questionText": "Please describe a typical progression of schoooling at this site. At what ages do students move between schools (for example, from primary to middle or secondary school)? How many years do they spend at each stage?",
+          "infoExample": "For example, \"Children typically attend elementary school from kindergarten through grade 5 or 6, beginning at age 5 and lasting about 6–7 years. Students then move to middle school or junior high school for grades 6–8 or 7–8, usually from ages 11–13, lasting 2–3 years, before progressing to high school, which lasts 4 years.\""
+        },
+        {
+          "itemId": "site_20",
+          "variableName": "schoolingTeacherQuals",
+          "kind": "single-select",
+          "required": true,
+          "sectionId":"languageEducationInfo",
+          "questionText": "What minimum qualifications are typically required for teachers at your site?",
+          "options": [
+            {
+              "value": "less_than_undergrad",
+              "label": "Less than an undergraduate degree"
+            },
+            {
+              "value": "undergrad_any",
+              "label": "Undergraduate degree of any kind"
+            },
+            {
+              "value": "undergrad_ed",
+              "label": "Undergraduate degree in education or with an education credential"
+            },
+            {
+              "value": "postgrad_any",
+              "label": "Postgraduate degree of any kind"
+            },
+            {
+              "value": "postgrad_ed",
+              "label": "Postgraduate degree in education or with an education credential"
+            }
+          ]
+        },
+        {
+          "itemId": "site_21",
+          "variableName": "anythingElse",
+          "kind": "text",
+          "required": true,
+          "sectionId":"anythingElse",
+          "questionText": "Is there anything else you would like us to know about your site's sampling, recruitment, population, or administration?"
+        }
+      ]
+    }
+  },
+  "_meta": {
+    "sourceCsv": "Site Survey - Sheet1.csv",
+    "generatedAt": "2026-06-16T12:32:23.039Z",
+    "skippedRows": [],
+    "schemaGaps": [],
+    "mappingNotes": [
+      "site_06: CSV response_options uses \"table\"; seed uses \"tablet\" to match the Tablet label"
+    ],
+    "dashboardProvidedResponseFields": [
+      "siteId"
+    ]
+  }
+}
