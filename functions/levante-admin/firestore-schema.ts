@@ -163,6 +163,151 @@ export interface School {
   name: string;
 }
 
+// --- Org information forms (`formDefinitions` collection and response subcollections) ---
+
+/**
+ * Document in the `siteInformation` subcollection of `districts`.
+ * Optional subcollection: a district document may or may not have siteInformation.
+ * Allowed values for select fields are sourced from the runtime form definition,
+ * so they are typed as strings here rather than hardcoded literal unions.
+ */
+export interface SiteInformation {
+  siteId: string;
+  /**
+   * Document ID of the form definition version this response was collected against
+   * (`formDefinitions/siteInformation/versions/{versionId}`).
+   */
+  formVersion: string;
+  sampleApproach: string[];
+  /** Only populated when `sampleApproach` includes `"other"`. */
+  sampleApproachOther?: string;
+  siteRecruitment: string;
+  adminApproach: string[];
+  /** Only populated when `adminApproach` includes `"other"`. */
+  adminApproachOther?: string;
+  testConditions: string;
+  equipmentType: string[];
+  equipmentDevices: string;
+  siteGeoArea: string;
+  siteGeoType: string;
+  sitePopulationSize: string;
+  siteRaceEthnicity: string;
+  siteSES: string;
+  siteLifestyle: string;
+  siteTech: string;
+  siteLanguages: string;
+  siteSubsistence: string[];
+  schoolingAgeStart: number;
+  schoolingAgeEnd: number;
+  schoolingProgression: string;
+  schoolingTeacherQuals: string;
+  anythingElse?: string;
+}
+
+/**
+ * Document in the `schoolInformation` subcollection of `schools`.
+ * Optional subcollection: a school document may or may not have schoolInformation.
+ * Allowed values for select fields are sourced from the runtime form definition,
+ * so they are typed as strings here rather than hardcoded literal unions.
+ */
+export interface SchoolInformation {
+  siteId: string;
+  siteName: string;
+  schoolId: string;
+  schoolPseudonym: string;
+  /**
+   * Document ID of the form definition version this response was collected against
+   * (`formDefinitions/schoolInformation/versions/{versionId}`).
+   */
+  formVersion: string;
+  numStudents: string;
+  studentAgeYoungest: number;
+  studentAgeOldest: number;
+  numTeachers: string;
+  studentsPerTeacher: number;
+  avgClassSize: string;
+  schoolFunding: string;
+  schoolReligious: string;
+  schoolTuition: string;
+  schoolSelectiveness: string[];
+  /** Only populated when `schoolSelectiveness` includes `"other"`. */
+  schoolSelectivenessOther?: string;
+  instructionLanguages: string;
+  schoolDayLength: number;
+  teacherQuals: string;
+}
+
+/** Response field keys shared across org-information forms (site and school). */
+export type InformationFieldKey =
+  | keyof SiteInformation
+  | keyof SchoolInformation;
+
+/** Section metadata within a form definition version. */
+export interface FormSectionInfo {
+  sectionId: string;
+  title: string;
+  description: string;
+}
+
+/**
+ * Single field within an org-information form version. Describes how to render and
+ * validate one question. `variableName` matches a `SiteInformation` or
+ * `SchoolInformation` response property for that form.
+ */
+export interface FullInformationFormField {
+  /** Stable spreadsheet id, e.g. `"site_02"`. */
+  itemId: string;
+  variableName: InformationFieldKey;
+  kind: "text" | "number" | "single-select" | "multi-select";
+  required: boolean;
+  sectionId: string;
+  questionText: string;
+  /** Value/label pairs for select fields; omitted for text/number fields. */
+  options?: { value: string; label: string }[];
+  /**
+   * Conditional visibility: only render/collect this field when another field's
+   * value satisfies the rule (e.g. show `sampleApproachOther` when
+   * `sampleApproach` includes `"other"`).
+   */
+  displayLogic?: { field: InformationFieldKey; includes: string };
+  infoExample?: string;
+  notes?: string;
+}
+
+/**
+ * Document in the top-level `formDefinitions` collection.
+ * Document ID is the form identifier (e.g. `"siteInformation"`, `"schoolInformation"`).
+ * Form-specific field definitions live in the `versions` subcollection.
+ */
+export interface FormDefinition {
+  currentVersionId: string;
+  formDescription: string;
+  /**
+   * Per-response-field descriptions; keys are `SiteInformation` or `SchoolInformation`
+   * property names for this form.
+   */
+  fieldsDescription: Record<string, string>;
+}
+
+/**
+ * Document in the `versions` subcollection of `formDefinitions`.
+ * Immutable snapshot of a published definition
+ * (`formDefinitions/{formId}/versions/{versionId}`).
+ */
+export interface FormDefinitionVersion {
+  registered: boolean;
+  versionNumber: number;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  /** Null if/when this version is awaiting registration. */
+  liveFrom: Timestamp | null;
+  /** Null while this is the current live version. */
+  liveUntil: Timestamp | null;
+  generalPrompt?: string;
+  sectionInfo: FormSectionInfo[];
+  fullFields: FullInformationFormField[];
+}
+
 // Structure for Claims within UserClaims
 // Manages custom claims for users, facilitating access control based on administrative roles or organizational (Group) affiliations.
 export interface Claims {

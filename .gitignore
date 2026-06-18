@@ -66,6 +66,10 @@ node_modules/
 # Yarn Integrity file
 .yarn-integrity
 
+# CSV data files (survey/source spreadsheets, script inputs/outputs)
+*.csv
+**/*.csv
+
 # dotenv environment variables file
 .env
 .env.*

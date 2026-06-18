@@ -1,0 +1,349 @@
+{
+  "collection": "formDefinitions",
+  "documentId": "schoolInformation",
+  "definition": {
+    "currentVersionId": "v1",
+    "formDescription": "School information survey for researchers describing schools within a LEVANTE site.",
+    "fieldsDescription": {
+      "numStudents": "Number of students in the school.",
+      "studentAgeYoungest": "Typical age of the youngest students in the school.",
+      "studentAgeOldest": "Typical age of the oldest students in the school.",
+      "numTeachers": "Number of teachers in the school.",
+      "studentsPerTeacher": "Number of students per teacher in the school.",
+      "avgClassSize": "Average class size at the school",
+      "schoolFunding": "Funding source for the school.",
+      "schoolReligious": "Whether the school has a religious affiliation.",
+      "schoolTuition": "Whether families have to pay tuition for their child to attend the school.",
+      "schoolSelectiveness": "Admission or selection process for the school.",
+      "schoolSelectivenessOther": "Optional - free text for describing non-standard admission or selection processes.",
+      "instructionLanguages": "List of languages spoken at the school.",
+      "schoolDayLength": "Aprroximate length of the school day in hours",
+      "teacherQuals": "Minimum teaching qualifications."
+    }
+  },
+  "versions": {
+    "v1": {
+      "registered": true,
+      "versionNumber": 1,
+      "createdAt": "2026-06-16T00:00:00.000Z",
+      "updatedAt": "2026-06-16T00:00:00.000Z",
+      "liveFrom": "2026-06-16T00:00:00.000Z",
+      "liveUntil": null,
+      "generalPrompt":"<p>Before creating your school, we need to know some basic information to help us understand the data we collect. Any responses here will not be released with the general data until they have been deemed non-identifying according to LEVANTE policies.</p><p>There are 12 questions in this form and it should take about 5-10 minutes to complete, but you can save your progress and come back later if needed.</p>",
+      "sectionInfo":[
+        {"sectionId":"studentStats","title":"Students","description":"Provide some information about who attends this school."},
+        {"sectionId":"teacherStats","title":"Teachers","description":"Provide some information abotu teachers at the school."},
+        {"sectionId":"schoolFunding","title":"Funding, Admissions & Affiliations","description":"Provide some information about how the school is funded, how students are selected, and whether it is religiously affiliated."},
+        {"sectionId":"instructionStats","title":"Instruction","description":"These questions are about the instruction at this school."},
+        {"sectionId":"schoolExperience","title":"School Experience","description":"Finally, provide some information about languages spoken at the shchool and the length of the school day."}
+      ],
+      "fullFields": [
+        {
+          "itemId": "school_01",
+          "variableName": "numStudents",
+          "kind": "single-select",
+          "required": true,
+          "sectionId": "studentStats",
+          "questionText": "Across all grades, how many students attend this school?",
+          "options": [
+            {
+              "value": "less_than_20",
+              "label": "Fewer than 20 students"
+            },
+            {
+              "value": "20_to_49",
+              "label": "20-49 students"
+            },
+            {
+              "value": "50_to_149",
+              "label": "50-149 students"
+            },
+            {
+              "value": "150_to_499",
+              "label": "150-499 students"
+            },
+            {
+              "value": "500_to_999",
+              "label": "500-999 students"
+            },
+            {
+              "value": "1000_to_1999",
+              "label": "1,000–1,999 students"
+            },
+            {
+              "value": "2000_or_more",
+              "label": "2,000 or more students"
+            }
+          ]
+        },
+        {
+          "itemId": "school_02_youngest",
+          "variableName": "studentAgeYoungest",
+          "kind": "number",
+          "required": true,
+          "sectionId": "studentStats",
+          "questionText": "What is the typical age of the youngest students at this school?"
+        },
+        {
+          "itemId": "school_02_oldest",
+          "variableName": "studentAgeOldest",
+          "kind": "number",
+          "required": true,
+          "sectionId": "studentStats",
+          "questionText": "What is the typical age of the oldest students at this school?"
+        },
+        {
+          "itemId": "school_03",
+          "variableName": "numTeachers",
+          "kind": "single-select",
+          "required": true,
+          "sectionId": "teacherStats",
+          "questionText": "How many teachers work at this school?",
+          "options": [
+            {
+              "value": "less_than_5",
+              "label": "Fewer than 5 teachers"
+            },
+            {
+              "value": "5_to_9",
+              "label": "5-9 teachers"
+            },
+            {
+              "value": "10_to_24",
+              "label": "10-24 teachers"
+            },
+            {
+              "value": "25_to_49",
+              "label": "25-49 teachers"
+            },
+            {
+              "value": "50_to_99",
+              "label": "50-99 teachers"
+            },
+            {
+              "value": "100_to_149",
+              "label": "100-149 teachers"
+            },
+            {
+              "value": "150_or_more",
+              "label": "150 or more teachers"
+            }
+          ]
+        },
+        {
+          "itemId": "school_04",
+          "variableName": "studentsPerTeacher",
+          "kind": "number",
+          "required": true,
+          "sectionId": "teacherStats",
+          "questionText": "What is the teacher to student ratio at this school? Provide the number of students per teacher.",
+          "infoExample": "For example, if there are roughly 30 students for every teacher, enter '30'."
+        },
+        {
+          "itemId": "school_05",
+          "variableName": "avgClassSize",
+          "kind": "single-select",
+          "required": true,
+          "sectionId": "teacherStats",
+          "questionText": "What is the average number of students per class at this school?",
+          "options": [
+            {
+              "value": "less_than_10",
+              "label": "Fewer than 10 students"
+            },
+            {
+              "value": "10_to_19",
+              "label": "10 to 19 students"
+            },
+            {
+              "value": "20_to_29",
+              "label": "20 to 29 students"
+            },
+            {
+              "value": "30_to_39",
+              "label": "30 to 39 students"
+            },
+            {
+              "value": "40_to_49",
+              "label": "40 to 49 students"
+            },
+            {
+              "value": "50_to_99",
+              "label": "50 to 99 students"
+            },
+            {
+              "value": "100_or_more",
+              "label": "100 or more students"
+            }
+          ]
+        },
+        {
+          "itemId": "school_12",
+          "variableName": "teacherQuals",
+          "kind": "single-select",
+          "required": true,
+          "sectionId": "teacherStats",
+          "questionText": "What minimum qualifications are required for teachers at this school?",
+          "options": [
+            {
+              "value": "less_than_undergrad",
+              "label": "Less than an undergraduate degree"
+            },
+            {
+              "value": "undergrad_any",
+              "label": "An undergraduate degree of any kind"
+            },
+            {
+              "value": "undergrad_ed",
+              "label": "An undergraduate degree in education or with an education credential"
+            },
+            {
+              "value": "postgrad_any",
+              "label": "A postgraduate degree of any kind"
+            },
+            {
+              "value": "postgrad_ed",
+              "label": "A postgraduate degree in education or with an education credential"
+            }
+          ]
+        },
+        {
+          "itemId": "school_06",
+          "variableName": "schoolFunding",
+          "kind": "single-select",
+          "required": true,
+          "sectionId": "schoolFunding",
+          "questionText": "How is this school funded?",
+          "options": [
+            {
+              "value": "government",
+              "label": "Government funded"
+            },
+            {
+              "value": "private",
+              "label": "Privately funded"
+            },
+            {
+              "value": "other",
+              "label": "Other"
+            }
+          ]
+        },
+        {
+          "itemId": "school_07",
+          "variableName": "schoolReligious",
+          "kind": "single-select",
+          "required": true,
+          "sectionId": "schoolFunding",
+          "questionText": "Does this school have a religious affiliation?",
+          "options": [
+            {
+              "value": "yes",
+              "label": "Yes"
+            },
+            {
+              "value": "no",
+              "label": "No"
+            }
+          ]
+        },
+        {
+          "itemId": "school_08",
+          "variableName": "schoolTuition",
+          "kind": "single-select",
+          "required": true,
+          "sectionId": "schoolFunding",
+          "questionText": "Do families have to pay tuition for their child to attend this school?",
+          "options": [
+            {
+              "value": "yes",
+              "label": "Yes"
+            },
+            {
+              "value": "no",
+              "label": "No"
+            }
+          ]
+        },
+        {
+          "itemId": "school_09",
+          "variableName": "schoolSelectiveness",
+          "kind": "multi-select",
+          "required": true,
+          "sectionId": "schoolFunding",
+          "questionText": "What is the process for students to be admitted to this school? Select all that apply.",
+          "options": [
+            {
+              "value": "selective",
+              "label": "By application, where selection is based on students' achievement or background"
+            },
+            {
+              "value": "lottery_based",
+              "label": "By application, where selection is lottery-based"
+            },
+            {
+              "value": "residence_based",
+              "label": "Based on residence; the schools serves children who reside in a specific area"
+            },
+            {
+              "value": "other",
+              "label": "Other"
+            }
+          ]
+        },
+        {
+          "itemId": "school_09a",
+          "variableName": "schoolSelectivenessOther",
+          "kind": "text",
+          "required": true,
+          "sectionId": "schoolFunding",
+          "questionText": "If you selected \"Other,\" please explain",
+          "displayLogic": {
+            "field": "schoolSelectiveness",
+            "includes": "other"
+          }
+        },
+        {
+          "itemId": "school_10",
+          "variableName": "instructionLanguages",
+          "kind": "text",
+          "required": true,
+          "sectionId": "schoolExperience",
+          "questionText": "What languages do children regularly hear during instruction at this school?"
+        },
+        {
+          "itemId": "school_11",
+          "variableName": "schoolDayLength",
+          "kind": "number",
+          "required": true,
+          "sectionId": "schoolExperience",
+          "questionText": "How long is the school day? Please respond in the approximate number of hours between when children typically arrive for school, and when they leave."
+        }
+      ]
+    }
+  },
+  "_meta": {
+    "sourceCsv": "School Survey - Sheet1.csv",
+    "generatedAt": "2026-06-16T12:32:23.052Z",
+    "skippedRows": [
+      {
+        "itemId": "NA",
+        "variableName": "site",
+        "reason": "If not collected via dashboard"
+      },
+      {
+        "itemId": "NA",
+        "variableName": "schoolPseudonym",
+        "reason": "If not collected via dashboard"
+      }
+    ],
+    "schemaGaps": [],
+    "mappingNotes": [],
+    "dashboardProvidedResponseFields": [
+      "siteId",
+      "siteName",
+      "schoolId",
+      "schoolPseudonym"
+    ]
+  }
+}
