@@ -356,6 +356,7 @@ export interface User {
   archived: boolean;
   birthMonth?: number;
   birthYear?: number;
+  childIdentifier?: string;
   classes: OrgAssociationMap;
   createdAt: Timestamp;
   disabled: boolean;
