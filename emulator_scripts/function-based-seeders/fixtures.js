@@ -118,7 +118,7 @@ function buildParticipantRows({
   const baseOrgIds = {
     districts: [siteId],
     schools: [schoolId],
-    groups: [cohortId],
+    cohorts: [],
   };
 
   const rowForClass = (row, classId) => ({
@@ -135,8 +135,6 @@ function buildParticipantRows({
       {
         id: "teacher",
         userType: "teacher",
-        month: "",
-        year: "",
       },
       originalClassId
     ),
@@ -144,17 +142,15 @@ function buildParticipantRows({
       {
         id: "student",
         userType: "child",
-        month: "1",
-        year: "2018",
+        month: 1,
+        year: 2018,
       },
       originalClassId
     ),
     rowForClass(
       {
         id: "parent",
-        userType: "parent",
-        month: "",
-        year: "",
+        userType: "caregiver",
       },
       newClassId
     ),
@@ -164,8 +160,8 @@ function buildParticipantRows({
         {
           id: `student${studentNumber}`,
           userType: "child",
-          month: String((studentNumber % 12) + 1),
-          year: CHILD_BIRTH_YEARS[index % CHILD_BIRTH_YEARS.length],
+          month: (studentNumber % 12) + 1,
+          year: Number(CHILD_BIRTH_YEARS[index % CHILD_BIRTH_YEARS.length]),
         },
         studentNumber <= Math.ceil(studentCount / 2)
           ? newClassId

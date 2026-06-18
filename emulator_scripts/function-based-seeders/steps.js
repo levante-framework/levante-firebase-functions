@@ -128,12 +128,12 @@ async function createParticipantUsers({ runtime, userRows, siteId, idToken }) {
       { users: rows, siteId },
       idToken
     );
-    if (!Array.isArray(result?.data) || result.data.length !== rows.length) {
+    if (!Array.isArray(result?.users) || result.users.length !== rows.length) {
       throw new Error(
         `createUsers returned an unexpected response: ${JSON.stringify(result)}`
       );
     }
-    createdUsers.push(...result.data);
+    createdUsers.push(...result.users);
   }
 
   return createdUsers;
