@@ -10,6 +10,7 @@ export type ParamType = (typeof PARAM_TYPES)[number];
 export interface ParamDefinition {
   type: ParamType;
   required?: boolean;
+  description: string;
 }
 
 export interface TaskSchemaDoc {
@@ -43,7 +44,7 @@ function validateParamDefinition(def: unknown): asserts def is ParamDefinition {
   if (def === null || typeof def !== "object" || Array.isArray(def)) {
     throw new HttpsError(
       "invalid-argument",
-      "Each paramDefinition must be an object { type, required? }."
+      "Each paramDefinition must be an object { type, required?, description }."
     );
   }
   const d = def as Record<string, unknown>;
@@ -55,6 +56,12 @@ function validateParamDefinition(def: unknown): asserts def is ParamDefinition {
   }
   if ("required" in d && typeof d.required !== "boolean") {
     throw new HttpsError("invalid-argument", "paramDefinition.required must be a boolean when present.");
+  }
+  if (!("description" in d)) {
+    throw new HttpsError("invalid-argument", "paramDefinition.description is required.");
+  }
+  if (typeof d.description !== "string") {
+    throw new HttpsError("invalid-argument", "paramDefinition.description must be a string.");
   }
 }
 
@@ -68,7 +75,7 @@ function validateParamDefinitions(
   ) {
     throw new HttpsError(
       "invalid-argument",
-      "paramDefinitions must be an object mapping param keys to { type, required? }."
+      "paramDefinitions must be an object mapping param keys to { type, required?, description }."
     );
   }
   for (const [key, def] of Object.entries(paramDefinitions)) {
