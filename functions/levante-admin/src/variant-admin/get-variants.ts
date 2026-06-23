@@ -1,4 +1,7 @@
-import { getFirestore, type QueryDocumentSnapshot } from "firebase-admin/firestore";
+import {
+  getFirestore,
+  type QueryDocumentSnapshot,
+} from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 import type { TaskDoc, VariantDoc } from "../../firestore-schema.js";
 

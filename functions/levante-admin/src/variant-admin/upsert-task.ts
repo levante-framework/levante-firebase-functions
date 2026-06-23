@@ -14,10 +14,16 @@ export const upsertTaskHandler = async (
   const { id, name, ...rest } = data;
 
   if (!id || typeof id !== "string" || id.trim().length === 0) {
-    throw new HttpsError("invalid-argument", "id is required and must be a non-empty string.");
+    throw new HttpsError(
+      "invalid-argument",
+      "id is required and must be a non-empty string."
+    );
   }
   if (!name || typeof name !== "string" || name.trim().length === 0) {
-    throw new HttpsError("invalid-argument", "name is required and must be a non-empty string.");
+    throw new HttpsError(
+      "invalid-argument",
+      "name is required and must be a non-empty string."
+    );
   }
 
   const taskId = id.trim();

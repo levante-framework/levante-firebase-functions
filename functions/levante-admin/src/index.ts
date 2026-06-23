@@ -1044,7 +1044,13 @@ export const getTasks = onCall(async (request) => {
   if (!requestingUid) {
     throw new HttpsError("unauthenticated", "User must be authenticated.");
   }
-  await checkPermission("Get Tasks", request, RESOURCES.TASKS, ACTIONS.READ, undefined);
+  await checkPermission(
+    "Get Tasks",
+    request,
+    RESOURCES.TASKS,
+    ACTIONS.READ,
+    undefined
+  );
   return await getTasksHandler();
 });
 
@@ -1053,7 +1059,13 @@ export const getVariants = onCall(async (request) => {
   if (!requestingUid) {
     throw new HttpsError("unauthenticated", "User must be authenticated.");
   }
-  await checkPermission("Get Variants", request, RESOURCES.TASKS, ACTIONS.READ, undefined);
+  await checkPermission(
+    "Get Variants",
+    request,
+    RESOURCES.TASKS,
+    ACTIONS.READ,
+    undefined
+  );
   return await getVariantsHandler({
     taskId: request.data?.taskId,
     registeredVariantsOnly: request.data?.registeredVariantsOnly ?? true,
@@ -1067,7 +1079,10 @@ export const upsertTask = onCall(async (request) => {
   }
 
   const userRecord = await getAuth().getUser(requestingUid);
-  const customClaims = (userRecord.customClaims ?? {}) as Record<string, unknown>;
+  const customClaims = (userRecord.customClaims ?? {}) as Record<
+    string,
+    unknown
+  >;
   if (customClaims.useNewPermissions !== true) {
     throw new HttpsError(
       "permission-denied",
@@ -1098,13 +1113,25 @@ export const upsertTaskVariant = onCall(async (request) => {
   if (!requestingUid) {
     throw new HttpsError("unauthenticated", "User must be authenticated.");
   }
-  await checkPermission("upsert variant", request, RESOURCES.TASKS, ACTIONS.CREATE, undefined);
+  await checkPermission(
+    "upsert variant",
+    request,
+    RESOURCES.TASKS,
+    ACTIONS.CREATE,
+    undefined
+  );
   return await upsertVariantHandler(requestingUid, request.data);
 });
 
 export const getTaskSchemas = onCall(async (request) => {
   const requestingUid = request.auth?.uid;
-  await checkPermission("Get Task Schemas", request, RESOURCES.TASKS, ACTIONS.READ, undefined);
+  await checkPermission(
+    "Get Task Schemas",
+    request,
+    RESOURCES.TASKS,
+    ACTIONS.READ,
+    undefined
+  );
   if (!requestingUid) {
     throw new HttpsError("unauthenticated", "User must be authenticated.");
   }
@@ -1120,7 +1147,13 @@ export const upsertTaskSchema = onCall(async (request) => {
   if (!requestingUid) {
     throw new HttpsError("unauthenticated", "User must be authenticated.");
   }
-  await checkPermission("Create Task Schema", request, RESOURCES.TASKS, ACTIONS.CREATE, undefined);
+  await checkPermission(
+    "Create Task Schema",
+    request,
+    RESOURCES.TASKS,
+    ACTIONS.CREATE,
+    undefined
+  );
   return await upsertTaskSchemaHandler(requestingUid, request.data);
 });
 

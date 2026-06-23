@@ -30,7 +30,10 @@ function validateParams(
   }
   for (const [key, value] of Object.entries(params)) {
     if (typeof key !== "string" || key.length === 0) {
-      throw new HttpsError("invalid-argument", "params keys must be non-empty strings");
+      throw new HttpsError(
+        "invalid-argument",
+        "params keys must be non-empty strings"
+      );
     }
     if (!isVariantParamValue(value)) {
       throw new HttpsError(
@@ -49,10 +52,16 @@ export const upsertVariantHandler = async (
   const { taskId, variantId, name, params, registered, schemaVersion } = data;
 
   if (!taskId || typeof taskId !== "string" || taskId.trim().length === 0) {
-    throw new HttpsError("invalid-argument", "taskId is required and must be a non-empty string.");
+    throw new HttpsError(
+      "invalid-argument",
+      "taskId is required and must be a non-empty string."
+    );
   }
   if (!name || typeof name !== "string" || name.trim().length === 0) {
-    throw new HttpsError("invalid-argument", "name is required and must be a non-empty string.");
+    throw new HttpsError(
+      "invalid-argument",
+      "name is required and must be a non-empty string."
+    );
   }
   if (typeof registered !== "boolean") {
     throw new HttpsError("invalid-argument", "registered must be a boolean.");
@@ -73,19 +82,34 @@ export const upsertVariantHandler = async (
     lastUpdated: FieldValue.serverTimestamp(),
   };
 
-  if (variantId && typeof variantId === "string" && variantId.trim().length > 0) {
+  if (
+    variantId &&
+    typeof variantId === "string" &&
+    variantId.trim().length > 0
+  ) {
     const variantRef = taskRef.collection("variants").doc(variantId.trim());
     const variantSnap = await variantRef.get();
     if (!variantSnap.exists) {
-      throw new HttpsError("not-found", `Variant ${variantId} not found for task ${taskId}.`);
+      throw new HttpsError(
+        "not-found",
+        `Variant ${variantId} not found for task ${taskId}.`
+      );
     }
     await variantRef.update(variantPayload);
-    logger.info("Variant updated.", { callerUid, taskId, variantId: variantRef.id });
+    logger.info("Variant updated.", {
+      callerUid,
+      taskId,
+      variantId: variantRef.id,
+    });
     return { taskId, variantId: variantRef.id };
   }
 
   const variantRef = taskRef.collection("variants").doc();
   await variantRef.set(variantPayload);
-  logger.info("Variant created.", { callerUid, taskId, variantId: variantRef.id });
+  logger.info("Variant created.", {
+    callerUid,
+    taskId,
+    variantId: variantRef.id,
+  });
   return { taskId, variantId: variantRef.id };
 };

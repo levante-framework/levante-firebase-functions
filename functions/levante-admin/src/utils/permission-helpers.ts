@@ -178,7 +178,7 @@ export const bulkCheckForSite = (
 ) => getPermissionService().bulkPermissionCheck(user, siteId, checks);
 
 /**
- * 
+ *
  * @param operation - The operation being performed.
  * @param request - The request object.
  * @param resource - The resource being performed.
@@ -187,7 +187,7 @@ export const bulkCheckForSite = (
  * @param config - The configuration object for the operation.
  * @returns void
  * @throws HttpsError if the user is not authenticated or does not have permission to perform the operation.
- * 
+ *
  */
 export const checkPermission = async (
   operation: string,
@@ -195,7 +195,7 @@ export const checkPermission = async (
   resource: (typeof RESOURCES)[keyof typeof RESOURCES],
   action: (typeof ACTIONS)[keyof typeof ACTIONS],
   subResource?: string,
-  config: Record<string, any> = {},
+  config: Record<string, any> = {}
 ): Promise<void> => {
   const requestingUid = request.auth?.uid;
   if (!requestingUid) {
@@ -254,4 +254,4 @@ export const checkPermission = async (
       (err as Error)?.message || "Permission check failed"
     );
   }
-}
+};

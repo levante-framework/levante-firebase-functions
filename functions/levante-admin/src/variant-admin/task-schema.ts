@@ -1,4 +1,8 @@
-import { getFirestore, FieldValue, type Timestamp } from "firebase-admin/firestore";
+import {
+  getFirestore,
+  FieldValue,
+  type Timestamp,
+} from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import type { VariantParamValue } from "./upsert-variant.js";
@@ -36,7 +40,10 @@ export interface ValidateParamsResult {
 
 function validateParamDefinitionKey(key: string): void {
   if (typeof key !== "string" || key.trim().length === 0) {
-    throw new HttpsError("invalid-argument", "paramDefinitions keys must be non-empty strings.");
+    throw new HttpsError(
+      "invalid-argument",
+      "paramDefinitions keys must be non-empty strings."
+    );
   }
 }
 
@@ -55,13 +62,22 @@ function validateParamDefinition(def: unknown): asserts def is ParamDefinition {
     );
   }
   if ("required" in d && typeof d.required !== "boolean") {
-    throw new HttpsError("invalid-argument", "paramDefinition.required must be a boolean when present.");
+    throw new HttpsError(
+      "invalid-argument",
+      "paramDefinition.required must be a boolean when present."
+    );
   }
   if (!("description" in d)) {
-    throw new HttpsError("invalid-argument", "paramDefinition.description is required.");
+    throw new HttpsError(
+      "invalid-argument",
+      "paramDefinition.description is required."
+    );
   }
   if (typeof d.description !== "string") {
-    throw new HttpsError("invalid-argument", "paramDefinition.description must be a string.");
+    throw new HttpsError(
+      "invalid-argument",
+      "paramDefinition.description must be a string."
+    );
   }
 }
 
@@ -114,9 +130,11 @@ export const getTaskSchemasHandler = async (
   callerUid: string,
   taskId: string
 ): Promise<TaskSchemaSnapshot[]> => {
-
   if (!taskId || typeof taskId !== "string" || taskId.trim().length === 0) {
-    throw new HttpsError("invalid-argument", "taskId is required and must be a non-empty string.");
+    throw new HttpsError(
+      "invalid-argument",
+      "taskId is required and must be a non-empty string."
+    );
   }
 
   const db = getFirestore();
@@ -147,10 +165,12 @@ export const upsertTaskSchemaHandler = async (
   callerUid: string,
   data: UpsertTaskSchemaData
 ): Promise<{ taskId: string; schemaId: string; version: number }> => {
-
   const { taskId, paramDefinitions } = data;
   if (!taskId || typeof taskId !== "string" || taskId.trim().length === 0) {
-    throw new HttpsError("invalid-argument", "taskId is required and must be a non-empty string.");
+    throw new HttpsError(
+      "invalid-argument",
+      "taskId is required and must be a non-empty string."
+    );
   }
   validateParamDefinitions(paramDefinitions);
 
