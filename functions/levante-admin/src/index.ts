@@ -14,6 +14,7 @@ import {
   buildPermissionsUserFromAuthRecord,
   filterSitesByPermission,
   getPermissionService,
+  checkPermission,
 } from "./utils/permission-helpers.js";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
 import {
@@ -48,6 +49,14 @@ import { _upsertOrg } from "./upsert-org.js";
 import type { OrgData } from "./upsert-org.js";
 import { syncOnRunDocUpdateEventHandler } from "./runs/index.js";
 import { upsertAdministrationHandler } from "./upsertAdministration.js";
+import { upsertVariantHandler } from "./variant-admin/upsert-variant.js";
+import { getTasksHandler } from "./variant-admin/get-tasks.js";
+import { getVariantsHandler } from "./variant-admin/get-variants.js";
+import { upsertTaskHandler } from "./variant-admin/upsert-task.js";
+import {
+  getTaskSchemasHandler,
+  upsertTaskSchemaHandler,
+} from "./variant-admin/task-schema.js";
 import { ORG_COLLECTION_TO_SUBRESOURCE } from "./utils/constants.js";
 import { sanitizeRoles } from "./utils/role-helpers.js";
 
@@ -1028,6 +1037,124 @@ export const upsertAdministration = onCall(async (request) => {
 
   // Delegate to handler
   return await upsertAdministrationHandler(requestingUid, request.data);
+});
+
+export const getTasks = onCall(async (request) => {
+  const requestingUid = request.auth?.uid;
+  if (!requestingUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated.");
+  }
+  await checkPermission(
+    "Get Tasks",
+    request,
+    RESOURCES.TASKS,
+    ACTIONS.READ,
+    undefined
+  );
+  return await getTasksHandler();
+});
+
+export const getVariants = onCall(async (request) => {
+  const requestingUid = request.auth?.uid;
+  if (!requestingUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated.");
+  }
+  await checkPermission(
+    "Get Variants",
+    request,
+    RESOURCES.TASKS,
+    ACTIONS.READ,
+    undefined
+  );
+  return await getVariantsHandler({
+    taskId: request.data?.taskId,
+    registeredVariantsOnly: request.data?.registeredVariantsOnly ?? true,
+  });
+});
+
+export const upsertTask = onCall(async (request) => {
+  const requestingUid = request.auth?.uid;
+  if (!requestingUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated.");
+  }
+
+  const userRecord = await getAuth().getUser(requestingUid);
+  const customClaims = (userRecord.customClaims ?? {}) as Record<
+    string,
+    unknown
+  >;
+  if (customClaims.useNewPermissions !== true) {
+    throw new HttpsError(
+      "permission-denied",
+      "New permission system must be enabled to upsert tasks"
+    );
+  }
+
+  await ensurePermissionsLoaded();
+  const user = buildPermissionsUserFromAuthRecord(userRecord);
+  const permissionsService = getPermissionService();
+  const allowed = permissionsService.canPerformGlobalAction(
+    user,
+    RESOURCES.TASKS,
+    ACTIONS.CREATE
+  );
+  if (!allowed) {
+    throw new HttpsError(
+      "permission-denied",
+      "You do not have permission to upsert tasks"
+    );
+  }
+
+  return await upsertTaskHandler(requestingUid, request.data);
+});
+
+export const upsertTaskVariant = onCall(async (request) => {
+  const requestingUid = request.auth?.uid;
+  if (!requestingUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated.");
+  }
+  await checkPermission(
+    "upsert variant",
+    request,
+    RESOURCES.TASKS,
+    ACTIONS.CREATE,
+    undefined
+  );
+  return await upsertVariantHandler(requestingUid, request.data);
+});
+
+export const getTaskSchemas = onCall(async (request) => {
+  const requestingUid = request.auth?.uid;
+  await checkPermission(
+    "Get Task Schemas",
+    request,
+    RESOURCES.TASKS,
+    ACTIONS.READ,
+    undefined
+  );
+  if (!requestingUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated.");
+  }
+  const taskId = request.data?.taskId;
+  if (taskId === undefined) {
+    throw new HttpsError("invalid-argument", "taskId is required.");
+  }
+  return await getTaskSchemasHandler(requestingUid, taskId);
+});
+
+export const upsertTaskSchema = onCall(async (request) => {
+  const requestingUid = request.auth?.uid;
+  if (!requestingUid) {
+    throw new HttpsError("unauthenticated", "User must be authenticated.");
+  }
+  await checkPermission(
+    "Create Task Schema",
+    request,
+    RESOURCES.TASKS,
+    ACTIONS.CREATE,
+    undefined
+  );
+  return await upsertTaskSchemaHandler(requestingUid, request.data);
 });
 
 export { completeTask } from "./tasks/completeTask.js";

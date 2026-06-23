@@ -12,9 +12,7 @@ import {
   loadAdministratorContext,
   updateAdministratorRoles,
 } from "./update-administrator.js";
-import {
-  buildPermissionsUserFromAuthRecord,
-} from "../utils/permission-helpers.js";
+import { buildPermissionsUserFromAuthRecord } from "../utils/permission-helpers.js";
 
 const assertSuperAdminRolesOnly = (roles: ReturnType<typeof sanitizeRoles>) => {
   const invalid = roles.filter((r) => r.role !== ROLES.SUPER_ADMIN);
@@ -67,7 +65,7 @@ export const createUpdateSuperAdmin = async (params: {
 
   const requestingUser = buildPermissionsUserFromAuthRecord(requesterRecord);
   const requesterIsSuperAdmin = requestingUser.roles.some(
-    (role) => role.role === ROLES.SUPER_ADMIN,
+    (role) => role.role === ROLES.SUPER_ADMIN
   );
   if (!requesterIsSuperAdmin) {
     throw new HttpsError(

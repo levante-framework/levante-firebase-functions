@@ -5,7 +5,4 @@ const normalizeToLowercase = (str = "") =>
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, "");
 
-  module.exports = {
-    normalizeToLowercase
-  };
-  
+module.exports = { normalizeToLowercase };
