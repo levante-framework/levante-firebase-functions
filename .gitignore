@@ -66,6 +66,10 @@ node_modules/
 # Yarn Integrity file
 .yarn-integrity
 
+# CSV data files (survey/source spreadsheets, script inputs/outputs)
+*.csv
+**/*.csv
+
 # dotenv environment variables file
 .env
 .env.*
@@ -87,6 +91,8 @@ lib
 .nx/workspace-data
 
 # Firebase Emulator Suite
+emulator_scripts/registered-variants.json
+
 # Emulator data directories
 emulator_data/
 emulator_data_dev/

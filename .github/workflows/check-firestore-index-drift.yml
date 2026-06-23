@@ -1,0 +1,80 @@
+name: Check Firestore Index Drift (dev)
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DEV_PROJECT_ID: hs-levante-admin-dev
+
+jobs:
+  check-firestore-index-drift:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: '.nvmrc'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Authenticate with GCP
+        uses: google-github-actions/auth@v3
+        with:
+          project_id: hs-levante-admin-dev
+          credentials_json: ${{ secrets.GCP_SA_CREDENTIALS_DEV }}
+          request_reason: "levante-firebase-functions/check-firestore-index-drift run ${{ github.run_id }}"
+          access_token_scopes: "email,openid,https://www.googleapis.com/auth/cloudplatformprojects.readonly,https://www.googleapis.com/auth/firebase,https://www.googleapis.com/auth/cloud-platform"
+
+      - name: Export deployed Firestore indexes
+        run: |
+          npx firebase firestore:indexes --project "$DEV_PROJECT_ID" > functions/levante-admin/remote-indexes.json
+        shell: bash
+
+      - name: Check for index drift
+        run: |
+          cd functions/levante-admin
+
+          # Function to normalize JSON for comparison
+          normalize_json() {
+            jq -S '.' "$1" | sed 's/[[:space:]]//g'
+          }
+
+          # Normalize index files for comparison
+          normalize_json "firestore.indexes.json" > local-normalized.json
+          normalize_json "remote-indexes.json" > remote-normalized.json
+
+          # Compare normalized files for index drift
+          if ! cmp -s local-normalized.json remote-normalized.json; then
+            echo "::error::Local firestore.indexes.json does not match the indexes deployed in dev project."
+            echo ""
+            echo "Diff (local vs remote):"
+            diff <(jq '.' local-normalized.json) <(jq '.' remote-normalized.json) || true
+            echo ""
+            echo "Run 'Deploy Firestore Indexes' against this branch before merging, or run 'validate:indexes' locally."
+            exit 1
+          fi
+          echo "Local indexes match deployed indexes."
+        shell: bash
+
+      - name: Cleanup
+        if: always()
+        run: |
+          cd functions/levante-admin
+          rm -f remote-indexes.json local-normalized.json remote-normalized.json
+        shell: bash

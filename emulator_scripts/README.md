@@ -2,15 +2,58 @@
 
 ## Emulator (local)
 
-- **Seed:** `npm run emulator:seed` — populates the local emulator (run with emulator started).
+- **Seed:** `npm run emulator:seed` — populates the local emulator through Firebase callable functions.
+- **Legacy seed:** `npm run emulator:seed:legacy` — legacy direct Auth/Firestore seed.
+- **Tasks bootstrap:** `npm run emulator:seed:tasks` — copies only `registered == true` tasks and variants from a source project into the emulator.
+- **Functions seed:** `npm run emulator:seed:functions` — signs in as the bootstrapped super admin and creates visible dashboard data by invoking Firebase callable functions.
+- **UI seed:** `npm run emulator:seed:ui` — drives the researcher dashboard through Cypress in `../levante-support` to create realistic groups, users, and assignments. Videos are disabled by default.
+- **Start seeded dashboard:** `npm run emulator:start:dashboard` — starts Auth/Firestore/Functions emulators, bootstraps only permissions/admin/tasks, creates visible seed data through callable Firebase Functions, starts the local dashboard, then prints login credentials and keeps everything running for manual use.
+- **Admin login smoke test:** `npm run emulator:test:admin-login` — starts Auth/Firestore/Functions emulators, bootstraps permissions, task variants, and a super-admin user, starts the local dashboard, then verifies the seeded super admin can log in through Cypress. Videos are disabled.
 - **Clear:** `npm run emulator:clear` — wipes Auth + Firestore in the emulator.
 - **Reset:** `npm run emulator:reset` — clear then seed.
+
+`emulator:seed:ui` first bootstraps only data the dashboard cannot create itself: system permissions, a super-admin user/claims, and task variants. Cypress then signs in as that user, creates a Site through the dashboard UI, selects it, then creates realistic school/class/cohort/users/assignment data through the UI. Override the support repo path with `LEVANTE_SUPPORT_DIR=/path/to/levante-support` if the repos are not siblings.
+
+`emulator:seed:functions` and `emulator:start:dashboard` use the same minimal bootstrap assumptions as the Cypress UI seed. The bootstrap creates only data the dashboard cannot create itself: system permissions, a super-admin user/claims, and task variants. Task variants are copied from a source project and filtered to `registered == true` for both tasks and variants. Visible test fixtures are then created through the same callable Firebase Functions used by the dashboard (`setUidClaims`, `upsertOrg`, `createUsers`, `linkUsers`, and `upsertAdministration`).
+
+By default task copy source is `hs-levante-admin-dev`. Override with:
+
+```bash
+SEED_TASK_SOURCE_PROJECT=hs-levante-admin-prod npm run emulator:seed
+```
+
+The functions-driven seeder is modular and profile-based. Default `SEED_PROFILE=dashboard` preserves the full visible dashboard fixture with 20 generated students. Available profiles:
+
+- `dashboard`: full default seed.
+- `large`: same shape as `dashboard`, with 200 generated students.
+- `minimal`: copy registered tasks/variants, sign in as the bootstrapped super admin, and refresh claims.
+- `no-administrations`: create orgs/admins/participants, but skip administration creation.
+- `tasks-only`: copy registered tasks/variants and stop.
+
+Useful overrides:
+
+```bash
+SEED_PROFILE=large npm run emulator:seed
+SEED_STUDENT_COUNT=50 npm run emulator:seed
+SEED_INCLUDE_OPTIONAL_ADMINISTRATION_TEMPLATES=true npm run emulator:seed
+SEED_VALIDATE=false npm run emulator:seed
+```
+
+Optional administration templates reference `survey`. They are excluded by default because the `hs-levante-admin-dev` source data currently does not provide a registered variant for that task.
+
+`emulator:start:dashboard` provides these default credentials unless overridden with `E2E_AI_SUPER_ADMIN_EMAIL` and `E2E_AI_SUPER_ADMIN_PASSWORD`:
+
+```text
+Email: superadmin@levante.test
+Password: super123
+```
 
 ## Live project (from firebaseconfig.js or env)
 
 `seed:dev` and `clear:dev` use **projectId** from (in order): env `SEED_PROJECT` / `FIREBASE_PROJECT`, or the repo root file `firebaseconfig.js`. Locally, copy `firebaseconfig.example.js` to `firebaseconfig.js` and fill in values; that file is gitignored.
 
-- **Seed:** `npm run seed:dev` — seeds the project (Auth + Firestore). Use Application Default Credentials (e.g. `gcloud auth application-default login`).
+- **Seed:** `npm run seed:dev` — seeds through Firebase callable functions. Use Application Default Credentials (e.g. `gcloud auth application-default login`).
+- **Legacy seed:** `npm run seed:dev:legacy` — legacy direct Auth/Firestore seed.
 - **Clear:** `CONFIRM_CLEAR=1 npm run clear:dev` — wipes Auth + Firestore in that project. Requires `CONFIRM_CLEAR=1` to avoid accidental runs.
 - **Reset:** `npm run reset:dev` — clear (with confirmation) then seed.
 
