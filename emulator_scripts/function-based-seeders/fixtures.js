@@ -1,69 +1,69 @@
 const ADMIN_USERS = [
   {
-    key: 'admin',
-    email: 'admin@levante.test',
-    name: { first: 'Admin', middle: '', last: 'User' },
-    role: 'admin',
+    key: "admin",
+    email: "admin@levante.test",
+    name: { first: "Admin", middle: "", last: "User" },
+    role: "admin",
   },
   {
-    key: 'siteAdmin',
-    email: 'siteadmin@levante.test',
-    name: { first: 'Site Admin', middle: '', last: 'User' },
-    role: 'site_admin',
+    key: "siteAdmin",
+    email: "siteadmin@levante.test",
+    name: { first: "Site Admin", middle: "", last: "User" },
+    role: "site_admin",
   },
   {
-    key: 'researchAssistant',
-    email: 'ra@levante.test',
-    name: { first: 'Research Assistant', middle: '', last: 'User' },
-    role: 'research_assistant',
+    key: "researchAssistant",
+    email: "ra@levante.test",
+    name: { first: "Research Assistant", middle: "", last: "User" },
+    role: "research_assistant",
   },
 ];
 
 const ORG_FIXTURES = {
-  siteName: 'Function Seed District',
-  schoolName: 'Function Seed Elementary School',
-  originalClassName: '3rd Grade - Room 101',
-  newClassName: '4th Grade - Room 102',
-  cohortName: 'Reading Intervention Cohort',
+  siteName: "Function Seed District",
+  schoolName: "Function Seed Elementary School",
+  originalClassName: "3rd Grade - Room 101",
+  newClassName: "4th Grade - Room 102",
+  cohortName: "Reading Intervention Cohort",
 };
 
 const ADMINISTRATION_TEMPLATES = [
   {
-    templateId: 'reading-assessment-1',
-    name: 'Basic Reading Assessment',
-    taskIds: ['pa', 'sre', 'swr'],
+    templateId: "reading-assessment-1",
+    name: "Basic Reading Assessment",
+    taskIds: ["pa", "sre", "swr"],
     sequential: false,
     daysToClose: 30,
-    assignedCondition: { field: 'userType', op: 'EQUAL', value: 'student' },
+    assignedCondition: { field: "userType", op: "EQUAL", value: "student" },
   },
   {
-    templateId: 'cognitive-assessment-1',
-    name: 'Cognitive Assessment Battery',
-    taskIds: ['matrix-reasoning', 'mental-rotation', 'memory-game'],
+    templateId: "cognitive-assessment-1",
+    name: "Cognitive Assessment Battery",
+    taskIds: ["matrix-reasoning", "mental-rotation", "memory-game"],
     sequential: false,
     daysToClose: 21,
-    assignedCondition: { field: 'userType', op: 'EQUAL', value: 'student' },
+    assignedCondition: { field: "userType", op: "EQUAL", value: "student" },
   },
   {
-    templateId: 'comprehensive-assessment-1',
-    name: 'Comprehensive Academic Assessment',
-    taskIds: ['vocab', 'egma-math', 'trog', 'theory-of-mind'],
+    templateId: "comprehensive-assessment-1",
+    name: "Comprehensive Academic Assessment",
+    taskIds: ["vocab", "egma-math", "trog", "theory-of-mind"],
     sequential: false,
     daysToClose: 45,
-    assignedCondition: { field: 'userType', op: 'EQUAL', value: 'student' },
+    assignedCondition: { field: "userType", op: "EQUAL", value: "student" },
   },
   {
-    templateId: 'mixed-assessment-battery',
-    name: 'Mixed Skills Assessment',
-    taskIds: ['intro', 'pa', 'matrix-reasoning', 'vocab'],
+    templateId: "mixed-assessment-battery",
+    name: "Mixed Skills Assessment",
+    taskIds: ["intro", "pa", "matrix-reasoning", "vocab"],
     sequential: false,
     daysToClose: 60,
-    assignedCondition: { field: 'userType', op: 'EQUAL', value: 'student' },
+    assignedCondition: { field: "userType", op: "EQUAL", value: "student" },
   },
   {
-    templateId: 'survey-administration',
-    name: 'Background Survey',
-    taskIds: ['survey'],
+    templateId: "survey-administration",
+    name: "Background Survey",
+    taskIds: ["survey"],
     sequential: true,
     daysToClose: 90,
     optional: true,
@@ -71,15 +71,32 @@ const ADMINISTRATION_TEMPLATES = [
 ];
 
 const DEFAULT_LEGAL = {
-  amount: '0',
+  amount: "0",
   assent: null,
-  consent: 'I consent to the terms of the Levante Privacy Policy and Terms of Service.',
-  expectedTime: '30 minutes',
+  consent:
+    "I consent to the terms of the Levante Privacy Policy and Terms of Service.",
+  expectedTime: "30 minutes",
 };
-const CHILD_BIRTH_YEARS = ['2014', '2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024'];
+const CHILD_BIRTH_YEARS = [
+  "2014",
+  "2015",
+  "2016",
+  "2017",
+  "2018",
+  "2019",
+  "2020",
+  "2021",
+  "2022",
+  "2023",
+  "2024",
+];
 
-function normalizeToLowercase(value = '') {
-  return value.trim().toLowerCase().normalize('NFKD').replace(/[\u0300-\u036f]/g, '');
+function normalizeToLowercase(value = "") {
+  return value
+    .trim()
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "");
 }
 
 function chunk(array, size) {
@@ -90,11 +107,18 @@ function chunk(array, size) {
   return chunks;
 }
 
-function buildParticipantRows({ siteId, schoolId, originalClassId, newClassId, cohortId, studentCount = 200 }) {
+function buildParticipantRows({
+  siteId,
+  schoolId,
+  originalClassId,
+  newClassId,
+  cohortId,
+  studentCount = 200,
+}) {
   const baseOrgIds = {
     districts: [siteId],
     schools: [schoolId],
-    groups: [cohortId],
+    cohorts: [],
   };
 
   const rowForClass = (row, classId) => ({
@@ -109,41 +133,39 @@ function buildParticipantRows({ siteId, schoolId, originalClassId, newClassId, c
   return [
     rowForClass(
       {
-        id: 'teacher',
-        userType: 'teacher',
-        month: '',
-        year: '',
+        id: "teacher",
+        userType: "teacher",
       },
-      originalClassId,
+      originalClassId
     ),
     rowForClass(
       {
-        id: 'student',
-        userType: 'child',
-        month: '1',
-        year: '2018',
+        id: "student",
+        userType: "child",
+        month: 1,
+        year: 2018,
       },
-      originalClassId,
+      originalClassId
     ),
     rowForClass(
       {
-        id: 'parent',
-        userType: 'parent',
-        month: '',
-        year: '',
+        id: "parent",
+        userType: "caregiver",
       },
-      newClassId,
+      newClassId
     ),
     ...Array.from({ length: studentCount }, (_, index) => {
       const studentNumber = index + 1;
       return rowForClass(
         {
           id: `student${studentNumber}`,
-          userType: 'child',
-          month: String((studentNumber % 12) + 1),
-          year: CHILD_BIRTH_YEARS[index % CHILD_BIRTH_YEARS.length],
+          userType: "child",
+          month: (studentNumber % 12) + 1,
+          year: Number(CHILD_BIRTH_YEARS[index % CHILD_BIRTH_YEARS.length]),
         },
-        studentNumber <= Math.ceil(studentCount / 2) ? newClassId : originalClassId,
+        studentNumber <= Math.ceil(studentCount / 2)
+          ? newClassId
+          : originalClassId
       );
     }),
   ];

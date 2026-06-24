@@ -37,15 +37,43 @@
       "updatedAt": "2026-06-16T00:00:00.000Z",
       "liveFrom": "2026-06-16T00:00:00.000Z",
       "liveUntil": null,
-      "generalPrompt":"<p>This form collects information, including open-ended text responses, to characterize site(s) in detail. The form contains 22 questions and should take about 10-15 minutes to complete, but you can save your progress and come back later if needed.</p><p>Where it meets the conditions of non-identifiability in our policies, text you provide may be used to describe this site or it's characteristics in our data releases and scientific publications. However, note that this text will not be released with the general data until it has been anonymized according to LEVANTE policies.</p><p>For open text repsonses, please describe the site accurately in full sentences. For examples, click the '?' icon next to a question.</p>",
-      "sectionInfo":[
-        {"sectionId":"sampleRecruit","title":"Sampling & Recruitment","description":"Provide some information about the sampling and recruitment methods in your site."},
-        {"sectionId":"testingInfo","title":"Testing Locations & Devices","description":"Describe testing conditions and equipment used for data collection"},
-        {"sectionId":"locationInfo","title":"Site Area","description":"Your responses to the following questions will help the research community understand the population(s) studied at this site."},
-        {"sectionId":"demographicInfo","title":"Demographic Information","description":"This section asks for some information about the population(s) studied at this site."},
-        {"sectionId":"lifestyleInfo","title":"Lifestyle Information","description":"This section asks for some information about the lifestyle of the population(s) studied at this site."},
-        {"sectionId":"languageEducationInfo","title":"Language & Education","description":"This section asks for some information about schooling and language use in population(s) studied at this site. Your responses to the following questions will help the research community understand the education system at this site."},
-        {"sectionId":"anythingElse","title":"Anything Else?","description":"Is there anything else you would like us to know about your site's sampling, recruitment, population, or administration?"}
+      "generalPrompt": "<p>This form collects information, including open-ended text responses, to characterize site(s) in detail. The form contains 22 questions and should take about 10-15 minutes to complete, but you can save your progress and come back later if needed.</p><p>Where it meets the conditions of non-identifiability in our policies, text you provide may be used to describe this site or it's characteristics in our data releases and scientific publications. However, note that this text will not be released with the general data until it has been anonymized according to LEVANTE policies.</p><p>For open text repsonses, please describe the site accurately in full sentences. For examples, click the '?' icon next to a question.</p>",
+      "sectionInfo": [
+        {
+          "sectionId": "sampleRecruit",
+          "title": "Sampling & Recruitment",
+          "description": "Provide some information about the sampling and recruitment methods in your site."
+        },
+        {
+          "sectionId": "testingInfo",
+          "title": "Testing Locations & Devices",
+          "description": "Describe testing conditions and equipment used for data collection"
+        },
+        {
+          "sectionId": "locationInfo",
+          "title": "Site Area",
+          "description": "Your responses to the following questions will help the research community understand the population(s) studied at this site."
+        },
+        {
+          "sectionId": "demographicInfo",
+          "title": "Demographic Information",
+          "description": "This section asks for some information about the population(s) studied at this site."
+        },
+        {
+          "sectionId": "lifestyleInfo",
+          "title": "Lifestyle Information",
+          "description": "This section asks for some information about the lifestyle of the population(s) studied at this site."
+        },
+        {
+          "sectionId": "languageEducationInfo",
+          "title": "Language & Education",
+          "description": "This section asks for some information about schooling and language use in population(s) studied at this site. Your responses to the following questions will help the research community understand the education system at this site."
+        },
+        {
+          "sectionId": "anythingElse",
+          "title": "Anything Else?",
+          "description": "Is there anything else you would like us to know about your site's sampling, recruitment, population, or administration?"
+        }
       ],
       "fullFields": [
         {
@@ -125,7 +153,7 @@
           "itemId": "site_04a",
           "variableName": "adminApproachOther",
           "kind": "text",
-          "required": true, 
+          "required": true,
           "sectionId": "sampleRecruit",
           "questionText": "If you selected \"Other,\" please explain.",
           "displayLogic": {
@@ -173,7 +201,7 @@
           "variableName": "siteGeoArea",
           "kind": "text",
           "required": true,
-          "sectionId":"locationInfo",
+          "sectionId": "locationInfo",
           "questionText": "For this site, what geographic area(s) were participants recruited from?"
         },
         {
@@ -181,7 +209,7 @@
           "variableName": "siteGeoType",
           "kind": "text",
           "required": true,
-          "sectionId":"locationInfo",
+          "sectionId": "locationInfo",
           "questionText": "Describe this area in terms of its urbanicity. Is the area urban or rural? If it is a city, is it considered to be small, mid-sized, or large? (e.g., \"Participants were drawn from Leipzig, a medium-sized urban center.\""
         },
         {
@@ -189,7 +217,7 @@
           "variableName": "sitePopulationSize",
           "kind": "text",
           "required": true,
-          "sectionId":"locationInfo",
+          "sectionId": "locationInfo",
           "questionText": "What is the approximate population size of the geographic area that participants were recruited from?"
         },
         {
@@ -197,7 +225,7 @@
           "variableName": "siteRaceEthnicity",
           "kind": "text",
           "required": true,
-          "sectionId":"demographicInfo",
+          "sectionId": "demographicInfo",
           "questionText": "Provide a general description of the population's racial/ethnic composition.",
           "infoExample": "For example, \"Leipzig is culturally diverse, with around 17% of the population having a migration background (primarily from Syria, Ukraine, and the Russian Federation).\""
         },
@@ -206,7 +234,7 @@
           "variableName": "siteSES",
           "kind": "text",
           "required": true,
-          "sectionId":"demographicInfo",
+          "sectionId": "demographicInfo",
           "questionText": "Provide a general description of the population's socioeconomic status. Include information about resident's education status, income, or other indicators of socioeconomic status when available.",
           "infoExample": "For example, \"According to recent census estimates, London residents have a mean education level of some postsecondary education, and the median household income is approximately $80,000 CAD.\""
         },
@@ -215,7 +243,7 @@
           "variableName": "siteLifestyle",
           "kind": "text",
           "required": true,
-          "sectionId":"demographicInfo",
+          "sectionId": "demographicInfo",
           "questionText": "Provide a general description of the population's living styles, including household style and composition. (e.g., \"The majority of households live in apartments, and multi-generational housing is common.\")"
         },
         {
@@ -223,7 +251,7 @@
           "variableName": "siteSubsistence",
           "kind": "multi-select",
           "required": true,
-          "sectionId":"lifestyleInfo",
+          "sectionId": "lifestyleInfo",
           "questionText": "What are the main subsistence style(s) (means of satisfying food and survival needs) of this population?",
           "options": [
             {
@@ -253,7 +281,7 @@
           "variableName": "siteTech",
           "kind": "text",
           "required": true,
-          "sectionId":"lifestyleInfo",
+          "sectionId": "lifestyleInfo",
           "questionText": "Provide a general description of the exposure and prevalence of technology among children and caregivers, especially smartphones and other touchscreen devices.",
           "infoExample": "For example, \"Technology prevalence, including touchscreens and mobile phones, is high. Most caregivers have a personal device and/or tablet, as do about a third of the children in our study's age range.\""
         },
@@ -262,7 +290,7 @@
           "variableName": "siteLanguages",
           "kind": "text",
           "required": true,
-          "sectionId":"languageEducationInfo",
+          "sectionId": "languageEducationInfo",
           "questionText": "What are most commonly spoken languages in this population? Please include any languages spoken by >5% of the population in your targeted geographic area."
         },
 
@@ -271,7 +299,7 @@
           "variableName": "schoolingAgeStart",
           "kind": "number",
           "required": true,
-          "sectionId":"languageEducationInfo",
+          "sectionId": "languageEducationInfo",
           "questionText": "At this site, at what age does formal school attendance typically start?"
         },
         {
@@ -279,7 +307,7 @@
           "variableName": "schoolingAgeEnd",
           "kind": "number",
           "required": true,
-          "sectionId":"languageEducationInfo",
+          "sectionId": "languageEducationInfo",
           "questionText": "At this site, at what age does formal school attendance typically end?"
         },
         {
@@ -287,7 +315,7 @@
           "variableName": "schoolingProgression",
           "kind": "text",
           "required": true,
-          "sectionId":"languageEducationInfo",
+          "sectionId": "languageEducationInfo",
           "questionText": "Please describe a typical progression of schoooling at this site. At what ages do students move between schools (for example, from primary to middle or secondary school)? How many years do they spend at each stage?",
           "infoExample": "For example, \"Children typically attend elementary school from kindergarten through grade 5 or 6, beginning at age 5 and lasting about 6–7 years. Students then move to middle school or junior high school for grades 6–8 or 7–8, usually from ages 11–13, lasting 2–3 years, before progressing to high school, which lasts 4 years.\""
         },
@@ -296,7 +324,7 @@
           "variableName": "schoolingTeacherQuals",
           "kind": "single-select",
           "required": true,
-          "sectionId":"languageEducationInfo",
+          "sectionId": "languageEducationInfo",
           "questionText": "What minimum qualifications are typically required for teachers at your site?",
           "options": [
             {
@@ -326,7 +354,7 @@
           "variableName": "anythingElse",
           "kind": "text",
           "required": true,
-          "sectionId":"anythingElse",
+          "sectionId": "anythingElse",
           "questionText": "Is there anything else you would like us to know about your site's sampling, recruitment, population, or administration?"
         }
       ]
@@ -340,8 +368,6 @@
     "mappingNotes": [
       "site_06: CSV response_options uses \"table\"; seed uses \"tablet\" to match the Tablet label"
     ],
-    "dashboardProvidedResponseFields": [
-      "siteId"
-    ]
+    "dashboardProvidedResponseFields": ["siteId"]
   }
 }

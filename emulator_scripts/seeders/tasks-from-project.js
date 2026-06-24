@@ -1,24 +1,24 @@
-const { GoogleAuth } = require('google-auth-library');
+const { GoogleAuth } = require("google-auth-library");
 
-const FIRESTORE_BASE_URL = 'https://firestore.googleapis.com/v1';
+const FIRESTORE_BASE_URL = "https://firestore.googleapis.com/v1";
 
 function firestoreValueToJs(value) {
-  if (!value || typeof value !== 'object') return undefined;
-  if ('stringValue' in value) return value.stringValue;
-  if ('booleanValue' in value) return value.booleanValue;
-  if ('integerValue' in value) return Number(value.integerValue);
-  if ('doubleValue' in value) return Number(value.doubleValue);
-  if ('timestampValue' in value) return value.timestampValue;
-  if ('nullValue' in value) return null;
-  if ('arrayValue' in value) {
+  if (!value || typeof value !== "object") return undefined;
+  if ("stringValue" in value) return value.stringValue;
+  if ("booleanValue" in value) return value.booleanValue;
+  if ("integerValue" in value) return Number(value.integerValue);
+  if ("doubleValue" in value) return Number(value.doubleValue);
+  if ("timestampValue" in value) return value.timestampValue;
+  if ("nullValue" in value) return null;
+  if ("arrayValue" in value) {
     return (value.arrayValue.values || []).map(firestoreValueToJs);
   }
-  if ('mapValue' in value) {
+  if ("mapValue" in value) {
     return Object.fromEntries(
       Object.entries(value.mapValue.fields || {}).map(([key, nestedValue]) => [
         key,
         firestoreValueToJs(nestedValue),
-      ]),
+      ])
     );
   }
   return undefined;
@@ -29,29 +29,33 @@ function firestoreDocumentToJs(document) {
     Object.entries(document?.fields || {}).map(([key, value]) => [
       key,
       firestoreValueToJs(value),
-    ]),
+    ])
   );
 }
 
 function parseDocumentId(documentName) {
-  const parts = String(documentName || '').split('/');
+  const parts = String(documentName || "").split("/");
   return parts[parts.length - 1];
 }
 
-async function requestWithAuth({ authClient, url, method = 'GET', body }) {
+async function requestWithAuth({ authClient, url, method = "GET", body }) {
   const token = await authClient.getAccessToken();
   const response = await fetch(url, {
     method,
     headers: {
       Authorization: `Bearer ${token.token || token}`,
-      'Content-Type': 'application/json',
+      "Content-Type": "application/json",
     },
     body: body ? JSON.stringify(body) : undefined,
   });
 
   const responseBody = await response.json().catch(() => null);
   if (!response.ok) {
-    throw new Error(`${method} ${url} failed: ${response.status} ${JSON.stringify(responseBody)}`);
+    throw new Error(
+      `${method} ${url} failed: ${response.status} ${JSON.stringify(
+        responseBody
+      )}`
+    );
   }
 
   return responseBody;
@@ -61,11 +65,11 @@ async function fetchRegisteredTasks({ sourceProjectId, authClient }) {
   const url = `${FIRESTORE_BASE_URL}/projects/${sourceProjectId}/databases/(default)/documents:runQuery`;
   const queryBody = {
     structuredQuery: {
-      from: [{ collectionId: 'tasks' }],
+      from: [{ collectionId: "tasks" }],
       where: {
         fieldFilter: {
-          field: { fieldPath: 'registered' },
-          op: 'EQUAL',
+          field: { fieldPath: "registered" },
+          op: "EQUAL",
           value: { booleanValue: true },
         },
       },
@@ -75,7 +79,7 @@ async function fetchRegisteredTasks({ sourceProjectId, authClient }) {
   const rows = await requestWithAuth({
     authClient,
     url,
-    method: 'POST',
+    method: "POST",
     body: queryBody,
   });
 
@@ -87,12 +91,16 @@ async function fetchRegisteredTasks({ sourceProjectId, authClient }) {
     }));
 }
 
-async function fetchRegisteredVariants({ sourceProjectId, taskId, authClient }) {
+async function fetchRegisteredVariants({
+  sourceProjectId,
+  taskId,
+  authClient,
+}) {
   const url = `${FIRESTORE_BASE_URL}/projects/${sourceProjectId}/databases/(default)/documents/tasks/${encodeURIComponent(
-    taskId,
+    taskId
   )}/variants?pageSize=1000`;
 
-  const body = await requestWithAuth({ authClient, url, method: 'GET' });
+  const body = await requestWithAuth({ authClient, url, method: "GET" });
   const variants = body.documents || [];
 
   return variants
@@ -105,18 +113,20 @@ async function fetchRegisteredVariants({ sourceProjectId, taskId, authClient }) 
 
 async function seedRegisteredTasksFromProject({
   targetApp,
-  sourceProjectId = 'hs-levante-admin-dev',
+  sourceProjectId = "hs-levante-admin-dev",
   verbose = true,
 }) {
-  if (!targetApp) throw new Error('targetApp is required');
+  if (!targetApp) throw new Error("targetApp is required");
 
   const auth = new GoogleAuth({
-    scopes: ['https://www.googleapis.com/auth/datastore'],
+    scopes: ["https://www.googleapis.com/auth/datastore"],
   });
   const authClient = await auth.getClient();
 
   if (verbose) {
-    console.log(`  Copying registered tasks/variants from ${sourceProjectId}...`);
+    console.log(
+      `  Copying registered tasks/variants from ${sourceProjectId}...`
+    );
   }
 
   const db = targetApp.firestore();
@@ -125,7 +135,7 @@ async function seedRegisteredTasksFromProject({
   let variantsWritten = 0;
 
   for (const task of tasks) {
-    const taskRef = db.collection('tasks').doc(task.id);
+    const taskRef = db.collection("tasks").doc(task.id);
     await taskRef.set(task.data, { merge: true });
 
     const variants = await fetchRegisteredVariants({
@@ -135,7 +145,7 @@ async function seedRegisteredTasksFromProject({
     });
 
     for (const variant of variants) {
-      await taskRef.collection('variants').doc(variant.id).set(variant.data, {
+      await taskRef.collection("variants").doc(variant.id).set(variant.data, {
         merge: true,
       });
       variantsWritten++;
@@ -150,7 +160,7 @@ async function seedRegisteredTasksFromProject({
 
   if (verbose) {
     console.log(
-      `  ✅ Copied ${summary.tasksWritten} registered tasks and ${summary.variantsWritten} registered variants`,
+      `  ✅ Copied ${summary.tasksWritten} registered tasks and ${summary.variantsWritten} registered variants`
     );
   }
 

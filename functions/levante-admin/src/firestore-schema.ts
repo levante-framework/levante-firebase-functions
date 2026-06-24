@@ -334,7 +334,7 @@ export interface AdminData {
 export interface OrgAssociationMap {
   all: string[];
   current: string[];
-  dates: Record<string, Timestamp>; // Structure needs clarification
+  dates: Record<string, { from: Timestamp; to: Timestamp | null }>;
 }
 
 // Structure for user legal document acceptance within Users
@@ -354,6 +354,10 @@ export interface User {
     started: string[]; // Document IDs from `administrations` collection that are started
   };
   archived: boolean;
+  birthMonth?: number;
+  birthYear?: number;
+  childIdentifier?: string;
+  childIds?: string[]; // TODO: backfill `studentIds` -> `childIds` in db
   classes: OrgAssociationMap;
   createdAt: Timestamp;
   disabled: boolean;
@@ -361,12 +365,17 @@ export interface User {
   districts: OrgAssociationMap;
   email: string;
   groups: OrgAssociationMap;
-  legal: UserLegal;
-  schools: OrgAssociationMap;
-  sso?: string; // e.g., "google" only for admin users
-  userType: "admin" | "teacher" | "student" | "parent";
-  testData?: boolean;
+  idHash?: string;
+  parentIds?: string[];
   roles: { siteId: string; role: string; siteName: string }[];
+  schools: OrgAssociationMap;
+  syncStatus?: "pending" | "complete" | "failed";
+  teacherIds?: string[];
+  userType: "admin" | "teacher" | "student" | "parent";
+  username?: string;
+  testData?: boolean;
+  uid?: string;
+  updatedAt: Timestamp;
 }
 
 // Interface for the assignments subcollection of `users`

@@ -26,7 +26,7 @@ export const adminDb = getFirestore();
 export function getClient() {
   const app = initClientApp(
     { projectId: PROJECT_ID, apiKey: "fake-api-key" },
-    `e2e-${Date.now()}`,
+    `e2e-${Date.now()}`
   );
   const auth = getClientAuth(app);
   const functions = getFunctions(app);
@@ -43,7 +43,7 @@ export function getClient() {
 export async function signInAs(
   client: ReturnType<typeof getClient>,
   uid: string,
-  claims: Record<string, unknown>,
+  claims: Record<string, unknown>
 ) {
   await adminAuth.createUser({ uid }).catch((e) => {
     if (e.code !== "auth/uid-already-exists") throw e;
@@ -58,7 +58,7 @@ export async function clearFirestore() {
     `http://127.0.0.1:8180/emulator/v1/projects/${PROJECT_ID}/databases/(default)/documents`,
     {
       method: "DELETE",
-    },
+    }
   );
   if (!res.ok) throw new Error(`clearFirestore failed: ${res.status}`);
 }
@@ -66,7 +66,7 @@ export async function clearFirestore() {
 export async function clearAuth() {
   await fetch(
     `http://127.0.0.1:9199/emulator/v1/projects/${PROJECT_ID}/accounts`,
-    { method: "DELETE" },
+    { method: "DELETE" }
   );
 }
 

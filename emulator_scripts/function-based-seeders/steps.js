@@ -5,26 +5,32 @@ const {
   ORG_FIXTURES,
   chunk,
   normalizeToLowercase,
-} = require('./fixtures');
+} = require("./fixtures");
 
-async function createOrgs({ runtime, idToken, uid, orgFixtures = ORG_FIXTURES }) {
-  const { siteName, schoolName, originalClassName, newClassName, cohortName } = orgFixtures;
+async function createOrgs({
+  runtime,
+  idToken,
+  uid,
+  orgFixtures = ORG_FIXTURES,
+}) {
+  const { siteName, schoolName, originalClassName, newClassName, cohortName } =
+    orgFixtures;
 
   const siteId = await upsertOrg(runtime, idToken, {
     name: siteName,
     normalizedName: normalizeToLowercase(siteName),
-    type: 'districts',
-    tags: ['function-seed', 'test'],
+    type: "districts",
+    tags: ["function-seed", "test"],
     createdBy: uid,
-    siteId: 'any',
+    siteId: "any",
     subGroups: [],
   });
 
   const schoolId = await upsertOrg(runtime, idToken, {
     name: schoolName,
     normalizedName: normalizeToLowercase(schoolName),
-    type: 'schools',
-    tags: ['function-seed'],
+    type: "schools",
+    tags: ["function-seed"],
     createdBy: uid,
     siteId,
     districtId: siteId,
@@ -33,8 +39,8 @@ async function createOrgs({ runtime, idToken, uid, orgFixtures = ORG_FIXTURES })
   const originalClassId = await upsertOrg(runtime, idToken, {
     name: originalClassName,
     normalizedName: normalizeToLowercase(originalClassName),
-    type: 'classes',
-    tags: ['function-seed', 'third-grade'],
+    type: "classes",
+    tags: ["function-seed", "third-grade"],
     createdBy: uid,
     siteId,
     districtId: siteId,
@@ -44,8 +50,8 @@ async function createOrgs({ runtime, idToken, uid, orgFixtures = ORG_FIXTURES })
   const newClassId = await upsertOrg(runtime, idToken, {
     name: newClassName,
     normalizedName: normalizeToLowercase(newClassName),
-    type: 'classes',
-    tags: ['function-seed', 'fourth-grade'],
+    type: "classes",
+    tags: ["function-seed", "fourth-grade"],
     createdBy: uid,
     siteId,
     districtId: siteId,
@@ -55,12 +61,12 @@ async function createOrgs({ runtime, idToken, uid, orgFixtures = ORG_FIXTURES })
   const cohortId = await upsertOrg(runtime, idToken, {
     name: cohortName,
     normalizedName: normalizeToLowercase(cohortName),
-    type: 'groups',
-    tags: ['function-seed', 'reading'],
+    type: "groups",
+    tags: ["function-seed", "reading"],
     createdBy: uid,
     siteId,
     parentOrgId: siteId,
-    parentOrgType: 'district',
+    parentOrgType: "district",
   });
 
   return {
@@ -78,26 +84,34 @@ async function createOrgs({ runtime, idToken, uid, orgFixtures = ORG_FIXTURES })
 }
 
 async function upsertOrg(runtime, idToken, data) {
-  const result = await runtime.callFunction('upsertOrg', data, idToken);
-  if (result?.status !== 'ok' || !result?.orgId) {
-    throw new Error(`upsertOrg returned an unexpected response: ${JSON.stringify(result)}`);
+  const result = await runtime.callFunction("upsertOrg", data, idToken);
+  if (result?.status !== "ok" || !result?.orgId) {
+    throw new Error(
+      `upsertOrg returned an unexpected response: ${JSON.stringify(result)}`
+    );
   }
   return result.orgId;
 }
 
-async function createAdminUsers({ runtime, idToken, siteId, siteName, adminUsers = ADMIN_USERS }) {
+async function createAdminUsers({
+  runtime,
+  idToken,
+  siteId,
+  siteName,
+  adminUsers = ADMIN_USERS,
+}) {
   const createdAdmins = [];
 
   for (const adminUser of adminUsers) {
     const result = await runtime.callFunction(
-      'createAdministrator',
+      "createAdministrator",
       {
         email: adminUser.email,
         name: adminUser.name,
         roles: [{ role: adminUser.role, siteId, siteName }],
         isTestData: false,
       },
-      idToken,
+      idToken
     );
     createdAdmins.push({ ...adminUser, uid: result?.adminUid });
   }
@@ -109,43 +123,58 @@ async function createParticipantUsers({ runtime, userRows, siteId, idToken }) {
   const createdUsers = [];
 
   for (const rows of chunk(userRows, 25)) {
-    const result = await runtime.callFunction('createUsers', { users: rows, siteId }, idToken);
-    if (!Array.isArray(result?.data) || result.data.length !== rows.length) {
-      throw new Error(`createUsers returned an unexpected response: ${JSON.stringify(result)}`);
+    const result = await runtime.callFunction(
+      "createUsers",
+      { users: rows, siteId },
+      idToken
+    );
+    if (!Array.isArray(result?.users) || result.users.length !== rows.length) {
+      throw new Error(
+        `createUsers returned an unexpected response: ${JSON.stringify(result)}`
+      );
     }
-    createdUsers.push(...result.data);
+    createdUsers.push(...result.users);
   }
 
   return createdUsers;
 }
 
-async function linkParticipantUsers({ runtime, userRows, createdUsers, siteId, idToken }) {
-  const createdUserBySeedId = new Map(userRows.map((row, index) => [row.id, createdUsers[index]]));
+async function linkParticipantUsers({
+  runtime,
+  userRows,
+  createdUsers,
+  siteId,
+  idToken,
+}) {
+  const createdUserBySeedId = new Map(
+    userRows.map((row, index) => [row.id, createdUsers[index]])
+  );
 
   await runtime.callFunction(
-    'linkUsers',
+    "linkUsers",
     {
       siteId,
       users: userRows.map((row) => ({
         id: row.id,
         userType: row.userType,
         uid: createdUserBySeedId.get(row.id)?.uid,
-        ...(row.userType === 'child' && {
-          parentId: 'parent',
-          teacherId: 'teacher',
+        ...(row.userType === "child" && {
+          parentId: "parent",
+          teacherId: "teacher",
           month: Number(row.month),
           year: Number(row.year),
         }),
       })),
     },
-    idToken,
+    idToken
   );
 }
 
 function buildAdministrationAssessments({ template, variantsByTaskId }) {
   return template.taskIds.map((taskId) => {
     const variant = variantsByTaskId[taskId];
-    if (!variant) throw new Error(`Missing seeded registered variant for task ${taskId}`);
+    if (!variant)
+      throw new Error(`Missing seeded registered variant for task ${taskId}`);
 
     return {
       taskId,
@@ -175,27 +204,41 @@ async function createAdministrations({
   const templates = includeOptionalAdministrationTemplates
     ? administrationTemplates
     : administrationTemplates.filter((template) => !template.optional);
-  const allTaskIds = Array.from(new Set(templates.flatMap((template) => template.taskIds)));
-  const variantsByTaskId = await runtime.getVariantsByTaskIds(allTaskIds, idToken);
+  const allTaskIds = Array.from(
+    new Set(templates.flatMap((template) => template.taskIds))
+  );
+  const variantsByTaskId = await runtime.getVariantsByTaskIds(
+    allTaskIds,
+    idToken
+  );
   const createdAdministrations = [];
   const now = new Date();
 
   for (const template of templates) {
-    const missingTasks = template.taskIds.filter((taskId) => !variantsByTaskId[taskId]);
+    const missingTasks = template.taskIds.filter(
+      (taskId) => !variantsByTaskId[taskId]
+    );
     if (missingTasks.length > 0) {
       console.log(
-        `Skipping administration template ${template.templateId}; missing registered variants for: ${missingTasks.join(', ')}`,
+        `Skipping administration template ${
+          template.templateId
+        }; missing registered variants for: ${missingTasks.join(", ")}`
       );
       continue;
     }
 
-    const closeDate = new Date(now.getTime() + template.daysToClose * 24 * 60 * 60 * 1000);
+    const closeDate = new Date(
+      now.getTime() + template.daysToClose * 24 * 60 * 60 * 1000
+    );
     const result = await runtime.callFunction(
-      'upsertAdministration',
+      "upsertAdministration",
       {
         name: template.name,
         normalizedName: normalizeToLowercase(template.name),
-        assessments: buildAdministrationAssessments({ template, variantsByTaskId }),
+        assessments: buildAdministrationAssessments({
+          template,
+          variantsByTaskId,
+        }),
         dateOpen: now.toISOString(),
         dateClose: closeDate.toISOString(),
         sequential: template.sequential,
@@ -210,14 +253,20 @@ async function createAdministrations({
         creatorName,
         siteId,
       },
-      idToken,
+      idToken
     );
 
     if (!result?.administrationId) {
-      throw new Error(`upsertAdministration returned an unexpected response: ${JSON.stringify(result)}`);
+      throw new Error(
+        `upsertAdministration returned an unexpected response: ${JSON.stringify(
+          result
+        )}`
+      );
     }
 
-    const expectedAssignmentCount = template.assignedCondition ? studentCount + 1 : studentCount + 3;
+    const expectedAssignmentCount = template.assignedCondition
+      ? studentCount + 1
+      : studentCount + 3;
     await waitForAssignmentSync({
       runtime,
       administrationId: result.administrationId,
@@ -234,17 +283,25 @@ async function createAdministrations({
   return createdAdministrations;
 }
 
-async function waitForAssignmentSync({ runtime, administrationId, expectedCount }) {
+async function waitForAssignmentSync({
+  runtime,
+  administrationId,
+  expectedCount,
+}) {
   const startedAt = Date.now();
   const timeoutMs = 120_000;
 
   while (Date.now() - startedAt < timeoutMs) {
-    const syncedCount = await runtime.countAssignmentsForAdministration(administrationId);
+    const syncedCount = await runtime.countAssignmentsForAdministration(
+      administrationId
+    );
     if (syncedCount === expectedCount) return;
     await new Promise((resolve) => setTimeout(resolve, 1_000));
   }
 
-  throw new Error(`Timed out waiting for assignment ${administrationId} to sync to ${expectedCount} users.`);
+  throw new Error(
+    `Timed out waiting for assignment ${administrationId} to sync to ${expectedCount} users.`
+  );
 }
 
 module.exports = {

@@ -1,5 +1,5 @@
-const path = require('path');
-const fs = require('fs');
+const path = require("path");
+const fs = require("fs");
 
 /**
  * Target for seed/clear scripts.
@@ -7,9 +7,9 @@ const fs = require('fs');
  * - SEED_PROJECT=projectId → use that Firebase project (Auth + Firestore).
  */
 function loadProjectIdFromFirebaseConfig() {
-  const configPath = path.resolve(__dirname, '..', 'firebaseconfig.js');
+  const configPath = path.resolve(__dirname, "..", "firebaseconfig.js");
   try {
-    const content = fs.readFileSync(configPath, 'utf8');
+    const content = fs.readFileSync(configPath, "utf8");
     const match = content.match(/projectId:\s*["']([^"']+)["']/);
     return match ? match[1] : null;
   } catch {
@@ -19,7 +19,7 @@ function loadProjectIdFromFirebaseConfig() {
 
 function getSeedConfig() {
   const forceEmulator =
-    process.env.EMULATOR === '1' || process.env.USE_EMULATOR === '1';
+    process.env.EMULATOR === "1" || process.env.USE_EMULATOR === "1";
   const projectId = forceEmulator
     ? null
     : process.env.SEED_PROJECT ||
@@ -28,7 +28,7 @@ function getSeedConfig() {
   const isEmulator = forceEmulator || !projectId;
 
   return {
-    projectId: projectId || 'demo-emulator',
+    projectId: projectId || "demo-emulator",
     isEmulator,
   };
 }

@@ -12,8 +12,9 @@
     "format": "npm --prefix functions/levante-admin run format",
     "lint": "npm --prefix functions/levante-admin run lint",
     "prepare": "husky install || true",
-    "test": "npm run test:e2e && npm run test:rules",
-    "test:e2e": "npm run build && firebase emulators:exec \"npx vitest run __tests__/e2e\"",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "vitest run functions/levante-admin/src --config vitest.unit.config.mts",
+    "test:e2e": "npm run build && firebase emulators:exec \"vitest run __tests__/e2e --config vitest.e2e.config.mts\"",
     "test:rules": "firebase emulators:exec \"npx vitest run __tests__/rules\"",
     "predeploy:levante-admin": "npm run build",
     "predeploy:levante-assessment": "npm run build",
@@ -30,7 +31,7 @@
     "emulator:clear": "EMULATOR=1 node emulator_scripts/clear-emulator.js",
     "emulator:export": "firebase emulators:export ./emulator_data --force",
     "emulator:reset": "npm run emulator:clear && npm run emulator:seed",
-    "seed:dev": "node emulator_scripts/seed-emulator-functions.js",
+    "seed:dev": "node emulator_scripts/seed-emulator.js",
     "seed:dev:legacy": "node emulator_scripts/seed-emulator.js",
     "clear:dev": "node emulator_scripts/clear-emulator.js",
     "reset:dev": "CONFIRM_CLEAR=1 npm run clear:dev && npm run seed:dev"
@@ -64,7 +65,7 @@
     "*.{js,css,md}": "prettier --write"
   },
   "dependencies": {
-    "@levante-framework/levante-zod": "1.1.1",
+    "@levante-framework/levante-zod": "^1.2.4",
     "firebase": "^11.6.1",
     "firebase-admin": "^11.11.1",
     "firebase-tools": "^14.27.0"

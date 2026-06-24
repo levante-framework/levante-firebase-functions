@@ -1,13 +1,13 @@
 # Levante Firebase Functions
 
 This repository contains a collection of Firebase functions for the Levante platform. The functions are organized into separate directories:
-                        |
+|
 
-| `levante-admin`      | Contains Firebase functions for the hs-levante-admin and hs-levante-admin-dev projects                           |
+| `levante-admin` | Contains Firebase functions for the hs-levante-admin and hs-levante-admin-dev projects |
 
-| `levante-assessment` | Contains Firebase functions for hs-levante-assessment and hs-levante-assessment-dev projects. (To be sunset.)                    |
+| `levante-assessment` | Contains Firebase functions for hs-levante-assessment and hs-levante-assessment-dev projects. (To be sunset.) |
 
-| `local`         | Contains "local" functions for one off use cases (ex. transfering user data to another account).
+| `local` | Contains "local" functions for one off use cases (ex. transfering user data to another account).
 
 ## Getting Started
 
@@ -53,21 +53,22 @@ npm run dev
 npm run emulator:seed
 ```
 
-
 ### Database Seeding Scripts
 
 The default emulator seed is functions-driven. It copies registered tasks/variants from the configured source project, then creates dashboard-visible users, orgs, administrations, and assignments through Firebase callable functions.
 
 #### Test Users Created
-| User Type | Email | Password | Description |
-|-----------|-------|----------|-------------|
-| Super Admin | superadmin@levante.test | super123 | Super Admin user |
-| Admin | admin@levante.test | Set by `createAdministrator` | Site admin fixture user |
-| Site Admin | siteadmin@levante.test | Set by `createAdministrator` | Site admin fixture user |
-| Research Assistant | ra@levante.test | Set by `createAdministrator` | Research assistant fixture user |
-| Participants | Generated seed users | N/A | Teacher, parent, and generated child users |
+
+| User Type          | Email                   | Password                     | Description                                |
+| ------------------ | ----------------------- | ---------------------------- | ------------------------------------------ |
+| Super Admin        | superadmin@levante.test | super123                     | Super Admin user                           |
+| Admin              | admin@levante.test      | Set by `createAdministrator` | Site admin fixture user                    |
+| Site Admin         | siteadmin@levante.test  | Set by `createAdministrator` | Site admin fixture user                    |
+| Research Assistant | ra@levante.test         | Set by `createAdministrator` | Research assistant fixture user            |
+| Participants       | Generated seed users    | N/A                          | Teacher, parent, and generated child users |
 
 #### Groups Created
+
 - **District/Site**: "Function Seed District"
 - **School**: "Function Seed Elementary School"
 - **Classes**: "3rd Grade - Room 101", "4th Grade - Room 102"
@@ -100,11 +101,13 @@ rm -rf emulator_data && npm run dev:clean
 ### Typical Development Workflow
 
 1. **Start emulators**:
+
    ```bash
    npm run dev
    ```
 
 2. **Set up test data**:
+
    ```bash
    npm run emulator:seed
    ```
@@ -143,7 +146,6 @@ Optional administration templates reference `survey`, which is skipped by defaul
 
 All participant users are automatically linked to the test group (cohort) and groups according to their user type.
 
-
 ## Deployment
 
 Levante functions are deployed automatically when merged to the `main` branch. If you would like to deploy functions locally, follow these steps:
@@ -159,7 +161,6 @@ Levante functions are deployed automatically when merged to the `main` branch. I
    ```
 
 3. Deploy the functions
-
 
    ~To deploy only certain functions, first select either the dev or prod environment. For example, to select the dev environment, use
 
@@ -190,7 +191,6 @@ Levante functions are deployed automatically when merged to the `main` branch. I
    npm run deploy:prod  # For deployment to the prod environment
    ```
 
-
 ## License
 
-This project is a derivative of ROAR's original version, which is licensed under the [Stanford Academic Software License for ROAR](LICENSE). 
+This project is a derivative of ROAR's original version, which is licensed under the [Stanford Academic Software License for ROAR](LICENSE).
