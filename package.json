@@ -65,7 +65,7 @@
     "*.{js,css,md}": "prettier --write"
   },
   "dependencies": {
-    "@levante-framework/levante-zod": "^1.2.3",
+    "@levante-framework/levante-zod": "^1.2.4",
     "firebase": "^11.6.1",
     "firebase-admin": "^11.11.1",
     "firebase-tools": "^14.27.0"
