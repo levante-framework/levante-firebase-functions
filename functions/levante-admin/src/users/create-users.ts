@@ -531,6 +531,9 @@ export async function enqueueUserSyncTasks(
 
   if (failedToEnqueue.length === 0) return;
 
+  // TODO: The user gets no feedback that sync tasks failed to enqueue.
+  // Either the result should include this info or syncStatus "failed" should
+  // be checked client-side.
   logger.error("Failed to enqueue user sync tasks", {
     siteId,
     uids: failedToEnqueue.map((u) => u.uid),
