@@ -158,6 +158,7 @@ describe("createUsers (e2e)", () => {
       archived: false,
       disabled: false,
       districts: { current: [SITE] },
+      email: "existing@example.com",
       idHash: idHashFor("ext-1"),
       syncStatus: "complete",
     });
@@ -166,7 +167,12 @@ describe("createUsers (e2e)", () => {
       createUsers({ siteId: SITE, users: [teacher("ext-1")] })
     ).rejects.toMatchObject({
       code: "functions/already-exists",
-      details: { code: "users", ids: ["ext-1"] },
+      details: {
+        code: "users",
+        users: [
+          { id: "ext-1", email: "existing@example.com", uid: "u-existing" },
+        ],
+      },
     });
   });
 

@@ -633,7 +633,14 @@ export const createUsers = onCall(async (req): Promise<CreateUsersResult> => {
     });
     throw new HttpsError("already-exists", "Users already exist", {
       code: "users",
-      ids: existingUsers.map((u) => u.id),
+      users: existingUsers.map((u) => {
+        const doc = hashToUser.get(idToHash[u.id])!;
+        return {
+          id: u.id,
+          email: doc.get("email") as string,
+          uid: doc.id,
+        };
+      }),
     });
   }
 
