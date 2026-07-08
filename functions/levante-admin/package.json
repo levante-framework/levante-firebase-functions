@@ -20,7 +20,7 @@
     "update:indexes": "firebase firestore:indexes --project dev > firestore.indexes.json && npm run normalize:indexes"
   },
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "license": "Stanford Academic Software License for LEVANTE",
   "main": "lib/index.js",
@@ -32,7 +32,7 @@
     "@levante-framework/permissions-core": "^1.2.1",
     "axios": "^1.4.0",
     "axios-oauth-1.0a": "^0.3.6",
-    "bcrypt": "^5.1.1",
+    "bcrypt": "^6.0.0",
     "boolean": "^3.2.0",
     "dotenv": "^16.0.0",
     "firebase-admin": "^13.4.0",
@@ -43,7 +43,7 @@
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
-    "@types/node": "^20.19.19",
+    "@types/node": "^22",
     "prettier": "2.8.3",
     "typescript": "5.9"
   },
