@@ -37,7 +37,7 @@
     "reset:dev": "CONFIRM_CLEAR=1 npm run clear:dev && npm run seed:dev"
   },
   "engines": {
-    "node": "20"
+    "node": "22"
   },
   "repository": {
     "type": "git",
