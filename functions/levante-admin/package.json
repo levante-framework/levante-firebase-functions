@@ -26,6 +26,7 @@
   "main": "lib/index.js",
   "dependencies": {
     "@bdelab/roar-utils": "^1.1.0",
+    "@date-fns/tz": "^1.5.0",
     "@firebase/logger": "^0.4.4",
     "@google-cloud/secret-manager": "^4.2.2",
     "@levante-framework/levante-zod": "^1.2.4",
@@ -34,6 +35,7 @@
     "axios-oauth-1.0a": "^0.3.6",
     "bcrypt": "^6.0.0",
     "boolean": "^3.2.0",
+    "date-fns": "^4.4.0",
     "dotenv": "^16.0.0",
     "firebase-admin": "^13.4.0",
     "firebase-functions": "^6.3.2",
