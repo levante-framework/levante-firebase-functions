@@ -51,6 +51,19 @@ export interface TaskProgressSummaryRow {
   completed: number;
 }
 
+export type UserTaskProgressStatus =
+  | "notAssigned"
+  | "notStarted"
+  | "started"
+  | "completed";
+
+export interface UserTaskProgressRow {
+  taskId: string;
+  status: UserTaskProgressStatus;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
 export interface UserAdministrationProgressRow {
   userId: string;
   email: string | null;
@@ -59,6 +72,7 @@ export interface UserAdministrationProgressRow {
   status: AssignmentRollupStatus;
   startedAt: string | null;
   completedAt: string | null;
+  tasks: UserTaskProgressRow[];
 }
 
 export interface GetAdministrationOrgProgressResult {
@@ -365,6 +379,16 @@ export async function getAdministrationOrgProgressHandler(
       rollup = "notAssigned";
     }
 
+    const tasks: UserTaskProgressRow[] = taskDefinitions.map((def) => {
+      const assessment = assessments.find((a) => a.taskId === def.taskId);
+      return {
+        taskId: def.taskId,
+        status: classifyTaskForUser(assessments, def.taskId),
+        startedAt: toIso(assessment?.startedOn),
+        completedAt: toIso(assessment?.completedOn),
+      };
+    });
+
     users.push({
       userId: uid,
       email,
@@ -373,6 +397,7 @@ export async function getAdministrationOrgProgressHandler(
       status: rollup,
       startedAt,
       completedAt,
+      tasks,
     });
 
     for (let i = 0; i < taskDefinitions.length; i++) {
