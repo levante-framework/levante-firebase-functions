@@ -14,6 +14,10 @@ import {
   processModifiedAdministration,
 } from "./administrations/sync-administrations.js";
 import { assertNoDuplicateAdministrationNameInSite } from "./administrations/administration-duplicate-name.js";
+import {
+  atTimeInTz,
+  dayInTz,
+} from "./administrations/administration-dates.js";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import type { IAssessment, IOrgsList } from "./interfaces.js"; // Assuming necessary types/helpers are in common
@@ -25,6 +29,7 @@ interface UpsertAdministrationData {
   assessments: IAssessment[]; // Use interface from common
   dateOpen: string; // Expect ISO string from client
   dateClose: string; // Expect ISO string from client
+  timeZone?: string;
   sequential?: boolean;
   orgs?: IOrgsList; // Use interface from common
   tags?: string[];
@@ -135,6 +140,7 @@ export const upsertAdministrationHandler = async (
     assessments,
     dateOpen,
     dateClose,
+    timeZone: rawTimeZone,
     sequential = true,
     orgs = {
       districts: [],
@@ -162,25 +168,38 @@ export const upsertAdministrationHandler = async (
     );
   }
 
-  let dateOpenedTs: Timestamp;
+  const timeZone =
+    typeof rawTimeZone === "string" && rawTimeZone.length > 0
+      ? rawTimeZone
+      : "UTC";
+
+  let openDay: string;
+  let closeDay: string;
   let dateClosedTs: Timestamp;
   try {
-    const dateOpenObj = new Date(dateOpen);
-    const dateCloseObj = new Date(dateClose);
+    const openInput = new Date(dateOpen);
+    const closeInput = new Date(dateClose);
 
-    dateOpenedTs = Timestamp.fromDate(dateOpenObj);
-    dateClosedTs = Timestamp.fromDate(dateCloseObj);
-  } catch (e: unknown) {
+    if (Number.isNaN(openInput.getTime()) || Number.isNaN(closeInput.getTime())) {
+      throw new Error("Invalid date");
+    }
+    
+    openDay = dayInTz(openInput, timeZone);
+    closeDay = dayInTz(closeInput, timeZone);
+    dateClosedTs = Timestamp.fromDate(
+      atTimeInTz(closeDay, timeZone, 23, 59, 59, 999)
+    );
+  } catch {
     throw new HttpsError(
       "invalid-argument",
       "Invalid date format for dateOpen or dateClose. Use ISO 8601 format."
     );
   }
 
-  if (dateClosedTs.toMillis() < dateOpenedTs.toMillis()) {
+  if (closeDay < openDay) {
     throw new HttpsError(
       "invalid-argument",
-      `The end date cannot be before the start date: ${dateClose} < ${dateOpen}`
+      `The end date cannot be before the start date: ${closeDay} < ${openDay}`
     );
   }
 
@@ -229,7 +248,8 @@ export const upsertAdministrationHandler = async (
             `Administration with ID ${administrationId} not found for update.`
           );
         }
-        prevData = _pick(existingDoc.data(), [
+        const existingData = existingDoc.data() as IAdministrationDoc;
+        prevData = _pick(existingData, [
           ...ORG_NAMES,
           "createdBy",
           "assessments",
@@ -244,6 +264,15 @@ export const upsertAdministrationHandler = async (
           "readOrgs",
           "minimalOrgs",
         ]) as IAdministration;
+
+        const existingCreatedAt =
+          existingData.dateCreated instanceof Timestamp
+            ? existingData.dateCreated.toDate()
+            : new Date();
+        const dateOpenedTs =
+          openDay === dayInTz(existingCreatedAt, timeZone)
+            ? existingData.dateCreated
+            : Timestamp.fromDate(atTimeInTz(openDay, timeZone, 0, 0, 0, 0));
 
         // Prepare data for update (merge: true will handle partial updates)
         const updateData: Partial<IAdministrationDoc> = {
@@ -291,6 +320,11 @@ export const upsertAdministrationHandler = async (
         // --- Read 1 (Create Path) --- Check if user doc exists BEFORE any writes
         const userDocRef = db.collection("users").doc(callerAdminUid);
         const userDoc = await transaction.get(userDocRef);
+
+        const dateOpenedTs =
+          openDay === dayInTz(new Date(), timeZone)
+            ? (FieldValue.serverTimestamp() as Timestamp)
+            : Timestamp.fromDate(atTimeInTz(openDay, timeZone, 0, 0, 0, 0));
 
         // Prepare Administration Data for creation
         const administrationData: IAdministrationDoc = {
