@@ -6,6 +6,9 @@ const {
   ADMIN_USERS,
   buildParticipantRows,
 } = require("./function-based-seeders/fixtures");
+const {
+  bootstrapFunctionSeedPrerequisites,
+} = require("./function-based-seeders/bootstrap");
 const { getFunctionsSeedOptions } = require("./function-based-seeders/options");
 const {
   createFunctionsSeedRuntime,
@@ -80,6 +83,13 @@ async function main() {
     console.log("=== TASK-ONLY SEED COMPLETE ===");
     return;
   }
+
+  console.log("Bootstrapping system permissions and super admin...");
+  await bootstrapFunctionSeedPrerequisites({
+    app: runtime.app,
+    superAdminEmail: options.superAdminEmail,
+    superAdminPassword: options.superAdminPassword,
+  });
 
   const { idToken, uid } = await runtime.signIn({
     email: options.superAdminEmail,
