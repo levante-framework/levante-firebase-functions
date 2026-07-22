@@ -1,4 +1,5 @@
 const { GoogleAuth } = require("google-auth-library");
+const { seedVariantParamSpecs } = require("./variant-param-specs");
 
 const FIRESTORE_BASE_URL = "https://firestore.googleapis.com/v1";
 
@@ -164,7 +165,18 @@ async function seedRegisteredTasksFromProject({
     );
   }
 
-  return summary;
+  if (verbose) {
+    console.log("  Seeding variantParamSpecs from task variant params...");
+  }
+  const variantParamSpecs = await seedVariantParamSpecs({
+    targetApp,
+    verbose,
+  });
+
+  return {
+    ...summary,
+    variantParamSpecsWritten: variantParamSpecs.written,
+  };
 }
 
 module.exports = { seedRegisteredTasksFromProject };

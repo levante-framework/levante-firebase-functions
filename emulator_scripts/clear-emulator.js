@@ -143,6 +143,7 @@ async function clearDatabase() {
       "schools",
       "classes",
       "groups",
+      "variantParamSpecs",
     ];
     for (const collectionName of flatCollections) {
       console.log(`  Clearing ${collectionName}...`);
