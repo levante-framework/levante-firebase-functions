@@ -129,6 +129,7 @@ async function clearDatabase() {
     await deleteCollectionGroup("assignedOrgs");
     await deleteCollectionGroup("readOrgs");
     await deleteCollectionGroup("stats");
+    await deleteCollectionGroup("revisions");
     await deleteCollectionGroup("variants");
 
     await recursiveDeleteCollection("users");

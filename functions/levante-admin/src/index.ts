@@ -975,6 +975,9 @@ export const upsertAdministration = onCall(async (request) => {
 
 export { completeTask } from "./tasks/completeTask.js";
 export { startTask } from "./tasks/startTask.js";
+export { getTasks } from "./tasks/get-tasks.js";
+export { getTaskVariants } from "./tasks/get-task-variants.js";
+export { getVariantParamSpecs } from "./tasks/get-variant-param-specs.js";
 
 /**
  * Syncs run document changes to assignment best-run and completion status.
