@@ -12,6 +12,7 @@ import {
   assertCanReadTasks,
   isNotArchived,
   requireAuthUid,
+  resolveAttributionEmails,
   resolveRegisteredFromLatestRevision,
   serializeTaskVariant,
   taskIdFromVariantPath,
@@ -65,7 +66,7 @@ export const getTaskVariants = onCall(
         )
       ).filter((variant): variant is SerializedVariant => variant !== null);
 
-      return { variants };
+      return { variants: await resolveAttributionEmails(variants) };
     }
 
     if (variantIds) {
@@ -104,7 +105,7 @@ export const getTaskVariants = onCall(
         );
       }
 
-      return { variants };
+      return { variants: await resolveAttributionEmails(variants) };
     }
 
     // No taskId / variantIds: return all non-archived variants.
@@ -126,6 +127,6 @@ export const getTaskVariants = onCall(
       )
     ).filter((variant): variant is SerializedVariant => variant !== null);
 
-    return { variants };
+    return { variants: await resolveAttributionEmails(variants) };
   }
 );

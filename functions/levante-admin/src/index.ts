@@ -980,6 +980,8 @@ export { getTaskVariants } from "./tasks/get-task-variants.js";
 export { getVariantParamSpecs } from "./tasks/get-variant-param-specs.js";
 export { upsertTask } from "./tasks/upsert-task.js";
 export { upsertVariantParamSpec } from "./tasks/upsert-variant-param-spec.js";
+export { createTaskVariant } from "./tasks/create-task-variant.js";
+export { updateTaskVariant } from "./tasks/update-task-variant.js";
 
 /**
  * Syncs run document changes to assignment best-run and completion status.

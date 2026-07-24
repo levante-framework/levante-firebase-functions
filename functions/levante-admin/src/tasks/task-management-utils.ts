@@ -1,9 +1,12 @@
 import type {
   DocumentData,
+  DocumentReference,
   DocumentSnapshot,
+  Firestore,
   QueryDocumentSnapshot,
 } from "firebase-admin/firestore";
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 import { HttpsError } from "firebase-functions/v2/https";
 import { ROLES } from "../utils/constants.js";
 import {
@@ -170,6 +173,165 @@ export function stripNullParams(
   return out;
 }
 
+export type VariantParams = Record<string, boolean | number | string>;
+
+/**
+ * Rejects null/undefined and non-primitive values on write.
+ * Returns a cleaned params object for storage/comparison.
+ */
+export function assertWritableParams(params: unknown): VariantParams {
+  if (!params || typeof params !== "object" || Array.isArray(params)) {
+    throw new HttpsError("invalid-argument", "Invalid input", {
+      code: "schema",
+      issues: [
+        {
+          path: "params",
+          message: "Params must be an object of boolean, number, or string",
+        },
+      ],
+    });
+  }
+
+  const issues: Array<{ path: string; message: string }> = [];
+  const out: VariantParams = {};
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value === null || value === undefined) {
+      issues.push({
+        path: `params.${key}`,
+        message: "Null/undefined param values are not allowed",
+      });
+      continue;
+    }
+    if (
+      typeof value === "boolean" ||
+      typeof value === "number" ||
+      typeof value === "string"
+    ) {
+      out[key] = value;
+    } else {
+      issues.push({
+        path: `params.${key}`,
+        message: "Param value must be boolean, number, or string",
+      });
+    }
+  }
+
+  if (issues.length > 0) {
+    throw new HttpsError("invalid-argument", "Invalid input", {
+      code: "schema",
+      issues,
+    });
+  }
+
+  return out;
+}
+
+/** Deep equality of params bags: same keys and same values (order-independent). */
+export function paramsEqual(a: VariantParams, b: VariantParams): boolean {
+  const aKeys = Object.keys(a).sort();
+  const bKeys = Object.keys(b).sort();
+  if (aKeys.length !== bKeys.length) return false;
+  for (let i = 0; i < aKeys.length; i++) {
+    if (aKeys[i] !== bKeys[i]) return false;
+    if (a[aKeys[i]] !== b[bKeys[i]]) return false;
+  }
+  return true;
+}
+
+type ParamSpecType = "boolean" | "number" | "string" | "unknown";
+
+/**
+ * Ensures every param key exists in a non-archived variantParamSpec and the
+ * value type matches the spec (`unknown` accepts boolean|number|string).
+ */
+export async function assertParamsAllowedBySpecs(
+  db: Firestore,
+  params: VariantParams
+): Promise<void> {
+  const specsSnap = await db.collection("variantParamSpecs").get();
+  const specsByName = new Map<string, ParamSpecType>();
+  for (const doc of specsSnap.docs) {
+    const data = doc.data();
+    if (!isNotArchived(data)) continue;
+    const type = data.type;
+    if (
+      type === "boolean" ||
+      type === "number" ||
+      type === "string" ||
+      type === "unknown"
+    ) {
+      specsByName.set(doc.id, type);
+      if (typeof data.name === "string" && data.name !== doc.id) {
+        specsByName.set(data.name, type);
+      }
+    }
+  }
+
+  const issues: Array<{ path: string; message: string }> = [];
+  for (const [key, value] of Object.entries(params)) {
+    const specType = specsByName.get(key);
+    if (!specType) {
+      issues.push({
+        path: `params.${key}`,
+        message: `Param "${key}" is not defined in variantParamSpecs`,
+      });
+      continue;
+    }
+    const valueType = typeof value;
+    if (specType === "unknown") continue;
+    if (valueType !== specType) {
+      issues.push({
+        path: `params.${key}`,
+        message: `Param "${key}" must be of type ${specType}`,
+      });
+    }
+  }
+
+  if (issues.length > 0) {
+    throw new HttpsError("invalid-argument", "Invalid input", {
+      code: "schema",
+      issues,
+    });
+  }
+}
+
+/** Finds a sibling variant under the same task with an identical params bag. */
+export async function findVariantWithSameParams(
+  taskRef: DocumentReference,
+  params: VariantParams
+): Promise<DocumentSnapshot | null> {
+  const variantsSnap = await taskRef.collection("variants").get();
+  for (const doc of variantsSnap.docs) {
+    if (!isNotArchived(doc.data())) continue;
+    const existing = stripNullParams(doc.data().params);
+    if (paramsEqual(existing, params)) return doc;
+  }
+  return null;
+}
+
+export async function writeVariantRevision(
+  variantSnap: DocumentSnapshot | QueryDocumentSnapshot,
+  fields: {
+    archived: boolean;
+    registered: boolean;
+    updatedBy: string;
+  }
+): Promise<void> {
+  const data = variantSnap.data() ?? {};
+  const now = FieldValue.serverTimestamp();
+  await variantSnap.ref.collection("revisions").add({
+    archived: fields.archived,
+    createdAt: data.createdAt ?? now,
+    ...(typeof data.createdBy === "string" ? { createdBy: data.createdBy } : {}),
+    name: typeof data.name === "string" ? data.name : "",
+    params: data.params ?? {},
+    registered: fields.registered,
+    updatedAt: now,
+    updatedBy: fields.updatedBy,
+  });
+}
+
 /**
  * Returns `registered` from the latest revision under the variant.
  * If no revisions exist, creates one from the variant's current fields.
@@ -189,17 +351,15 @@ export async function resolveRegisteredFromLatestRevision(
 
   const data = variantSnap.data() ?? {};
   const registered = data.registered === true;
-  const now = FieldValue.serverTimestamp();
-
-  await revisionsRef.add({
+  await writeVariantRevision(variantSnap, {
     archived: data.archived === true,
-    createdAt: data.createdAt ?? now,
-    ...(typeof data.createdBy === "string" ? { createdBy: data.createdBy } : {}),
-    name: typeof data.name === "string" ? data.name : "",
-    params: data.params ?? {},
     registered,
-    updatedAt: now,
-    ...(typeof data.updatedBy === "string" ? { updatedBy: data.updatedBy } : {}),
+    updatedBy:
+      typeof data.updatedBy === "string"
+        ? data.updatedBy
+        : typeof data.createdBy === "string"
+          ? data.createdBy
+          : "system",
   });
 
   return registered;
@@ -238,6 +398,47 @@ export function serializeTaskVariant(
     updatedAt: requireIsoString(data, "updatedAt", "lastUpdated", "createdAt"),
     ...(typeof data.updatedBy === "string" ? { updatedBy: data.updatedBy } : {}),
   };
+}
+
+type AttributionFields = {
+  createdBy?: string;
+  updatedBy?: string;
+};
+
+/**
+ * Resolve Auth UIDs in `createdBy` / `updatedBy` to emails for the wire format.
+ * Falls back to the original value when the user/email cannot be resolved.
+ */
+export async function resolveAttributionEmails<T extends AttributionFields>(
+  items: T[]
+): Promise<T[]> {
+  const uids = new Set<string>();
+  for (const item of items) {
+    if (item.createdBy) uids.add(item.createdBy);
+    if (item.updatedBy) uids.add(item.updatedBy);
+  }
+  if (uids.size === 0) return items;
+
+  const emailByUid = new Map<string, string>();
+  const identifiers = [...uids].map((uid) => ({ uid }));
+  // getUsers accepts at most 100 identifiers per call.
+  for (let i = 0; i < identifiers.length; i += 100) {
+    const chunk = identifiers.slice(i, i + 100);
+    const result = await getAuth().getUsers(chunk);
+    for (const user of result.users) {
+      if (user.email) emailByUid.set(user.uid, user.email);
+    }
+  }
+
+  return items.map((item) => ({
+    ...item,
+    ...(item.createdBy
+      ? { createdBy: emailByUid.get(item.createdBy) ?? item.createdBy }
+      : {}),
+    ...(item.updatedBy
+      ? { updatedBy: emailByUid.get(item.updatedBy) ?? item.updatedBy }
+      : {}),
+  }));
 }
 
 export function serializeVariantParamSpec(snap: DocumentSnapshot) {
