@@ -7,6 +7,7 @@ import { HttpsError, onCall } from "firebase-functions/v2/https";
 import {
   GetTaskVariantsParamsSchema,
   type GetTaskVariantsResult,
+  type SerializedTaskVariant,
 } from "@levante-framework/levante-zod";
 import {
   assertCanReadTasks,
@@ -19,13 +20,11 @@ import {
   throwSchemaError,
 } from "./task-management-utils.js";
 
-type SerializedVariant = ReturnType<typeof serializeTaskVariant>;
-
 async function buildVariantResult(
   doc: QueryDocumentSnapshot,
   taskId: string,
   registeredFilter: boolean | undefined
-): Promise<SerializedVariant | null> {
+): Promise<SerializedTaskVariant | null> {
   const registered = await resolveRegisteredFromLatestRevision(doc);
   if (registeredFilter !== undefined && registered !== registeredFilter) {
     return null;
@@ -64,7 +63,7 @@ export const getTaskVariants = onCall(
             .filter((doc) => isNotArchived(doc.data()))
             .map((doc) => buildVariantResult(doc, taskId, registered))
         )
-      ).filter((variant): variant is SerializedVariant => variant !== null);
+      ).filter((variant): variant is SerializedTaskVariant => variant !== null);
 
       return { variants: await resolveAttributionEmails(variants) };
     }
@@ -78,7 +77,7 @@ export const getTaskVariants = onCall(
       );
 
       const missing: string[] = [];
-      const variants: SerializedVariant[] = [];
+      const variants: SerializedTaskVariant[] = [];
       for (const variantId of variantIds) {
         const doc = byId.get(variantId);
         if (!doc) {
@@ -125,7 +124,7 @@ export const getTaskVariants = onCall(
             )
           )
       )
-    ).filter((variant): variant is SerializedVariant => variant !== null);
+    ).filter((variant): variant is SerializedTaskVariant => variant !== null);
 
     return { variants: await resolveAttributionEmails(variants) };
   }

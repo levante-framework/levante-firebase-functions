@@ -8,6 +8,12 @@ import type {
 import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { getAuth } from "firebase-admin/auth";
 import { HttpsError } from "firebase-functions/v2/https";
+import type {
+  SerializedTask,
+  SerializedTaskVariant,
+  SerializedTaskVariantRevision,
+  SerializedVariantParamSpec,
+} from "@levante-framework/levante-zod";
 import { ROLES } from "../utils/constants.js";
 import {
   extractRolesFromClaims,
@@ -365,7 +371,7 @@ export async function resolveRegisteredFromLatestRevision(
   return registered;
 }
 
-export function serializeTask(snap: DocumentSnapshot) {
+export function serializeTask(snap: DocumentSnapshot): SerializedTask {
   const data = snap.data() ?? {};
   return {
     id: snap.id,
@@ -384,7 +390,7 @@ export function serializeTaskVariant(
   snap: DocumentSnapshot,
   taskId: string,
   registered: boolean
-) {
+): SerializedTaskVariant {
   const data = snap.data() ?? {};
   return {
     id: snap.id,
@@ -397,6 +403,19 @@ export function serializeTaskVariant(
     registered,
     updatedAt: requireIsoString(data, "updatedAt", "lastUpdated", "createdAt"),
     ...(typeof data.updatedBy === "string" ? { updatedBy: data.updatedBy } : {}),
+  };
+}
+
+export function serializeTaskVariantRevision(
+  snap: DocumentSnapshot
+): SerializedTaskVariantRevision {
+  const data = snap.data() ?? {};
+  return {
+    id: snap.id,
+    archived: data.archived === true,
+    registered: data.registered === true,
+    updatedAt: requireIsoString(data, "updatedAt", "createdAt"),
+    updatedBy: typeof data.updatedBy === "string" ? data.updatedBy : "",
   };
 }
 
@@ -441,7 +460,9 @@ export async function resolveAttributionEmails<T extends AttributionFields>(
   }));
 }
 
-export function serializeVariantParamSpec(snap: DocumentSnapshot) {
+export function serializeVariantParamSpec(
+  snap: DocumentSnapshot
+): SerializedVariantParamSpec {
   const data = snap.data() ?? {};
   const type = data.type;
   return {

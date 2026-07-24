@@ -977,6 +977,7 @@ export { completeTask } from "./tasks/completeTask.js";
 export { startTask } from "./tasks/startTask.js";
 export { getTasks } from "./tasks/get-tasks.js";
 export { getTaskVariants } from "./tasks/get-task-variants.js";
+export { getTaskVariantRevisions } from "./tasks/get-task-variant-revisions.js";
 export { getVariantParamSpecs } from "./tasks/get-variant-param-specs.js";
 export { upsertTask } from "./tasks/upsert-task.js";
 export { upsertVariantParamSpec } from "./tasks/upsert-variant-param-spec.js";
