@@ -22,6 +22,24 @@ type SchemaIssueSource = {
   issues: Array<{ path: PropertyKey[]; message: string }>;
 };
 
+function callerHasRole(
+  claims: Record<string, unknown>,
+  allowed: Set<string>
+): boolean {
+  const rolesFromClaims = extractRolesFromClaims(claims);
+  if (rolesFromClaims.some((role) => allowed.has(role.role))) return true;
+
+  const rolesSet = claims.rolesSet;
+  if (
+    Array.isArray(rolesSet) &&
+    rolesSet.some((role) => allowed.has(normalizeRoleKey(role)))
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
 /** True when archived is explicitly false or missing (pre-migration docs). */
 export function isNotArchived(data: DocumentData): boolean {
   return data.archived !== true;
@@ -59,22 +77,52 @@ export function assertCanReadTasks(
   }
 
   if (claims.super_admin === true || claims.admin === true) return;
-
-  const rolesFromClaims = extractRolesFromClaims(claims);
-  if (rolesFromClaims.some((role) => TASK_READ_ROLES.has(role.role))) return;
-
-  const rolesSet = claims.rolesSet;
-  if (
-    Array.isArray(rolesSet) &&
-    rolesSet.some((role) => TASK_READ_ROLES.has(normalizeRoleKey(role)))
-  ) {
-    return;
-  }
+  if (callerHasRole(claims, TASK_READ_ROLES)) return;
 
   throw new HttpsError(
     "permission-denied",
     "You do not have permission to read tasks"
   );
+}
+
+/** Task catalog writes are super_admin-only and not site-scoped. */
+export function assertCanWriteTasks(
+  claims: Record<string, unknown> | undefined
+): void {
+  if (!claims) {
+    throw new HttpsError(
+      "permission-denied",
+      "You do not have permission to write tasks"
+    );
+  }
+
+  if (claims.super_admin === true) return;
+  if (callerHasRole(claims, new Set([ROLES.SUPER_ADMIN]))) return;
+
+  throw new HttpsError(
+    "permission-denied",
+    "You do not have permission to write tasks"
+  );
+}
+
+/** Semantic Firestore doc id from a display name, e.g. "Matrix Reasoning" → "matrix-reasoning". */
+export function semanticIdFromName(name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+  if (!slug) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Could not derive a document id from name",
+      {
+        code: "schema",
+        issues: [{ path: "name", message: "Name must yield a non-empty id" }],
+      }
+    );
+  }
+  return slug;
 }
 
 export function toIsoString(value: unknown): string | undefined {
