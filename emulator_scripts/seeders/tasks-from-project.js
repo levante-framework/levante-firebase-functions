@@ -146,9 +146,16 @@ async function seedRegisteredTasksFromProject({
     });
 
     for (const variant of variants) {
-      await taskRef.collection("variants").doc(variant.id).set(variant.data, {
-        merge: true,
-      });
+      await taskRef
+        .collection("variants")
+        .doc(variant.id)
+        .set(
+          {
+            ...variant.data,
+            displayName: variant.data.displayName || variant.data.name,
+          },
+          { merge: true }
+        );
       variantsWritten++;
     }
   }

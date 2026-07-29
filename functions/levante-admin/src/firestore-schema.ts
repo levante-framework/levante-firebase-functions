@@ -517,6 +517,7 @@ export interface VariantDoc {
   archived?: boolean;
   createdAt?: Timestamp | string;
   createdBy?: string;
+  displayName?: string;
   lastUpdated?: Timestamp;
   name?: string; // e.g., "default", "adaptive"
   params?: Record<string, boolean | number | string | null>;

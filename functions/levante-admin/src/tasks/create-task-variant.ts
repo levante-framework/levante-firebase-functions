@@ -24,7 +24,8 @@ export const createTaskVariant = onCall(
     const parsed = CreateTaskVariantParamsSchema.safeParse(req.data ?? {});
     if (!parsed.success) throwSchemaError(parsed.error);
 
-    const { name, params: rawParams, registered, taskId } = parsed.data;
+    const { displayName, name, params: rawParams, registered, taskId } =
+      parsed.data;
 
     const userRecord = await getAuth().getUser(uid);
     assertCanWriteTasks(userRecord.customClaims);
@@ -61,6 +62,7 @@ export const createTaskVariant = onCall(
       archived: false,
       createdAt: now,
       createdBy: uid,
+      displayName,
       name,
       params,
       registered,

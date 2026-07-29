@@ -390,7 +390,7 @@ export function serializeTaskVariant(
   snap: DocumentSnapshot,
   taskId: string,
   registered: boolean
-): SerializedTaskVariant {
+): SerializedTaskVariant & { displayName: string } {
   const data = snap.data() ?? {};
   return {
     id: snap.id,
@@ -398,6 +398,12 @@ export function serializeTaskVariant(
     archived: data.archived === true,
     createdAt: requireIsoString(data, "createdAt", "updatedAt", "lastUpdated"),
     ...(typeof data.createdBy === "string" ? { createdBy: data.createdBy } : {}),
+    displayName:
+      typeof data.displayName === "string"
+        ? data.displayName
+        : typeof data.name === "string"
+          ? data.name
+          : "",
     name: typeof data.name === "string" ? data.name : "",
     params: stripNullParams(data.params),
     registered,
