@@ -175,7 +175,12 @@ export const _createAdministratorWithRoles = async ({
   } else {
     const createdUser = await auth.createUser({
       email,
-      emailVerified: false,
+      // Administrators get a random password and sign in via email link, and
+      // that first sign-in flips emailVerified. Firebase revokes outstanding
+      // refresh tokens on an email mutation, including the token that same
+      // sign-in just issued, leaving the new admin with a session that dies at
+      // its first token expiry. Verifying up front avoids the mutation.
+      emailVerified: true,
       disabled: false,
       displayName,
       password: uuidv4(),
