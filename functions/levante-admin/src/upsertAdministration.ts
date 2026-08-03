@@ -14,10 +14,7 @@ import {
   processModifiedAdministration,
 } from "./administrations/sync-administrations.js";
 import { assertNoDuplicateAdministrationNameInSite } from "./administrations/administration-duplicate-name.js";
-import {
-  atTimeInTz,
-  dayInTz,
-} from "./administrations/administration-dates.js";
+import { atTimeInTz, dayInTz } from "./administrations/administration-dates.js";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import type { IAssessment, IOrgsList } from "./interfaces.js"; // Assuming necessary types/helpers are in common
@@ -180,10 +177,13 @@ export const upsertAdministrationHandler = async (
     const openInput = new Date(dateOpen);
     const closeInput = new Date(dateClose);
 
-    if (Number.isNaN(openInput.getTime()) || Number.isNaN(closeInput.getTime())) {
+    if (
+      Number.isNaN(openInput.getTime()) ||
+      Number.isNaN(closeInput.getTime())
+    ) {
       throw new Error("Invalid date");
     }
-    
+
     openDay = dayInTz(openInput, timeZone);
     closeDay = dayInTz(closeInput, timeZone);
     dateClosedTs = Timestamp.fromDate(
