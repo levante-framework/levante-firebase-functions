@@ -20,7 +20,7 @@
     "update:indexes": "firebase firestore:indexes --project dev > firestore.indexes.json && npm run normalize:indexes"
   },
   "engines": {
-    "node": "22"
+    "node": "24"
   },
   "license": "Stanford Academic Software License for LEVANTE",
   "main": "lib/index.js",
@@ -45,7 +45,7 @@
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
-    "@types/node": "^22",
+    "@types/node": "^24",
     "prettier": "2.8.3",
     "typescript": "5.9"
   },
