@@ -13,6 +13,7 @@ const {
 const {
   createAdminUsers,
   createAdministrations,
+  createCaregiverSurveyAdministration,
   createOrgs,
   createParticipantUsers,
   linkParticipantUsers,
@@ -56,6 +57,18 @@ function printTesterLogins({ createdUsers, userRows }) {
     {
       label: "Parent participant",
       ...userBySeedId.get("parent"),
+    },
+    {
+      label: "Caregiver (no children)",
+      ...userBySeedId.get("caregiverNoChild"),
+    },
+    {
+      label: "Caregiver (one child)",
+      ...userBySeedId.get("caregiverOneChild"),
+    },
+    {
+      label: "Caregiver (two children)",
+      ...userBySeedId.get("caregiverTwoChildren"),
     },
   ].filter((login) => login.email && login.password);
 
@@ -112,8 +125,14 @@ async function main() {
     originalClassId: orgs.originalClassId,
     newClassId: orgs.newClassId,
     cohortId: orgs.cohortId,
+    caregiverCohortId: orgs.caregiverCohortId,
     studentCount: options.studentCount,
   });
+  const childCount = userRows.filter((row) => row.userType === "child").length;
+  const participantCount = userRows.length;
+  const caregiverCohortMemberCount = userRows.filter((row) =>
+    row.orgIds.cohorts?.includes(orgs.caregiverCohortId)
+  ).length;
   const createdUsers = await createParticipantUsers({
     runtime,
     userRows,
@@ -141,10 +160,22 @@ async function main() {
       classIds: [orgs.originalClassId, orgs.newClassId],
       cohortId: orgs.cohortId,
       creatorName: "Super Admin User",
-      studentCount: options.studentCount,
+      childCount,
+      participantCount,
       includeOptionalAdministrationTemplates:
         options.includeOptionalAdministrationTemplates,
     });
+
+    console.log("Creating caregiver survey administration...");
+    const caregiverSurvey = await createCaregiverSurveyAdministration({
+      runtime,
+      idToken,
+      siteId: orgs.siteId,
+      caregiverCohortId: orgs.caregiverCohortId,
+      creatorName: "Super Admin User",
+      expectedAssignmentCount: caregiverCohortMemberCount,
+    });
+    if (caregiverSurvey) createdAdministrations.push(caregiverSurvey);
   } else {
     console.log("Skipping administrations for this seed profile.");
   }
@@ -155,7 +186,8 @@ async function main() {
         siteId: orgs.siteId,
         createdAdministrations,
         idToken,
-        studentCount: options.studentCount,
+        participantCount,
+        expectedGroups: 2,
         adminUsers: ADMIN_USERS,
       })
     : null;
