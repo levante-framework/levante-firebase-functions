@@ -29,7 +29,7 @@
     "@date-fns/tz": "^1.5.0",
     "@firebase/logger": "^0.4.4",
     "@google-cloud/secret-manager": "^4.2.2",
-    "@levante-framework/levante-zod": "^1.2.4",
+    "@levante-framework/levante-zod": "github:levante-framework/levante-zod#feat/load-form-definitions-schemas",
     "@levante-framework/permissions-core": "^1.2.1",
     "axios": "^1.4.0",
     "axios-oauth-1.0a": "^0.3.6",

@@ -178,6 +178,8 @@ export interface SiteInformation {
    * (`formDefinitions/siteInformation/versions/{versionId}`).
    */
   formVersion: string;
+  /** `draft` for page/leave saves; `submitted` when the form is finished. */
+  status: "draft" | "submitted";
   sampleApproach: string[];
   /** Only populated when `sampleApproach` includes `"other"`. */
   sampleApproachOther?: string;
@@ -220,6 +222,8 @@ export interface SchoolInformation {
    * (`formDefinitions/schoolInformation/versions/{versionId}`).
    */
   formVersion: string;
+  /** `draft` for page/leave saves; `submitted` when the form is finished. */
+  status: "draft" | "submitted";
   numStudents: string;
   studentAgeYoungest: number;
   studentAgeOldest: number;
