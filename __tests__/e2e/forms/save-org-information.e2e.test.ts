@@ -1,3 +1,7 @@
+import type {
+  SaveOrgInformationParams,
+  SaveOrgInformationResult,
+} from "@levante-framework/levante-zod";
 import type { HttpsCallable } from "firebase/functions";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -12,22 +16,6 @@ const SITE = "site-1";
 const SCHOOL = "school-1";
 const SUPER_ADMIN_UID = "u-super";
 const SITE_ADMIN_UID = "u-admin";
-
-type SaveOrgInformationParams = {
-  orgType: "site" | "school";
-  orgId: string;
-  formVersion: string;
-  responses: Record<string, unknown>;
-  status: "draft" | "submitted";
-};
-
-type SaveOrgInformationResult = {
-  orgType: "site" | "school";
-  orgId: string;
-  formVersion: string;
-  status: "draft" | "submitted";
-  path: string;
-};
 
 const validSiteDraft = (): SaveOrgInformationParams => ({
   orgType: "site",
