@@ -1,41 +1,14 @@
+import {
+  type FormSectionInfo,
+  type InformationFormField,
+  LoadFormDefinitionsParamsSchema,
+  type LoadFormDefinitionsResult,
+} from "@levante-framework/levante-zod";
 import { getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 
 type OrgType = "site" | "school";
-
-interface FormSectionInfo {
-  sectionId: string;
-  title: string;
-  description: string;
-}
-
-interface InformationFormField {
-  itemId: string;
-  variableName: string;
-  kind: "text" | "number" | "single-select" | "multi-select";
-  required: boolean;
-  sectionId: string;
-  questionText: string;
-  options?: { value: string; label: string }[];
-  displayLogic?: { field: string; includes: string };
-  infoExample?: string;
-  notes?: string;
-}
-
-export interface LoadFormDefinitionsResult {
-  formId: string;
-  versionId: string;
-  versionNumber: number;
-  formDescription: string;
-  fieldsDescription: Record<string, string>;
-  generalPrompt: string;
-  sectionInfo: FormSectionInfo[];
-  fullFields: InformationFormField[];
-  orgType: OrgType;
-  orgId: string;
-  savedResponses: unknown[];
-}
 
 function formIdFromOrgType(orgType: OrgType): string {
   if (orgType === "site") return "siteInformation";
@@ -115,17 +88,17 @@ export const loadFormDefinitions = onCall(
       throw new HttpsError("unauthenticated", "User must be authenticated");
     }
 
-    const { orgType, orgId } = request.data ?? {};
-
-    if (orgType !== "site" && orgType !== "school") {
-      throw new HttpsError(
-        "invalid-argument",
-        "orgType must be site or school"
-      );
+    const parsed = LoadFormDefinitionsParamsSchema.safeParse(request.data);
+    if (!parsed.success) {
+      throw new HttpsError("invalid-argument", "Invalid input", {
+        code: "schema",
+        issues: parsed.error.issues.map((i) => ({
+          path: i.path.join("."),
+          message: i.message,
+        })),
+      });
     }
-    if (!orgId || typeof orgId !== "string") {
-      throw new HttpsError("invalid-argument", "orgId is required");
-    }
+    const { orgType, orgId } = parsed.data;
 
     try {
       const formId = formIdFromOrgType(orgType);
