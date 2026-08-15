@@ -28,6 +28,17 @@ The table is partitioned by `commit_timestamp` and clustered by `resource_path,o
 
 The callable defaults to the last 24 hours, caps `limit` at 100 rows, and returns payload columns as `null` unless `includePayloads` is explicitly `true`. Keep dashboard views metadata-first and require an explicit expand action before showing `before_json` or `after_json`, because those payloads may contain PII.
 
+For immediate debugging without dashboard UI, use the local script. It relies on the active user's `gcloud` credentials, defaults to `hs-levante-admin-dev`, and also hides payloads unless `--include-payloads` is set.
+
+```bash
+npm run audit:journal
+npm run audit:journal -- --resource-prefix users/ --operation update --limit 25
+npm run audit:journal -- --actor admin@example.test --format json
+npm run audit:journal -- --include-payloads --resource users/test-user
+```
+
+Run `npm run audit:journal -- --help` for all filters. The caller needs BigQuery permissions to create query jobs and read `levante_audit.writes_journal`.
+
 ## Deploy
 
 Create the dataset, table, and DLQ topic before deploying the function:
