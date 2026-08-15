@@ -2,7 +2,7 @@
 
 ## What This Does
 
-`journalWrite` is a Firebase Cloud Functions v2 Firestore trigger that records application writes from the default Firestore database into a BigQuery append-only journal. Each row includes the Firestore event ID, document path, operation, commit time, ingest time, before/after payloads, and optional `_audit.actor` and `_audit.request_id` metadata when callers stamp it on the document.
+`journalWrite` is a Firebase Cloud Functions v2 Firestore trigger that records application writes from the default Firestore database into a BigQuery append-only journal. Each row includes the Firestore event ID, document path, operation, commit time, ingest time, before/after payloads, and optional `_audit.actor` and `_audit.request_id` metadata when callers stamp it on the document. `getAuditJournalRows` is a super-admin-only callable for reading bounded slices of the journal from dashboard tooling.
 
 ## Coverage And Known Gaps
 
@@ -22,6 +22,12 @@ The BigQuery schema is checked in at `functions/levante-admin/scripts/audit/writ
 
 The table is partitioned by `commit_timestamp` and clustered by `resource_path,operation`. `before_json` and `after_json` are nullable JSON columns. Payloads larger than 256 KiB are replaced with null JSON values and a stable `payload_sha256` so the journal keeps change-detection value without storing oversized documents.
 
+## Query Endpoint
+
+`getAuditJournalRows` is an HTTPS callable intended for super-admin dashboard tooling. It accepts optional filters for `startTime`, `endTime`, `resourcePath`, `resourcePathPrefix`, `operation`, `actor`, `requestId`, `payloadTruncated`, `includePayloads`, `limit`, and `pageToken`.
+
+The callable defaults to the last 24 hours, caps `limit` at 100 rows, and returns payload columns as `null` unless `includePayloads` is explicitly `true`. Keep dashboard views metadata-first and require an explicit expand action before showing `before_json` or `after_json`, because those payloads may contain PII.
+
 ## Deploy
 
 Create the dataset, table, and DLQ topic before deploying the function:
@@ -30,10 +36,10 @@ Create the dataset, table, and DLQ topic before deploying the function:
 functions/levante-admin/scripts/audit/create_dataset.sh hs-levante-admin-dev
 ```
 
-Deploy only the dev trigger:
+Deploy only the dev audit functions:
 
 ```bash
-firebase deploy --only functions:journalWrite --project hs-levante-admin-dev
+firebase deploy --only functions:levante-admin:journalWrite,functions:levante-admin:getAuditJournalRows --project hs-levante-admin-dev
 ```
 
 Do not run a production deploy for this PR.
@@ -43,6 +49,7 @@ Do not run a production deploy for this PR.
 Apply these grants once for the functions runtime service account in the target project. Keep the grants in the infra runbook; do not apply them from application code.
 
 - `roles/bigquery.dataEditor` on dataset `levante_audit`.
+- `roles/bigquery.jobUser` on project `hs-levante-admin-dev` so the query endpoint can run BigQuery jobs.
 - `roles/pubsub.publisher` on topic `levante-audit-journal-dlq`.
 
 No new Firestore role is required for the trigger. Eventarc/Functions v2 provides Firestore event delivery through the standard trigger wiring.

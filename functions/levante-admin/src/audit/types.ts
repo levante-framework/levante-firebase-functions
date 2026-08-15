@@ -25,6 +25,45 @@ export type JournalRow = {
   payload_sha256: string | null;
 };
 
+export type AuditJournalQueryParams = {
+  startTime?: string;
+  endTime?: string;
+  resourcePath?: string;
+  resourcePathPrefix?: string;
+  operation?: JournalOperation;
+  actor?: string;
+  requestId?: string;
+  payloadTruncated?: boolean;
+  includePayloads?: boolean;
+  limit?: number;
+  pageToken?: string;
+};
+
+export type AuditJournalQueryResult = {
+  rows: JournalRow[];
+  nextPageToken?: string;
+};
+
+export type AuditJournalReader = {
+  query(
+    params: RequiredAuditJournalQueryParams
+  ): Promise<AuditJournalQueryResult>;
+};
+
+export type RequiredAuditJournalQueryParams = {
+  startTime: string;
+  endTime: string;
+  resourcePath: string | null;
+  resourcePathPrefix: string | null;
+  operation: JournalOperation | null;
+  actor: string | null;
+  requestId: string | null;
+  payloadTruncated: boolean | null;
+  includePayloads: boolean;
+  limit: number;
+  pageToken: string | null;
+};
+
 export type DeadLetterMessage = {
   event_id: string;
   resource_path: string;
