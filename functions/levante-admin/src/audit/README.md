@@ -82,6 +82,41 @@ Promotion criteria:
 
 Table retention is intentionally left at the BigQuery default in this PR. Decide the partition expiration, such as 400 days, in the follow-up production PR after the audit retention policy is agreed on.
 
+## Production Rollout Checklist
+
+Do not start this checklist until the dev volume test has enough data to make a promotion decision.
+
+- Review dev daily row count, byte volume, truncation rate, DLQ errors, trigger latency, and estimated BigQuery cost.
+- Confirm promotion criteria are met: less than 1% truncation, zero sustained DLQ errors, and ingest cost within the team-approved budget.
+- Decide the production retention policy and whether to set a partition expiration on `writes_journal`.
+- Merge the audit journal PR before deploying from `main`.
+- Create production audit resources:
+
+  ```bash
+  functions/levante-admin/scripts/audit/create_dataset.sh hs-levante-admin-prod
+  ```
+
+- Grant the production functions runtime service account:
+  - `roles/bigquery.dataEditor` on dataset `levante_audit`.
+  - `roles/bigquery.jobUser` on project `hs-levante-admin-prod`.
+  - `roles/pubsub.publisher` on topic `levante-audit-journal-dlq`.
+- Prefer dataset-level BigQuery access in production. Avoid the broader project-level `roles/bigquery.dataEditor` fallback unless dataset IAM cannot be applied and the team explicitly accepts the wider grant.
+- Deploy only the production audit functions:
+
+  ```bash
+  firebase deploy --only functions:levante-admin:journalWrite,functions:levante-admin:getAuditJournalRows --project hs-levante-admin-prod
+  ```
+
+- Smoke test with a production-safe synthetic write/update/delete, then confirm rows appear in `hs-levante-admin-prod.levante_audit.writes_journal`.
+- Confirm the local query script can read production rows:
+
+  ```bash
+  npm run audit:journal -- --project hs-levante-admin-prod --limit 5
+  ```
+
+- Add monitoring for `component="audit.journalWrite"` errors, DLQ messages, daily row count, and daily bytes.
+- Remember that `_audit.actor` and `_audit.request_id` may remain `null` until the dashboard and client-helper stamping follow-ups ship.
+
 ## Runbook: Bulk Restores
 
 Firestore import and restore operations do not fire this trigger. Anyone running `FirestoreAdmin.ImportDocuments` must, in the same change ticket, run the future `scripts/audit/journal_backfill.ts` companion after the import completes. That script should read the imported document IDs and write synthetic journal rows with `actor = "import:<ticket-id>"`.
