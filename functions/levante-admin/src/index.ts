@@ -37,7 +37,6 @@ import { getAdministrationOrgProgressHandler } from "./administrations/get-admin
 import { _deleteAdministration } from "./administrations/delete-administration.js";
 import { unenrollOrg } from "./orgs/org-utils.js";
 import { deleteOrg } from "./orgs/delete-org.js";
-import { _linkUsers } from "./user-linking.js";
 import { writeSurveyResponses } from "./save-survey-results.js";
 import { _editUsers } from "./edit-users.js";
 import { onTaskDispatched } from "firebase-functions/v2/tasks";
@@ -434,57 +433,6 @@ export const saveSurveyResponses = onCall(async (request) => {
         "An unknown error occurred while writing survey responses"
     );
   }
-});
-
-export const linkUsers = onCall(async (request) => {
-  const requestingUid = request.auth!.uid;
-  const users = request.data.users;
-  const siteId: string | undefined = (request.data.siteId ||
-    request.data.districtId) as string | undefined;
-
-  if (!siteId) {
-    throw new HttpsError(
-      "invalid-argument",
-      "A siteId (or districtId) is required to link users"
-    );
-  }
-
-  let isSuperAdmin = false;
-
-  try {
-    const auth = getAuth();
-    const userRecord = await auth.getUser(requestingUid);
-    const customClaims: any = userRecord.customClaims || {};
-    const useNewPermissions = customClaims.useNewPermissions === true;
-
-    if (useNewPermissions) {
-      await ensurePermissionsLoaded();
-      const user = buildPermissionsUserFromAuthRecord(userRecord);
-
-      const allowed =
-        filterSitesByPermission(user, [siteId], {
-          resource: RESOURCES.USERS,
-          // If you can create users, you can link them.
-          action: ACTIONS.CREATE,
-        }).length > 0;
-
-      if (!allowed) {
-        throw new HttpsError(
-          "permission-denied",
-          `You do not have permission to link users in site ${siteId}`
-        );
-      }
-
-      isSuperAdmin = user.roles.some((role) => role.role === "super_admin");
-    }
-  } catch (err) {
-    if (err instanceof HttpsError) throw err;
-    throw new HttpsError(
-      "internal",
-      (err as Error)?.message || "Permission check failed"
-    );
-  }
-  return await _linkUsers(users, siteId, isSuperAdmin);
 });
 
 export const getAdministrations = onCall(async (request) => {
@@ -994,3 +942,4 @@ export const syncOnRunDocUpdate = onDocumentWritten(
 export { getSiteOverview } from "./sites/get-site-overview.js";
 export { getSyncStatus } from "./sites/get-sync-status.js";
 export { createUsers, syncCreatedUsersTask } from "./users/create-users.js";
+export { linkUsers } from "./users/link-users.js";
