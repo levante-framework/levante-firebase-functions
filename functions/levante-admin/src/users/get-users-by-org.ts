@@ -7,14 +7,14 @@ import { getAuth } from "firebase-admin/auth";
 import { FieldPath, getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { ORG_TYPE_TO_COLLECTION } from "../orgs/constants.js";
+import { resolveSiteId } from "../orgs/helpers/resolve-site-id.js";
 import {
   buildPermissionsUserFromAuthRecord,
   ensurePermissionsLoaded,
   filterSitesByPermission,
 } from "../utils/permission-helpers.js";
-import { resolveSiteId } from "../orgs/helpers/resolve-site-id.js";
 import { ROAR_TO_LEVANTE_USERTYPE } from "./user-utils.js";
-import { ORG_TYPE_TO_COLLECTION } from "../orgs/constants.js";
 
 export const getUsersByOrg = onCall(
   async (req): Promise<GetUsersByOrgResult> => {
@@ -98,7 +98,7 @@ export const getUsersByOrg = onCall(
         invalidUsers.push({ uid: doc.id, userType: roarUserType, email });
         continue;
       }
-      
+
       users.push({
         uid: doc.id,
         email,
