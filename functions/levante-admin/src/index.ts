@@ -1020,4 +1020,5 @@ export const syncOnRunDocUpdate = onDocumentWritten(
 
 export { getSiteOverview } from "./sites/get-site-overview.js";
 export { getSyncStatus } from "./sites/get-sync-status.js";
+export { getUsersByOrg } from "./users/get-users-by-org.js";
 export { createUsers, syncCreatedUsersTask } from "./users/create-users.js";
