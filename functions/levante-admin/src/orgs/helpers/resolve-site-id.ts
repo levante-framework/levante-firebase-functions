@@ -17,8 +17,8 @@ export async function resolveSiteId(
   if (!snap.exists) {
     throw new HttpsError("not-found", `Org not found`, {
       code: "org",
-      orgType,
-      orgId,
+      id: orgId,
+      type: orgType,
     });
   }
   const doc = snap.data() ?? {};

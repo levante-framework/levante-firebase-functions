@@ -58,7 +58,7 @@ describe("resolveSiteId", () => {
     const { db } = mockReadDb({});
     await expect(resolveSiteId(db, "school", "missing")).rejects.toMatchObject({
       code: "not-found",
-      details: { code: "org", orgType: "school", orgId: "missing" },
+      details: { code: "org", id: "missing", type: "school" },
     });
   });
 

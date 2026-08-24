@@ -118,7 +118,10 @@ describe("getUsersByOrg (e2e)", () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
     await expect(
       getUsersByOrg({ orgType: "school", orgId: "missing" })
-    ).rejects.toMatchObject({ code: "functions/not-found" });
+    ).rejects.toMatchObject({
+      code: "functions/not-found",
+      details: { code: "org", id: "missing", type: "school" },
+    });
   });
 
   it("returns an empty list for a site with no matching users", async () => {
