@@ -1002,6 +1002,8 @@ export const upsertAdministration = onCall(async (request) => {
 
 export { completeTask } from "./tasks/completeTask.js";
 export { startTask } from "./tasks/startTask.js";
+export { getAuditJournalRows } from "./audit/getAuditJournalRows.js";
+export { journalWrite } from "./audit/journalWrite.js";
 
 /**
  * Syncs run document changes to assignment best-run and completion status.
