@@ -130,7 +130,7 @@ describe("getUsersByOrg (e2e)", () => {
     expect(data).toEqual({ users: [] });
   });
 
-  it("returns site members, mapping ROAR user types and excluding archived/disabled/off-site/invalid docs", async () => {
+  it("returns site members (including archived/disabled), mapping ROAR user types and excluding off-site/invalid docs", async () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
     await seedFixture();
 
@@ -151,9 +151,20 @@ describe("getUsersByOrg (e2e)", () => {
           userType: "caregiver",
         },
         { uid: "u-site-admin", email: "admin@example.com", userType: "admin" },
+        // archived and disabled users are no longer filtered out
+        {
+          uid: "u-archived",
+          email: "archived@example.com",
+          userType: "teacher",
+        },
+        {
+          uid: "u-disabled",
+          email: "disabled@example.com",
+          userType: "teacher",
+        },
       ])
     );
-    expect(data.users).toHaveLength(4);
+    expect(data.users).toHaveLength(6);
   });
 
   it("returns members of a school by resolving its owning site", async () => {
@@ -163,7 +174,9 @@ describe("getUsersByOrg (e2e)", () => {
     const { data } = await getUsersByOrg({ orgType: "school", orgId: SCHOOL });
 
     expect(data.users.map((u) => u.uid).sort()).toEqual([
+      "u-archived",
       "u-child",
+      "u-disabled",
       "u-teacher",
     ]);
   });
@@ -175,7 +188,9 @@ describe("getUsersByOrg (e2e)", () => {
     const { data } = await getUsersByOrg({ orgType: "class", orgId: CLASS });
 
     expect(data.users.map((u) => u.uid).sort()).toEqual([
+      "u-archived",
       "u-child",
+      "u-disabled",
       "u-teacher",
     ]);
   });
@@ -187,8 +202,10 @@ describe("getUsersByOrg (e2e)", () => {
     const { data } = await getUsersByOrg({ orgType: "cohort", orgId: COHORT });
 
     expect(data.users.map((u) => u.uid).sort()).toEqual([
+      "u-archived",
       "u-caregiver",
       "u-child",
+      "u-disabled",
       "u-teacher",
     ]);
   });
@@ -217,7 +234,7 @@ async function seedFixture() {
     archived: false,
   });
 
-  // Valid, active members of the site.
+  // Valid members of the site.
   batch.set(adminDb.doc("users/u-teacher"), {
     userType: "teacher",
     email: "teacher@example.com",
@@ -255,7 +272,7 @@ async function seedFixture() {
     districts: { current: [SITE] },
   });
 
-  // Excluded: archived, disabled, and off-site users.
+  // Still returned: archived/disabled users are no longer filtered out.
   batch.set(adminDb.doc("users/u-archived"), {
     userType: "teacher",
     email: "archived@example.com",
@@ -276,6 +293,8 @@ async function seedFixture() {
     classes: { current: [CLASS] },
     groups: { current: [COHORT] },
   });
+
+  // Excluded: off-site user.
   batch.set(adminDb.doc("users/u-other-site"), {
     userType: "teacher",
     email: "offsite@example.com",

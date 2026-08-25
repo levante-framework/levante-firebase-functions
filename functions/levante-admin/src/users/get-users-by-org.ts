@@ -81,8 +81,6 @@ export const getUsersByOrg = onCall(
         "array-contains",
         orgId
       )
-      .where("archived", "==", false)
-      .where("disabled", "==", false)
       .select("email", "userType", "childLabelIndex")
       .get();
 
