@@ -356,8 +356,8 @@ export interface User {
   archived: boolean;
   birthMonth?: number;
   birthYear?: number;
-  childIdentifier?: string;
   childIds?: string[]; // TODO: backfill `studentIds` -> `childIds` in db
+  childLabelIndex?: number;
   classes: OrgAssociationMap;
   createdAt: Timestamp;
   disabled: boolean;
