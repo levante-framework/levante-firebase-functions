@@ -4,6 +4,7 @@ const {
 } = require("./seeders/tasks-from-project");
 const {
   ADMIN_USERS,
+  ORG_FIXTURES,
   buildParticipantRows,
 } = require("./function-based-seeders/fixtures");
 const { getFunctionsSeedOptions } = require("./function-based-seeders/options");
@@ -36,7 +37,7 @@ process.env.FIREBASE_AUTH_EMULATOR_HOST ||= "127.0.0.1:9199";
 const options = getFunctionsSeedOptions();
 const runtime = createFunctionsSeedRuntime({ projectId });
 
-function printTesterLogins({ createdUsers, userRows }) {
+function printTesterLogins({ createdUsers, userRows, createdAdmins }) {
   const userBySeedId = new Map(
     userRows.map((row, index) => [row.id, createdUsers[index]])
   );
@@ -46,6 +47,11 @@ function printTesterLogins({ createdUsers, userRows }) {
       email: options.superAdminEmail,
       password: options.superAdminPassword,
     },
+    ...createdAdmins.map((admin) => ({
+      label: `Admin (${admin.role})`,
+      email: admin.email,
+      password: admin.password,
+    })),
     {
       label: "Child participant",
       ...userBySeedId.get("student1"),
@@ -55,9 +61,17 @@ function printTesterLogins({ createdUsers, userRows }) {
       ...userBySeedId.get("teacher"),
     },
     {
-      label: "Parent participant",
+      label: "Caregiver participant",
       ...userBySeedId.get("parent"),
     },
+  ].filter((login) => login.email && login.password);
+
+  console.log("\nTester logins:");
+  logins.forEach((login) => {
+    console.log(`- ${login.label}: ${login.email} / ${login.password}`);
+  });
+
+  const caregiverCohortLogins = [
     {
       label: "Caregiver (no children)",
       ...userBySeedId.get("caregiverNoChild"),
@@ -70,10 +84,9 @@ function printTesterLogins({ createdUsers, userRows }) {
       label: "Caregiver (two children)",
       ...userBySeedId.get("caregiverTwoChildren"),
     },
-  ].filter((login) => login.email && login.password);
-
-  console.log("\nTester logins:");
-  logins.forEach((login) => {
+  ];
+  console.log(`\n${ORG_FIXTURES.caregiverCohortName} logins:`);
+  caregiverCohortLogins.forEach((login) => {
     console.log(`- ${login.label}: ${login.email} / ${login.password}`);
   });
 }
@@ -216,7 +229,7 @@ async function main() {
     });
   }
 
-  printTesterLogins({ createdUsers, userRows });
+  printTesterLogins({ createdUsers, userRows, createdAdmins });
 }
 
 main().catch((error) => {
