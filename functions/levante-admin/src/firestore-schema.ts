@@ -574,7 +574,7 @@ export interface RunDoc {
   userData?: {
     variantId?: string;
   };
-  stopType?: string | null;
+  stopReason?: string | null;
 }
 
 /**
