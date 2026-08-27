@@ -248,6 +248,40 @@ describe("linkUsers (e2e)", () => {
     expect(ghost.exists).toBe(false);
   });
 
+  it("mints sequential labels across multiple children sharing a caregiver in one call", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await Promise.all([
+      seedUser("cg1-uid", "cg1"),
+      seedUser("ch1-uid", "ch1"),
+      seedUser("ch2-uid", "ch2"),
+    ]);
+
+    await linkUsers({
+      siteId: SITE,
+      users: [
+        caregiverRow("cg1", "cg1-uid"),
+        childRow("ch1", "ch1-uid", { caregiverId: ["cg1"] }),
+        childRow("ch2", "ch2-uid", { caregiverId: ["cg1"] }),
+      ],
+    });
+
+    // Each child's transaction sees the caregiver bump committed by the prior
+    // child, so the shared caregiver gets distinct labels 0 and 1.
+    const child1 = await adminDb.doc("users/ch1-uid").get();
+    expect(child1.get("childLabelIndex")).toBe(0);
+    expect(child1.get("parentIds")).toContain("cg1-uid");
+
+    const child2 = await adminDb.doc("users/ch2-uid").get();
+    expect(child2.get("childLabelIndex")).toBe(1);
+    expect(child2.get("parentIds")).toContain("cg1-uid");
+
+    const caregiver = await adminDb.doc("users/cg1-uid").get();
+    expect(caregiver.get("lastChildLabelIndex")).toBe(1);
+    expect(caregiver.get("childIds")).toEqual(
+      expect.arrayContaining(["ch1-uid", "ch2-uid"])
+    );
+  });
+
   it("rejects when a referenced user does not exist", async () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
     // The child exists but the referenced caregiver doc was never created.
@@ -309,5 +343,28 @@ describe("linkUsers (e2e)", () => {
         uids: expect.arrayContaining(["ch1-uid"]),
       },
     });
+  });
+
+  it("backfills a missing idHash instead of rejecting", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedUser("t1-uid", "t1");
+    // Write the child without an idHash so the handler must backfill it.
+    await adminDb.doc("users/ch1-uid").set({
+      archived: false,
+      disabled: false,
+      districts: { current: [SITE] },
+    });
+
+    await linkUsers({
+      siteId: SITE,
+      users: [
+        teacherRow("t1", "t1-uid"),
+        childRow("ch1", "ch1-uid", { teacherId: ["t1"] }),
+      ],
+    });
+
+    const child = await adminDb.doc("users/ch1-uid").get();
+    expect(child.get("idHash")).toBe(idHashFor("ch1"));
+    expect(child.get("teacherIds")).toContain("t1-uid");
   });
 });
