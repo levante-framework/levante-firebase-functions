@@ -226,13 +226,21 @@ export const linkUsers = onCall(async (req): Promise<LinkUsersResult> => {
             : await transaction.getAll(
                 ...caregiverUids.map((uid) => usersRef.doc(uid))
               );
-        const missingCaregivers = caregiverSnaps.filter((s) => !s.exists);
-        if (missingCaregivers.length > 0) {
+        // Newly requested caregivers must exist (a missing one signals a
+        // concurrent delete). A caregiver that's missing only because it is a
+        // stale entry in the child's existing parentIds is tolerated: it is
+        // dropped from the label math and never written to.
+        const newCaregiverSet = new Set(newCaregiverUids);
+        const missingNewCaregivers = caregiverSnaps.filter(
+          (s) => !s.exists && newCaregiverSet.has(s.id)
+        );
+        if (missingNewCaregivers.length > 0) {
           throw new HttpsError("not-found", "Users not found", {
             code: "users",
-            uids: missingCaregivers.map((s) => s.id),
+            uids: missingNewCaregivers.map((s) => s.id),
           });
         }
+        const presentCaregiverSnaps = caregiverSnaps.filter((s) => s.exists);
 
         // Collect teacher docs
         const teacherSnaps =
@@ -251,7 +259,7 @@ export const linkUsers = onCall(async (req): Promise<LinkUsersResult> => {
 
         const childLabelIndex = nextChildLabelIndex(
           childDoc.childLabelIndex as number | undefined,
-          caregiverSnaps.map(
+          presentCaregiverSnaps.map(
             (s) => s.data()?.lastChildLabelIndex as number | undefined
           )
         );
@@ -276,7 +284,7 @@ export const linkUsers = onCall(async (req): Promise<LinkUsersResult> => {
         }
 
         // Bump every caregiver on the child to the minted label
-        for (const snap of caregiverSnaps) {
+        for (const snap of presentCaregiverSnaps) {
           transaction.update(snap.ref, {
             childIds: FieldValue.arrayUnion(user.uid),
             lastChildLabelIndex: childLabelIndex,

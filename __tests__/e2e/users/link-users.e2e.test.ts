@@ -1,4 +1,4 @@
-import { createHash } from "crypto";
+import { createHash } from "node:crypto";
 import type {
   LinkUsersParams,
   LinkUsersResult,
@@ -211,6 +211,41 @@ describe("linkUsers (e2e)", () => {
     const newCaregiver = await adminDb.doc("users/cg2-uid").get();
     expect(newCaregiver.get("lastChildLabelIndex")).toBe(4);
     expect(newCaregiver.get("childIds")).toContain("ch1-uid");
+  });
+
+  it("links a new caregiver even when the child has a stale parentIds entry", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    // "ghost-uid" is referenced by the child but its user doc never exists.
+    await Promise.all([
+      seedUser("cg2-uid", "cg2"),
+      seedUser("ch1-uid", "ch1", {
+        parentIds: ["ghost-uid"],
+        childLabelIndex: 2,
+      }),
+    ]);
+
+    await linkUsers({
+      siteId: SITE,
+      users: [
+        caregiverRow("cg2", "cg2-uid"),
+        childRow("ch1", "ch1-uid", { caregiverId: ["cg2"] }),
+      ],
+    });
+
+    const child = await adminDb.doc("users/ch1-uid").get();
+    expect(child.get("parentIds")).toEqual(
+      expect.arrayContaining(["ghost-uid", "cg2-uid"])
+    );
+    // The stale caregiver contributes nothing, so the existing label is kept.
+    expect(child.get("childLabelIndex")).toBe(2);
+
+    const newCaregiver = await adminDb.doc("users/cg2-uid").get();
+    expect(newCaregiver.get("lastChildLabelIndex")).toBe(2);
+    expect(newCaregiver.get("childIds")).toContain("ch1-uid");
+
+    // The stale reference is left untouched, not resurrected.
+    const ghost = await adminDb.doc("users/ghost-uid").get();
+    expect(ghost.exists).toBe(false);
   });
 
   it("rejects when a referenced user does not exist", async () => {
