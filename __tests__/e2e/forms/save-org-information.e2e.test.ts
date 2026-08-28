@@ -384,19 +384,27 @@ describe("saveOrgInformation (e2e)", () => {
       status: "complete",
     });
 
+    const completeSnap = await adminDb
+      .doc(`districts/${SITE}/siteInformation/version-1`)
+      .get();
+    const before = dataWithoutTimestamps(completeSnap.data());
+
     const { data } = await saveOrgInformation(validSiteDraft());
     expect(data.status).toBe("complete");
 
     const snap = await adminDb
       .doc(`districts/${SITE}/siteInformation/version-1`)
       .get();
-    expect(dataWithoutTimestamps(snap.data()).rest).toEqual({
+    const after = dataWithoutTimestamps(snap.data());
+    expect(after.rest).toEqual({
       sampleApproach: ["convenience"],
       siteRecruitment: "email",
       siteId: SITE,
       formVersion: "version-1",
       status: "complete",
     });
+    expect(after.createdAt.isEqual(before.createdAt)).toBe(true);
+    expect(after.updatedAt.isEqual(before.updatedAt)).toBe(true);
   });
 
   it("deletes Other text when Other is unselected and the field is sent as null", async () => {
