@@ -2,6 +2,7 @@ import type {
   SaveOrgInformationParams,
   SaveOrgInformationResult,
 } from "@levante-framework/levante-zod";
+import { Timestamp, type DocumentData } from "firebase-admin/firestore";
 import type { HttpsCallable } from "firebase/functions";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -68,6 +69,18 @@ const siteFields = [
   },
   { variableName: "siteRecruitment", kind: "text" as const, required: true },
 ];
+
+function dataWithoutTimestamps(data: DocumentData | undefined) {
+  expect(data).toBeDefined();
+  const { createdAt, updatedAt, ...rest } = data!;
+  expect(createdAt).toBeInstanceOf(Timestamp);
+  expect(updatedAt).toBeInstanceOf(Timestamp);
+  return {
+    rest,
+    createdAt: createdAt as Timestamp,
+    updatedAt: updatedAt as Timestamp,
+  };
+}
 
 const schoolFields = [
   {
@@ -256,9 +269,11 @@ describe("saveOrgInformation (e2e)", () => {
     const snap = await adminDb
       .doc(`districts/${SITE}/siteInformation/version-1`)
       .get();
-    expect(snap.data()).toEqual({
+    const first = dataWithoutTimestamps(snap.data());
+    expect(first.rest).toEqual({
       sampleApproach: ["other"],
       sampleApproachOther: "word of mouth",
+      siteId: SITE,
       formVersion: "version-1",
       status: "draft",
     });
@@ -274,13 +289,16 @@ describe("saveOrgInformation (e2e)", () => {
     const merged = await adminDb
       .doc(`districts/${SITE}/siteInformation/version-1`)
       .get();
-    expect(merged.data()).toEqual({
+    const second = dataWithoutTimestamps(merged.data());
+    expect(second.rest).toEqual({
       sampleApproach: ["other"],
       sampleApproachOther: "word of mouth",
       siteRecruitment: "email",
+      siteId: SITE,
       formVersion: "version-1",
       status: "complete",
     });
+    expect(second.createdAt.isEqual(first.createdAt)).toBe(true);
   });
 
   it("rejects complete when a required field is missing", async () => {
@@ -349,6 +367,38 @@ describe("saveOrgInformation (e2e)", () => {
     expect(data.status).toBe("complete");
   });
 
+  it("ignores a late draft after the form is complete", async () => {
+    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
+    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await seedFormVersion("siteInformation", "version-1", siteFields);
+
+    await saveOrgInformation({
+      orgType: "site",
+      orgId: SITE,
+      formVersion: "version-1",
+      responses: {
+        sampleApproach: ["convenience"],
+        siteRecruitment: "email",
+      },
+      status: "complete",
+    });
+
+    const { data } = await saveOrgInformation(validSiteDraft());
+    expect(data.status).toBe("complete");
+
+    const snap = await adminDb
+      .doc(`districts/${SITE}/siteInformation/version-1`)
+      .get();
+    expect(dataWithoutTimestamps(snap.data()).rest).toEqual({
+      sampleApproach: ["convenience"],
+      siteRecruitment: "email",
+      siteId: SITE,
+      formVersion: "version-1",
+      status: "complete",
+    });
+  });
+
   it("deletes Other text when Other is unselected and the field is sent as null", async () => {
     await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
     await seedSuperAdminClaims(SUPER_ADMIN_UID);
@@ -370,8 +420,9 @@ describe("saveOrgInformation (e2e)", () => {
     const snap = await adminDb
       .doc(`districts/${SITE}/siteInformation/version-1`)
       .get();
-    expect(snap.data()).toEqual({
+    expect(dataWithoutTimestamps(snap.data()).rest).toEqual({
       sampleApproach: ["convenience"],
+      siteId: SITE,
       formVersion: "version-1",
       status: "draft",
     });
@@ -394,7 +445,8 @@ describe("saveOrgInformation (e2e)", () => {
     const snap = await adminDb
       .doc(`districts/${SITE}/siteInformation/version-1`)
       .get();
-    expect(snap.data()).toEqual({
+    expect(dataWithoutTimestamps(snap.data()).rest).toEqual({
+      siteId: SITE,
       formVersion: "version-1",
       status: "draft",
     });
@@ -403,7 +455,10 @@ describe("saveOrgInformation (e2e)", () => {
   it("merges school responses onto schools/{orgId}/schoolInformation/version-2", async () => {
     await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
     await seedSuperAdminClaims(SUPER_ADMIN_UID);
-    await adminDb.doc(`schools/${SCHOOL}`).set({ name: "School 1" });
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await adminDb
+      .doc(`schools/${SCHOOL}`)
+      .set({ name: "School 1", districtId: SITE });
     await seedFormVersion("schoolInformation", "version-2", schoolFields);
 
     const { data } = await saveOrgInformation({
@@ -418,8 +473,12 @@ describe("saveOrgInformation (e2e)", () => {
     const snap = await adminDb
       .doc(`schools/${SCHOOL}/schoolInformation/version-2`)
       .get();
-    expect(snap.data()).toEqual({
+    expect(dataWithoutTimestamps(snap.data()).rest).toEqual({
       numTeachers: "10_to_24",
+      schoolId: SCHOOL,
+      siteId: SITE,
+      schoolPseudonym: "School 1",
+      siteName: "Site 1",
       formVersion: "version-2",
       status: "draft",
     });
