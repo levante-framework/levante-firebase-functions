@@ -15,6 +15,11 @@ function formIdFromOrgType(orgType: OrgType): string {
   return "schoolInformation";
 }
 
+function orgCollectionFromOrgType(orgType: OrgType): "districts" | "schools" {
+  if (orgType === "site") return "districts";
+  return "schools";
+}
+
 /**
  * Reads a form definition and its registered (live) version from Firestore.
  *
@@ -101,6 +106,19 @@ export const loadFormDefinitions = onCall(
     const { orgType, orgId } = parsed.data;
 
     try {
+      const orgCollection = orgCollectionFromOrgType(orgType);
+      const orgSnap = await getFirestore()
+        .collection(orgCollection)
+        .doc(orgId)
+        .get();
+
+      if (!orgSnap.exists) {
+        throw new HttpsError(
+          "not-found",
+          `${orgCollection} document "${orgId}" was not found.`
+        );
+      }
+
       const formId = formIdFromOrgType(orgType);
       const definition = await loadFormDefinition(formId);
 
