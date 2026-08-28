@@ -27,6 +27,13 @@ const idHashFor = (id: string) =>
 
 type LinkUser = LinkUsersParams["users"][number];
 
+// Maps a payload (LEVANTE) userType to the ROAR value stored in Firestore.
+const STORED_USERTYPE: Record<LinkUser["userType"], string> = {
+  caregiver: "parent",
+  child: "student",
+  teacher: "teacher",
+};
+
 const caregiverRow = (id: string, uid: string): LinkUser => ({
   id,
   uid,
@@ -51,11 +58,12 @@ const childRow = (
   teacherId: links.teacherId ?? [],
 });
 
-// Seeds a `users/{uid}` doc that passes the handler's existence, site, and
-// idHash validation. `extra` overrides link/label fields per test.
+// Seeds a `users/{uid}` doc that passes the handler's existence, site, idHash,
+// and userType validation. `extra` overrides link/label/userType fields per test.
 async function seedUser(
   uid: string,
   externalId: string,
+  userType: LinkUser["userType"],
   extra: Record<string, unknown> = {}
 ) {
   await adminDb.doc(`users/${uid}`).set({
@@ -63,6 +71,7 @@ async function seedUser(
     disabled: false,
     districts: { current: [SITE] },
     idHash: idHashFor(externalId),
+    userType: STORED_USERTYPE[userType],
     ...extra,
   });
 }
@@ -111,9 +120,9 @@ describe("linkUsers (e2e)", () => {
   it("links a child to a new caregiver and teacher, minting label 0", async () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
     await Promise.all([
-      seedUser("cg1-uid", "cg1"),
-      seedUser("t1-uid", "t1"),
-      seedUser("ch1-uid", "ch1"),
+      seedUser("cg1-uid", "cg1", "caregiver"),
+      seedUser("t1-uid", "t1", "teacher"),
+      seedUser("ch1-uid", "ch1", "child"),
     ]);
 
     await linkUsers({
@@ -146,12 +155,12 @@ describe("linkUsers (e2e)", () => {
   it("leaves an existing caregiver and the child label untouched on a teacher-only link", async () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
     await Promise.all([
-      seedUser("cg1-uid", "cg1", {
+      seedUser("cg1-uid", "cg1", "caregiver", {
         childIds: ["ch1-uid"],
         lastChildLabelIndex: 5,
       }),
-      seedUser("t1-uid", "t1"),
-      seedUser("ch1-uid", "ch1", {
+      seedUser("t1-uid", "t1", "teacher"),
+      seedUser("ch1-uid", "ch1", "child", {
         parentIds: ["cg1-uid"],
         childLabelIndex: 5,
       }),
@@ -179,12 +188,12 @@ describe("linkUsers (e2e)", () => {
   it("bumps a previously linked caregiver when a new caregiver mints a label", async () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
     await Promise.all([
-      seedUser("cg1-uid", "cg1", {
+      seedUser("cg1-uid", "cg1", "caregiver", {
         childIds: ["ch1-uid"],
         lastChildLabelIndex: 3,
       }),
-      seedUser("cg2-uid", "cg2"),
-      seedUser("ch1-uid", "ch1", {
+      seedUser("cg2-uid", "cg2", "caregiver"),
+      seedUser("ch1-uid", "ch1", "child", {
         parentIds: ["cg1-uid"],
         childLabelIndex: 3,
       }),
@@ -217,8 +226,8 @@ describe("linkUsers (e2e)", () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
     // "ghost-uid" is referenced by the child but its user doc never exists.
     await Promise.all([
-      seedUser("cg2-uid", "cg2"),
-      seedUser("ch1-uid", "ch1", {
+      seedUser("cg2-uid", "cg2", "caregiver"),
+      seedUser("ch1-uid", "ch1", "child", {
         parentIds: ["ghost-uid"],
         childLabelIndex: 2,
       }),
@@ -251,9 +260,9 @@ describe("linkUsers (e2e)", () => {
   it("mints sequential labels across multiple children sharing a caregiver in one call", async () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
     await Promise.all([
-      seedUser("cg1-uid", "cg1"),
-      seedUser("ch1-uid", "ch1"),
-      seedUser("ch2-uid", "ch2"),
+      seedUser("cg1-uid", "cg1", "caregiver"),
+      seedUser("ch1-uid", "ch1", "child"),
+      seedUser("ch2-uid", "ch2", "child"),
     ]);
 
     await linkUsers({
@@ -285,7 +294,7 @@ describe("linkUsers (e2e)", () => {
   it("rejects when a referenced user does not exist", async () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
     // The child exists but the referenced caregiver doc was never created.
-    await seedUser("ch1-uid", "ch1");
+    await seedUser("ch1-uid", "ch1", "child");
 
     await expect(
       linkUsers({
@@ -303,8 +312,10 @@ describe("linkUsers (e2e)", () => {
 
   it("rejects when a referenced user does not belong to the site", async () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
-    await seedUser("t1-uid", "t1");
-    await seedUser("ch1-uid", "ch1", { districts: { current: [OTHER_SITE] } });
+    await seedUser("t1-uid", "t1", "teacher");
+    await seedUser("ch1-uid", "ch1", "child", {
+      districts: { current: [OTHER_SITE] },
+    });
 
     await expect(
       linkUsers({
@@ -325,8 +336,8 @@ describe("linkUsers (e2e)", () => {
 
   it("rejects when a stored idHash does not match the expected hash", async () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
-    await seedUser("t1-uid", "t1");
-    await seedUser("ch1-uid", "ch1", { idHash: "tampered-hash" });
+    await seedUser("t1-uid", "t1", "teacher");
+    await seedUser("ch1-uid", "ch1", "child", { idHash: "tampered-hash" });
 
     await expect(
       linkUsers({
@@ -345,14 +356,62 @@ describe("linkUsers (e2e)", () => {
     });
   });
 
+  it("rejects when a payload userType contradicts the stored one, reporting the expected type", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedUser("t1-uid", "t1", "teacher");
+    // Stored as a caregiver, but the payload claims the user is a child.
+    await seedUser("ch1-uid", "ch1", "caregiver");
+
+    await expect(
+      linkUsers({
+        siteId: SITE,
+        users: [
+          teacherRow("t1", "t1-uid"),
+          childRow("ch1", "ch1-uid", { teacherId: ["t1"] }),
+        ],
+      })
+    ).rejects.toMatchObject({
+      code: "functions/invalid-argument",
+      details: {
+        code: "users-usertype-mismatch",
+        users: expect.arrayContaining([
+          { uid: "ch1-uid", userType: "caregiver" },
+        ]),
+      },
+    });
+  });
+
+  it("reports 'unknown' when the stored userType is unrecognized", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedUser("t1-uid", "t1", "teacher");
+    await seedUser("ch1-uid", "ch1", "child", { userType: "bogus" });
+
+    await expect(
+      linkUsers({
+        siteId: SITE,
+        users: [
+          teacherRow("t1", "t1-uid"),
+          childRow("ch1", "ch1-uid", { teacherId: ["t1"] }),
+        ],
+      })
+    ).rejects.toMatchObject({
+      code: "functions/invalid-argument",
+      details: {
+        code: "users-usertype-mismatch",
+        users: expect.arrayContaining([{ uid: "ch1-uid", userType: "unknown" }]),
+      },
+    });
+  });
+
   it("backfills a missing idHash instead of rejecting", async () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
-    await seedUser("t1-uid", "t1");
+    await seedUser("t1-uid", "t1", "teacher");
     // Write the child without an idHash so the handler must backfill it.
     await adminDb.doc("users/ch1-uid").set({
       archived: false,
       disabled: false,
       districts: { current: [SITE] },
+      userType: "student",
     });
 
     await linkUsers({

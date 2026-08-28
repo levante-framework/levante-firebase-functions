@@ -18,6 +18,7 @@ import {
   ensurePermissionsLoaded,
   filterSitesByPermission,
 } from "../utils/permission-helpers.js";
+import { ROAR_TO_LEVANTE_USERTYPE, isRoarUserType } from "./user-utils.js";
 
 /**
  * Compute the deterministic idHash for a user: the sha256 of the site-scoped
@@ -146,6 +147,32 @@ export const linkUsers = onCall(async (req): Promise<LinkUsersResult> => {
         code: "users-site-mismatch",
         siteId,
         uids: usersNotInSite,
+      }
+    );
+  }
+
+  // Validate payload userTypes match the stored ones, reporting the expected
+  // values when they don't. Rejects unexpected stored values as "unknown".
+  const uidToUserType = new Map(users.map((u) => [u.uid, u.userType]));
+  const usersUserTypeMismatch: { uid: string; userType: string }[] = [];
+  for (const snap of userSnaps) {
+    const storedUserType: unknown = snap.data()?.userType;
+    if (!isRoarUserType(storedUserType)) {
+      usersUserTypeMismatch.push({ uid: snap.id, userType: "unknown" });
+      continue;
+    }
+    const expectedUserType = ROAR_TO_LEVANTE_USERTYPE[storedUserType];
+    if (uidToUserType.get(snap.id) !== expectedUserType) {
+      usersUserTypeMismatch.push({ uid: snap.id, userType: expectedUserType });
+    }
+  }
+  if (usersUserTypeMismatch.length > 0) {
+    throw new HttpsError(
+      "invalid-argument",
+      "Users with userType mismatch found",
+      {
+        code: "users-usertype-mismatch",
+        users: usersUserTypeMismatch,
       }
     );
   }
