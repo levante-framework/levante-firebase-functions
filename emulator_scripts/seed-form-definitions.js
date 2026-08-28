@@ -11,8 +11,8 @@ const { createFormDefinitions } = require("./seeders/formDefinitions");
 const { projectId, isEmulator } = getSeedConfig();
 
 if (isEmulator) {
-  process.env.FIRESTORE_EMULATOR_HOST = "127.0.0.1:8180";
-  process.env.FIREBASE_AUTH_EMULATOR_HOST = "127.0.0.1:9199";
+  process.env.FIRESTORE_EMULATOR_HOST ||= "127.0.0.1:8180";
+  process.env.FIREBASE_AUTH_EMULATOR_HOST ||= "127.0.0.1:9199";
 }
 
 const adminApp = admin.initializeApp({ projectId }, "admin-form-definition-seeder");
