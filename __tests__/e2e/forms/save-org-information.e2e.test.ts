@@ -484,6 +484,47 @@ describe("saveOrgInformation (e2e)", () => {
     });
   });
 
+  it("rejects when the school document has no districtId", async () => {
+    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
+    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await adminDb.doc(`schools/${SCHOOL}`).set({ name: "School 1" });
+    await seedFormVersion("schoolInformation", "version-2", schoolFields);
+
+    await expect(
+      saveOrgInformation({
+        orgType: "school",
+        orgId: SCHOOL,
+        formVersion: "version-2",
+        responses: { numTeachers: "10_to_24" },
+        status: "draft",
+      })
+    ).rejects.toMatchObject({
+      code: "functions/not-found",
+    });
+  });
+
+  it("rejects when the school's district document does not exist", async () => {
+    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
+    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await adminDb
+      .doc(`schools/${SCHOOL}`)
+      .set({ name: "School 1", districtId: SITE });
+    await seedFormVersion("schoolInformation", "version-2", schoolFields);
+
+    await expect(
+      saveOrgInformation({
+        orgType: "school",
+        orgId: SCHOOL,
+        formVersion: "version-2",
+        responses: { numTeachers: "10_to_24" },
+        status: "draft",
+      })
+    ).rejects.toMatchObject({
+      code: "functions/not-found",
+    });
+  });
+
   it("rejects when the school document has no name", async () => {
     await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
     await seedSuperAdminClaims(SUPER_ADMIN_UID);
