@@ -2,9 +2,12 @@ import {
   SaveOrgInformationParamsSchema,
   type SaveOrgInformationResult,
 } from "@levante-framework/levante-zod";
-import { getFirestore } from "firebase-admin/firestore";
+import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import type { FormDefinitionVersion } from "../firestore-schema.js";
+import { validateResponseShape } from "./validate-response-shape.js";
+import { findMissingRequiredFields } from "./validate-complete-answers.js";
 
 type OrgType = "site" | "school";
 
@@ -18,6 +21,16 @@ function informationSubcollectionFromOrgType(
 ): "siteInformation" | "schoolInformation" {
   if (orgType === "site") return "siteInformation";
   return "schoolInformation";
+}
+
+function responsesForWrite(
+  responses: Record<string, unknown>
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(responses)) {
+    payload[key] = value === null ? FieldValue.delete() : value;
+  }
+  return payload;
 }
 
 export const saveOrgInformation = onCall(
@@ -66,13 +79,59 @@ export const saveOrgInformation = onCall(
         );
       }
 
-      const subcollection = informationSubcollectionFromOrgType(orgType);
-      const responseRef = orgRef.collection(subcollection).doc("response");
-      const path = `${orgCollection}/${orgId}/${subcollection}/response`;
+      const formId = informationSubcollectionFromOrgType(orgType);
+      const versionSnap = await db
+        .collection("formDefinitions")
+        .doc(formId)
+        .collection("versions")
+        .doc(formVersion)
+        .get();
+
+      if (!versionSnap.exists) {
+        throw new HttpsError(
+          "not-found",
+          `Form version "${formVersion}" was not found.`
+        );
+      }
+
+      const version = versionSnap.data() as FormDefinitionVersion;
+      const issues = validateResponseShape(responses, version.fullFields);
+
+      if (issues.length > 0) {
+        throw new HttpsError("invalid-argument", "Invalid input", {
+          code: "schema",
+          issues,
+        });
+      }
+
+      const responseRef = orgRef.collection(formId).doc(formVersion);
+      const path = `${orgCollection}/${orgId}/${formId}/${formVersion}`;
+
+      if (status === "complete") {
+        const existingSnap = await responseRef.get();
+        const merged: Record<string, unknown> = {
+          ...(existingSnap.data() ?? {}),
+          ...responses,
+        };
+        for (const [key, value] of Object.entries(responses)) {
+          if (value === null) delete merged[key];
+        }
+        const missing = findMissingRequiredFields(
+          merged,
+          version.fullFields
+        );
+
+        if (missing.length > 0) {
+          throw new HttpsError(
+            "failed-precondition",
+            `Required fields are missing: ${missing.join(", ")}`
+          );
+        }
+      }
 
       await responseRef.set(
         {
-          ...responses,
+          ...responsesForWrite(responses),
           formVersion,
           status,
         },

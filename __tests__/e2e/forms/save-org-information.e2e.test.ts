@@ -21,7 +21,10 @@ const validSiteDraft = (): SaveOrgInformationParams => ({
   orgType: "site",
   orgId: SITE,
   formVersion: "version-1",
-  responses: { sampleApproach: ["other"], sampleApproachOther: "word of mouth" },
+  responses: {
+    sampleApproach: ["other"],
+    sampleApproachOther: "word of mouth",
+  },
   status: "draft",
 });
 
@@ -30,6 +33,50 @@ async function seedSuperAdminClaims(uid: string) {
     claims: { super_admin: true },
   });
 }
+
+async function seedFormVersion(
+  formId: "siteInformation" | "schoolInformation",
+  formVersion: string,
+  fullFields: {
+    variableName: string;
+    kind: "text" | "number" | "single-select" | "multi-select";
+    required?: boolean;
+    options?: { value: string; label: string }[];
+    displayLogic?: { field: string; includes: string };
+  }[]
+) {
+  await adminDb.doc(`formDefinitions/${formId}/versions/${formVersion}`).set({
+    fullFields,
+  });
+}
+
+const siteFields = [
+  {
+    variableName: "sampleApproach",
+    kind: "multi-select" as const,
+    required: true,
+    options: [
+      { value: "other", label: "Other" },
+      { value: "convenience", label: "Convenience" },
+    ],
+  },
+  {
+    variableName: "sampleApproachOther",
+    kind: "text" as const,
+    required: true,
+    displayLogic: { field: "sampleApproach", includes: "other" },
+  },
+  { variableName: "siteRecruitment", kind: "text" as const, required: true },
+];
+
+const schoolFields = [
+  {
+    variableName: "numTeachers",
+    kind: "single-select" as const,
+    required: true,
+    options: [{ value: "10_to_24", label: "10-24 teachers" }],
+  },
+];
 
 describe("saveOrgInformation (e2e)", () => {
   let client: ReturnType<typeof getClient>;
@@ -104,10 +151,98 @@ describe("saveOrgInformation (e2e)", () => {
     });
   });
 
-  it("merges site responses onto districts/{orgId}/siteInformation/response", async () => {
+  it("rejects when the form version does not exist", async () => {
     await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
     await seedSuperAdminClaims(SUPER_ADMIN_UID);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+
+    await expect(saveOrgInformation(validSiteDraft())).rejects.toMatchObject({
+      code: "functions/not-found",
+    });
+  });
+
+  it("rejects unknown response keys", async () => {
+    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
+    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await seedFormVersion("siteInformation", "version-1", [
+      { variableName: "sampleApproach", kind: "multi-select" },
+    ]);
+
+    await expect(
+      saveOrgInformation({
+        ...validSiteDraft(),
+        responses: { notAField: "nope" },
+      })
+    ).rejects.toMatchObject({
+      code: "functions/invalid-argument",
+      details: {
+        code: "schema",
+        issues: [
+          expect.objectContaining({
+            path: "responses.notAField",
+            message: expect.any(String),
+          }),
+        ],
+      },
+    });
+  });
+
+  it("rejects responses with the wrong value type", async () => {
+    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
+    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await seedFormVersion("siteInformation", "version-1", siteFields);
+
+    await expect(
+      saveOrgInformation({
+        ...validSiteDraft(),
+        responses: { sampleApproach: "other" },
+      })
+    ).rejects.toMatchObject({
+      code: "functions/invalid-argument",
+      details: {
+        code: "schema",
+        issues: [
+          expect.objectContaining({
+            path: "responses.sampleApproach",
+            message: expect.any(String),
+          }),
+        ],
+      },
+    });
+  });
+
+  it("rejects values outside the field options", async () => {
+    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
+    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await seedFormVersion("siteInformation", "version-1", siteFields);
+
+    await expect(
+      saveOrgInformation({
+        ...validSiteDraft(),
+        responses: { sampleApproach: ["not-an-option"] },
+      })
+    ).rejects.toMatchObject({
+      code: "functions/invalid-argument",
+      details: {
+        code: "schema",
+        issues: [
+          expect.objectContaining({
+            path: "responses.sampleApproach",
+            message: expect.any(String),
+          }),
+        ],
+      },
+    });
+  });
+
+  it("merges site responses onto districts/{orgId}/siteInformation/version-1", async () => {
+    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
+    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await seedFormVersion("siteInformation", "version-1", siteFields);
 
     const { data } = await saveOrgInformation(validSiteDraft());
     expect(data).toEqual({
@@ -115,11 +250,11 @@ describe("saveOrgInformation (e2e)", () => {
       orgId: SITE,
       formVersion: "version-1",
       status: "draft",
-      path: `districts/${SITE}/siteInformation/response`,
+      path: `districts/${SITE}/siteInformation/version-1`,
     });
 
     const snap = await adminDb
-      .doc(`districts/${SITE}/siteInformation/response`)
+      .doc(`districts/${SITE}/siteInformation/version-1`)
       .get();
     expect(snap.data()).toEqual({
       sampleApproach: ["other"],
@@ -133,40 +268,158 @@ describe("saveOrgInformation (e2e)", () => {
       orgId: SITE,
       formVersion: "version-1",
       responses: { siteRecruitment: "email" },
-      status: "submitted",
+      status: "complete",
     });
 
     const merged = await adminDb
-      .doc(`districts/${SITE}/siteInformation/response`)
+      .doc(`districts/${SITE}/siteInformation/version-1`)
       .get();
     expect(merged.data()).toEqual({
       sampleApproach: ["other"],
       sampleApproachOther: "word of mouth",
       siteRecruitment: "email",
       formVersion: "version-1",
-      status: "submitted",
+      status: "complete",
     });
   });
 
-  it("merges school responses onto schools/{orgId}/schoolInformation/response", async () => {
+  it("rejects complete when a required field is missing", async () => {
+    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
+    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await seedFormVersion("siteInformation", "version-1", siteFields);
+
+    await expect(
+      saveOrgInformation({
+        orgType: "site",
+        orgId: SITE,
+        formVersion: "version-1",
+        responses: { sampleApproach: ["convenience"] },
+        status: "complete",
+      })
+    ).rejects.toMatchObject({
+      code: "functions/failed-precondition",
+    });
+
+    const snap = await adminDb
+      .doc(`districts/${SITE}/siteInformation/version-1`)
+      .get();
+    expect(snap.exists).toBe(false);
+  });
+
+  it("rejects complete when Other is selected without Other text", async () => {
+    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
+    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await seedFormVersion("siteInformation", "version-1", siteFields);
+
+    await expect(
+      saveOrgInformation({
+        orgType: "site",
+        orgId: SITE,
+        formVersion: "version-1",
+        responses: {
+          sampleApproach: ["other"],
+          siteRecruitment: "email",
+        },
+        status: "complete",
+      })
+    ).rejects.toMatchObject({
+      code: "functions/failed-precondition",
+    });
+  });
+
+  it("allows complete without Other text when Other is not selected", async () => {
+    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
+    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await seedFormVersion("siteInformation", "version-1", siteFields);
+
+    const { data } = await saveOrgInformation({
+      orgType: "site",
+      orgId: SITE,
+      formVersion: "version-1",
+      responses: {
+        sampleApproach: ["convenience"],
+        siteRecruitment: "email",
+      },
+      status: "complete",
+    });
+
+    expect(data.status).toBe("complete");
+  });
+
+  it("deletes Other text when Other is unselected and the field is sent as null", async () => {
+    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
+    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await seedFormVersion("siteInformation", "version-1", siteFields);
+
+    await saveOrgInformation(validSiteDraft());
+    await saveOrgInformation({
+      orgType: "site",
+      orgId: SITE,
+      formVersion: "version-1",
+      responses: {
+        sampleApproach: ["convenience"],
+        sampleApproachOther: null,
+      },
+      status: "draft",
+    });
+
+    const snap = await adminDb
+      .doc(`districts/${SITE}/siteInformation/version-1`)
+      .get();
+    expect(snap.data()).toEqual({
+      sampleApproach: ["convenience"],
+      formVersion: "version-1",
+      status: "draft",
+    });
+  });
+
+  it("treats null on a never-saved field as a no-op", async () => {
+    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
+    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await seedFormVersion("siteInformation", "version-1", siteFields);
+
+    await saveOrgInformation({
+      orgType: "site",
+      orgId: SITE,
+      formVersion: "version-1",
+      responses: { siteRecruitment: null },
+      status: "draft",
+    });
+
+    const snap = await adminDb
+      .doc(`districts/${SITE}/siteInformation/version-1`)
+      .get();
+    expect(snap.data()).toEqual({
+      formVersion: "version-1",
+      status: "draft",
+    });
+  });
+
+  it("merges school responses onto schools/{orgId}/schoolInformation/version-2", async () => {
     await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
     await seedSuperAdminClaims(SUPER_ADMIN_UID);
     await adminDb.doc(`schools/${SCHOOL}`).set({ name: "School 1" });
+    await seedFormVersion("schoolInformation", "version-2", schoolFields);
 
     const { data } = await saveOrgInformation({
       orgType: "school",
       orgId: SCHOOL,
       formVersion: "version-2",
-      responses: { numTeachers: "12" },
+      responses: { numTeachers: "10_to_24" },
       status: "draft",
     });
 
-    expect(data.path).toBe(`schools/${SCHOOL}/schoolInformation/response`);
+    expect(data.path).toBe(`schools/${SCHOOL}/schoolInformation/version-2`);
     const snap = await adminDb
-      .doc(`schools/${SCHOOL}/schoolInformation/response`)
+      .doc(`schools/${SCHOOL}/schoolInformation/version-2`)
       .get();
     expect(snap.data()).toEqual({
-      numTeachers: "12",
+      numTeachers: "10_to_24",
       formVersion: "version-2",
       status: "draft",
     });
