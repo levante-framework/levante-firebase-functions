@@ -54,6 +54,14 @@ async function coreFieldsFromOrg(
     );
   }
 
+  const schoolName = orgSnap.get("name") as string | undefined;
+  if (!schoolName) {
+    throw new HttpsError(
+      "not-found",
+      `name was not found on schools document "${orgId}".`
+    );
+  }
+
   const districtSnap = await db.collection("districts").doc(districtId).get();
   if (!districtSnap.exists) {
     throw new HttpsError(
@@ -62,11 +70,19 @@ async function coreFieldsFromOrg(
     );
   }
 
+  const siteName = districtSnap.get("name") as string | undefined;
+  if (!siteName) {
+    throw new HttpsError(
+      "not-found",
+      `name was not found on districts document "${districtId}".`
+    );
+  }
+
   return {
     schoolId: orgId,
     siteId: districtId,
-    schoolPseudonym: orgSnap.get("name"),
-    siteName: districtSnap.get("name"),
+    schoolPseudonym: schoolName,
+    siteName,
   };
 }
 
