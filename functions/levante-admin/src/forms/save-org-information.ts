@@ -2,7 +2,12 @@ import {
   SaveOrgInformationParamsSchema,
   type SaveOrgInformationResult,
 } from "@levante-framework/levante-zod";
-import { FieldValue, getFirestore } from "firebase-admin/firestore";
+import {
+  FieldValue,
+  getFirestore,
+  type DocumentSnapshot,
+  type Firestore,
+} from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import type { FormDefinitionVersion } from "../firestore-schema.js";
@@ -31,6 +36,38 @@ function responsesForWrite(
     payload[key] = value === null ? FieldValue.delete() : value;
   }
   return payload;
+}
+
+async function coreFieldsFromOrg(
+  orgType: OrgType,
+  orgId: string,
+  orgSnap: DocumentSnapshot,
+  db: Firestore
+): Promise<Record<string, unknown>> {
+  if (orgType === "site") return { siteId: orgId };
+
+  const districtId = orgSnap.get("districtId") as string | undefined;
+  if (!districtId) {
+    throw new HttpsError(
+      "not-found",
+      `districts document for school "${orgId}" was not found.`
+    );
+  }
+
+  const districtSnap = await db.collection("districts").doc(districtId).get();
+  if (!districtSnap.exists) {
+    throw new HttpsError(
+      "not-found",
+      `districts document "${districtId}" was not found.`
+    );
+  }
+
+  return {
+    schoolId: orgId,
+    siteId: districtId,
+    schoolPseudonym: orgSnap.get("name"),
+    siteName: districtSnap.get("name"),
+  };
 }
 
 export const saveOrgInformation = onCall(
@@ -79,6 +116,8 @@ export const saveOrgInformation = onCall(
         );
       }
 
+      const coreFields = await coreFieldsFromOrg(orgType, orgId, orgSnap, db);
+
       const formId = informationSubcollectionFromOrgType(orgType);
       const versionSnap = await db
         .collection("formDefinitions")
@@ -106,43 +145,53 @@ export const saveOrgInformation = onCall(
 
       const responseRef = orgRef.collection(formId).doc(formVersion);
       const path = `${orgCollection}/${orgId}/${formId}/${formVersion}`;
+      let savedStatus = status;
 
-      if (status === "complete") {
-        const existingSnap = await responseRef.get();
-        const merged: Record<string, unknown> = {
-          ...(existingSnap.data() ?? {}),
-          ...responses,
-        };
-        for (const [key, value] of Object.entries(responses)) {
-          if (value === null) delete merged[key];
+      await db.runTransaction(async (tx) => {
+        const existingSnap = await tx.get(responseRef);
+        const existing = existingSnap.data();
+
+        if (existing?.status === "complete" && status === "draft") {
+          savedStatus = "complete";
+          return;
         }
-        const missing = findMissingRequiredFields(
-          merged,
-          version.fullFields
-        );
 
-        if (missing.length > 0) {
-          throw new HttpsError(
-            "failed-precondition",
-            `Required fields are missing: ${missing.join(", ")}`
-          );
+        if (status === "complete") {
+          const merged: Record<string, unknown> = {
+            ...(existing ?? {}),
+            ...responses,
+          };
+          for (const [key, value] of Object.entries(responses)) {
+            if (value === null) delete merged[key];
+          }
+          const missing = findMissingRequiredFields(merged, version.fullFields);
+
+          if (missing.length > 0) {
+            throw new HttpsError(
+              "failed-precondition",
+              `Required fields are missing: ${missing.join(", ")}`
+            );
+          }
         }
-      }
 
-      await responseRef.set(
-        {
+        const payload: Record<string, unknown> = {
           ...responsesForWrite(responses),
+          ...coreFields,
           formVersion,
           status,
-        },
-        { merge: true }
-      );
+          updatedAt: FieldValue.serverTimestamp(),
+        };
+        if (!existingSnap.exists) {
+          payload.createdAt = FieldValue.serverTimestamp();
+        }
+        tx.set(responseRef, payload, { merge: true });
+      });
 
       return {
         orgType,
         orgId,
         formVersion,
-        status,
+        status: savedStatus,
         path,
       };
     } catch (error) {
