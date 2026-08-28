@@ -7,18 +7,7 @@ import {
 import { getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-
-type OrgType = "site" | "school";
-
-function formIdFromOrgType(orgType: OrgType): string {
-  if (orgType === "site") return "siteInformation";
-  return "schoolInformation";
-}
-
-function orgCollectionFromOrgType(orgType: OrgType): "districts" | "schools" {
-  if (orgType === "site") return "districts";
-  return "schools";
-}
+import { formIdFromOrgType, orgCollectionFromOrgType } from "./org-paths.js";
 
 /**
  * Reads a form definition and its registered (live) version from Firestore.
