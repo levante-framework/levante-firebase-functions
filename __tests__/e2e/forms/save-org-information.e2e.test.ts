@@ -44,10 +44,12 @@ async function seedFormVersion(
     required?: boolean;
     options?: { value: string; label: string }[];
     displayLogic?: { field: string; includes: string };
-  }[]
+  }[],
+  registered = true
 ) {
   await adminDb.doc(`formDefinitions/${formId}/versions/${formVersion}`).set({
     fullFields,
+    registered,
   });
 }
 
@@ -171,6 +173,19 @@ describe("saveOrgInformation (e2e)", () => {
 
     await expect(saveOrgInformation(validSiteDraft())).rejects.toMatchObject({
       code: "functions/not-found",
+    });
+  });
+
+  it("rejects when the form version is not registered", async () => {
+    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
+    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await seedFormVersion("siteInformation", "version-1", siteFields, false);
+
+    const draft = validSiteDraft();
+    await expect(saveOrgInformation(draft)).rejects.toMatchObject({
+      code: "functions/failed-precondition",
+      message: `Form version "${draft.formVersion}" is not registered.`,
     });
   });
 
@@ -325,6 +340,29 @@ describe("saveOrgInformation (e2e)", () => {
     expect(snap.exists).toBe(false);
   });
 
+  it("rejects complete when a required text field is only whitespace", async () => {
+    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
+    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await seedFormVersion("siteInformation", "version-1", siteFields);
+
+    await expect(
+      saveOrgInformation({
+        orgType: "site",
+        orgId: SITE,
+        formVersion: "version-1",
+        responses: {
+          sampleApproach: ["convenience"],
+          siteRecruitment: "   ",
+        },
+        status: "complete",
+      })
+    ).rejects.toMatchObject({
+      code: "functions/failed-precondition",
+      message: "Required fields are missing: siteRecruitment",
+    });
+  });
+
   it("rejects complete when Other is selected without Other text", async () => {
     await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
     await seedSuperAdminClaims(SUPER_ADMIN_UID);
@@ -405,6 +443,48 @@ describe("saveOrgInformation (e2e)", () => {
     });
     expect(after.createdAt.isEqual(before.createdAt)).toBe(true);
     expect(after.updatedAt.isEqual(before.updatedAt)).toBe(true);
+  });
+
+  it("ignores a late school draft even if the school name is later missing", async () => {
+    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
+    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await adminDb
+      .doc(`schools/${SCHOOL}`)
+      .set({ name: "School 1", districtId: SITE });
+    await seedFormVersion("schoolInformation", "version-2", schoolFields);
+
+    await saveOrgInformation({
+      orgType: "school",
+      orgId: SCHOOL,
+      formVersion: "version-2",
+      responses: { numTeachers: "10_to_24" },
+      status: "complete",
+    });
+
+    await adminDb.doc(`schools/${SCHOOL}`).set({ districtId: SITE });
+
+    const { data } = await saveOrgInformation({
+      orgType: "school",
+      orgId: SCHOOL,
+      formVersion: "version-2",
+      responses: { numTeachers: "10_to_24" },
+      status: "draft",
+    });
+    expect(data.status).toBe("complete");
+
+    const snap = await adminDb
+      .doc(`schools/${SCHOOL}/schoolInformation/version-2`)
+      .get();
+    expect(dataWithoutTimestamps(snap.data()).rest).toEqual({
+      numTeachers: "10_to_24",
+      schoolId: SCHOOL,
+      siteId: SITE,
+      schoolPseudonym: "School 1",
+      siteName: "Site 1",
+      formVersion: "version-2",
+      status: "complete",
+    });
   });
 
   it("deletes Other text when Other is unselected and the field is sent as null", async () => {
@@ -509,6 +589,7 @@ describe("saveOrgInformation (e2e)", () => {
       })
     ).rejects.toMatchObject({
       code: "functions/not-found",
+      message: `districtId was not found on schools document "${SCHOOL}".`,
     });
   });
 
@@ -530,6 +611,7 @@ describe("saveOrgInformation (e2e)", () => {
       })
     ).rejects.toMatchObject({
       code: "functions/not-found",
+      message: `districts document "${SITE}" was not found.`,
     });
   });
 
@@ -550,6 +632,30 @@ describe("saveOrgInformation (e2e)", () => {
       })
     ).rejects.toMatchObject({
       code: "functions/not-found",
+      message: `name was not found on schools document "${SCHOOL}".`,
+    });
+  });
+
+  it("rejects when the school name is blank", async () => {
+    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
+    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await adminDb
+      .doc(`schools/${SCHOOL}`)
+      .set({ name: "   ", districtId: SITE });
+    await seedFormVersion("schoolInformation", "version-2", schoolFields);
+
+    await expect(
+      saveOrgInformation({
+        orgType: "school",
+        orgId: SCHOOL,
+        formVersion: "version-2",
+        responses: { numTeachers: "10_to_24" },
+        status: "draft",
+      })
+    ).rejects.toMatchObject({
+      code: "functions/not-found",
+      message: `name was not found on schools document "${SCHOOL}".`,
     });
   });
 
@@ -572,6 +678,7 @@ describe("saveOrgInformation (e2e)", () => {
       })
     ).rejects.toMatchObject({
       code: "functions/not-found",
+      message: `name was not found on districts document "${SITE}".`,
     });
   });
 });
