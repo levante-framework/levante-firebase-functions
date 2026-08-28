@@ -7,26 +7,18 @@ import {
   getFirestore,
   type DocumentSnapshot,
   type Firestore,
+  type Transaction,
 } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import type { FormDefinitionVersion } from "../firestore-schema.js";
+import {
+  formIdFromOrgType,
+  orgCollectionFromOrgType,
+  type OrgType,
+} from "./org-paths.js";
 import { validateResponseShape } from "./validate-response-shape.js";
 import { findMissingRequiredFields } from "./validate-complete-answers.js";
-
-type OrgType = "site" | "school";
-
-function orgCollectionFromOrgType(orgType: OrgType): "districts" | "schools" {
-  if (orgType === "site") return "districts";
-  return "schools";
-}
-
-function informationSubcollectionFromOrgType(
-  orgType: OrgType
-): "siteInformation" | "schoolInformation" {
-  if (orgType === "site") return "siteInformation";
-  return "schoolInformation";
-}
 
 function responsesForWrite(
   responses: Record<string, unknown>
@@ -38,23 +30,31 @@ function responsesForWrite(
   return payload;
 }
 
+function requiredString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  return trimmed;
+}
+
 async function coreFieldsFromOrg(
   orgType: OrgType,
   orgId: string,
   orgSnap: DocumentSnapshot,
-  db: Firestore
+  db: Firestore,
+  tx: Transaction
 ): Promise<Record<string, unknown>> {
   if (orgType === "site") return { siteId: orgId };
 
-  const districtId = orgSnap.get("districtId") as string | undefined;
+  const districtId = requiredString(orgSnap.get("districtId"));
   if (!districtId) {
     throw new HttpsError(
       "not-found",
-      `districts document for school "${orgId}" was not found.`
+      `districtId was not found on schools document "${orgId}".`
     );
   }
 
-  const schoolName = orgSnap.get("name") as string | undefined;
+  const schoolName = requiredString(orgSnap.get("name"));
   if (!schoolName) {
     throw new HttpsError(
       "not-found",
@@ -62,7 +62,7 @@ async function coreFieldsFromOrg(
     );
   }
 
-  const districtSnap = await db.collection("districts").doc(districtId).get();
+  const districtSnap = await tx.get(db.collection("districts").doc(districtId));
   if (!districtSnap.exists) {
     throw new HttpsError(
       "not-found",
@@ -70,7 +70,7 @@ async function coreFieldsFromOrg(
     );
   }
 
-  const siteName = districtSnap.get("name") as string | undefined;
+  const siteName = requiredString(districtSnap.get("name"));
   if (!siteName) {
     throw new HttpsError(
       "not-found",
@@ -132,9 +132,7 @@ export const saveOrgInformation = onCall(
         );
       }
 
-      const coreFields = await coreFieldsFromOrg(orgType, orgId, orgSnap, db);
-
-      const formId = informationSubcollectionFromOrgType(orgType);
+      const formId = formIdFromOrgType(orgType);
       const versionSnap = await db
         .collection("formDefinitions")
         .doc(formId)
@@ -146,6 +144,13 @@ export const saveOrgInformation = onCall(
         throw new HttpsError(
           "not-found",
           `Form version "${formVersion}" was not found.`
+        );
+      }
+
+      if (versionSnap.get("registered") !== true) {
+        throw new HttpsError(
+          "failed-precondition",
+          `Form version "${formVersion}" is not registered.`
         );
       }
 
@@ -171,6 +176,14 @@ export const saveOrgInformation = onCall(
           savedStatus = "complete";
           return;
         }
+
+        const coreFields = await coreFieldsFromOrg(
+          orgType,
+          orgId,
+          orgSnap,
+          db,
+          tx
+        );
 
         if (status === "complete") {
           const merged: Record<string, unknown> = {
