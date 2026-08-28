@@ -165,54 +165,55 @@ export interface School {
 
 // --- Org information forms (`formDefinitions` collection and response subcollections) ---
 
-/**
- * Document in the `siteInformation` subcollection of `districts`.
- * Optional subcollection: a district document may or may not have siteInformation.
- * Allowed values for select fields are sourced from the runtime form definition,
- * so they are typed as strings here rather than hardcoded literal unions.
- */
-export interface SiteInformation {
+export interface SiteInformationCore {
   siteId: string;
   /**
    * Document ID of the form definition version this response was collected against
    * (`formDefinitions/siteInformation/versions/{versionId}`).
    */
   formVersion: string;
-  /** `draft` for page/leave saves; `submitted` when the form is finished. */
-  status: "draft" | "submitted";
-  sampleApproach: string[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  /** `draft` for page/leave saves; `complete` when the form is finished. */
+  status: "draft" | "complete";
+}
+
+export interface SiteInformationAnswers {
+  sampleApproach?: string[];
   /** Only populated when `sampleApproach` includes `"other"`. */
   sampleApproachOther?: string;
-  siteRecruitment: string;
-  adminApproach: string[];
+  siteRecruitment?: string;
+  adminApproach?: string[];
   /** Only populated when `adminApproach` includes `"other"`. */
   adminApproachOther?: string;
-  testConditions: string;
-  equipmentType: string[];
-  equipmentDevices: string;
-  siteGeoArea: string;
-  siteGeoType: string;
-  sitePopulationSize: string;
-  siteRaceEthnicity: string;
-  siteSES: string;
-  siteLifestyle: string;
-  siteTech: string;
-  siteLanguages: string;
-  siteSubsistence: string[];
-  schoolingAgeStart: number;
-  schoolingAgeEnd: number;
-  schoolingProgression: string;
-  schoolingTeacherQuals: string;
+  testConditions?: string;
+  equipmentType?: string[];
+  equipmentDevices?: string;
+  siteGeoArea?: string;
+  siteGeoType?: string;
+  sitePopulationSize?: string;
+  siteRaceEthnicity?: string;
+  siteSES?: string;
+  siteLifestyle?: string;
+  siteTech?: string;
+  siteLanguages?: string;
+  siteSubsistence?: string[];
+  schoolingAgeStart?: number;
+  schoolingAgeEnd?: number;
+  schoolingProgression?: string;
+  schoolingTeacherQuals?: string;
   anythingElse?: string;
 }
 
 /**
- * Document in the `schoolInformation` subcollection of `schools`.
- * Optional subcollection: a school document may or may not have schoolInformation.
+ * Document in the `siteInformation` subcollection of `districts`.
+ * Optional subcollection: a district document may or may not have siteInformation.
  * Allowed values for select fields are sourced from the runtime form definition,
  * so they are typed as strings here rather than hardcoded literal unions.
  */
-export interface SchoolInformation {
+export type SiteInformation = SiteInformationCore & SiteInformationAnswers;
+
+export interface SchoolInformationCore {
   siteId: string;
   siteName: string;
   schoolId: string;
@@ -222,24 +223,37 @@ export interface SchoolInformation {
    * (`formDefinitions/schoolInformation/versions/{versionId}`).
    */
   formVersion: string;
-  /** `draft` for page/leave saves; `submitted` when the form is finished. */
-  status: "draft" | "submitted";
-  numStudents: string;
-  studentAgeYoungest: number;
-  studentAgeOldest: number;
-  numTeachers: string;
-  studentsPerTeacher: number;
-  avgClassSize: string;
-  schoolFunding: string;
-  schoolReligious: string;
-  schoolTuition: string;
-  schoolSelectiveness: string[];
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  /** `draft` for page/leave saves; `complete` when the form is finished. */
+  status: "draft" | "complete";
+}
+
+export interface SchoolInformationAnswers {
+  numStudents?: string;
+  studentAgeYoungest?: number;
+  studentAgeOldest?: number;
+  numTeachers?: string;
+  studentsPerTeacher?: number;
+  avgClassSize?: string;
+  schoolFunding?: string;
+  schoolReligious?: string;
+  schoolTuition?: string;
+  schoolSelectiveness?: string[];
   /** Only populated when `schoolSelectiveness` includes `"other"`. */
   schoolSelectivenessOther?: string;
-  instructionLanguages: string;
-  schoolDayLength: number;
-  teacherQuals: string;
+  instructionLanguages?: string;
+  schoolDayLength?: number;
+  teacherQuals?: string;
 }
+
+/**
+ * Document in the `schoolInformation` subcollection of `schools`.
+ * Optional subcollection: a school document may or may not have schoolInformation.
+ * Allowed values for select fields are sourced from the runtime form definition,
+ * so they are typed as strings here rather than hardcoded literal unions.
+ */
+export type SchoolInformation = SchoolInformationCore & SchoolInformationAnswers;
 
 /** Response field keys shared across org-information forms (site and school). */
 export type InformationFieldKey =
