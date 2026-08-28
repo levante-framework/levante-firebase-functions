@@ -30,22 +30,17 @@ describe("findMissingRequiredFields", () => {
 
   it("treats omitted required keys as missing", () => {
     expect(
-      findMissingRequiredFields(
-        { sampleApproach: ["convenience"] },
-        fields
-      )
+      findMissingRequiredFields({ sampleApproach: ["convenience"] }, fields)
     ).toEqual(["siteRecruitment"]);
   });
 
-  it("treats an empty string as missing", () => {
+  it("treats empty and whitespace-only strings as missing", () => {
+    const answers = { sampleApproach: ["convenience"] };
     expect(
-      findMissingRequiredFields(
-        {
-          sampleApproach: ["convenience"],
-          siteRecruitment: "",
-        },
-        fields
-      )
+      findMissingRequiredFields({ ...answers, siteRecruitment: "" }, fields)
+    ).toEqual(["siteRecruitment"]);
+    expect(
+      findMissingRequiredFields({ ...answers, siteRecruitment: "   " }, fields)
     ).toEqual(["siteRecruitment"]);
   });
 
