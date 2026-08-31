@@ -133,6 +133,13 @@ async function createAdminUsers({
       },
       idToken
     );
+    // createAdministrator assigns a random password, so overwrite it with the
+    // fixture password to make the seeded admins usable as tester logins.
+    if (adminUser.password && result?.adminUid) {
+      await runtime.app
+        .auth()
+        .updateUser(result.adminUid, { password: adminUser.password });
+    }
     createdAdmins.push({ ...adminUser, uid: result?.adminUid });
   }
 
@@ -208,10 +215,8 @@ async function linkParticipantUsers({
         userType: row.userType,
         uid: createdUserBySeedId.get(row.id)?.uid,
         ...(row.userType === "child" && {
-          ...(row.parentId && { parentId: row.parentId }),
-          ...(row.teacherId && { teacherId: row.teacherId }),
-          month: Number(row.month),
-          year: Number(row.year),
+          caregiverId: row.parentId ? [row.parentId] : [],
+          teacherId: row.teacherId ? [row.teacherId] : [],
         }),
       })),
     },
