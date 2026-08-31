@@ -24,6 +24,7 @@ import type {
 import { ORG_NAMES } from "../interfaces.js";
 import { getReadOrgs, isEmptyOrgs } from "../orgs/org-utils.js";
 import { evaluateCondition } from "../administrations/conditions.js";
+import { rebuildAssignmentProgress } from "../utils/assignment.js";
 import { parseTimestamp, removeUndefinedFields } from "../utils/utils.js";
 import {
   summarizeAssignmentForLog,
@@ -237,10 +238,7 @@ const prepareNewAssignment = async (
       username,
     };
 
-    const progress = assessments.reduce((acc, { taskId }) => {
-      acc[taskId.replace(/-/g, "_")] = "assigned";
-      return acc;
-    }, {});
+    const progress = rebuildAssignmentProgress(assessments);
 
     const { dateOpened, dateClosed, dateCreated } = administrationData;
     const cleanedAssessments = removeUndefinedFields(assessments);
@@ -736,6 +734,10 @@ export const updateAssignmentForUser = async (
       }
 
       const prevData = assignmentDoc.data()!;
+      const progress = rebuildAssignmentProgress(
+        cleanedAssessments,
+        (prevData.progress as Record<string, unknown> | undefined) ?? {}
+      );
       const assignmentData: DocumentData = {
         ...prevData,
         id: administrationId,
@@ -750,6 +752,7 @@ export const updateAssignmentForUser = async (
         sequential: administrationData.sequential ?? false,
         readOrgs: userReadOrgs,
         assessments: cleanedAssessments,
+        progress,
         userData: userDataCopy,
         testData: administrationData.testData ?? false,
         demoData: administrationData.demoData ?? false,
@@ -1006,6 +1009,10 @@ const readPhaseForUser = async (
     const { dateOpened, dateClosed, dateCreated } = administrationData;
     const cleanedAssessments = removeUndefinedFields(updatedAssessments);
     const prevData = assignmentDoc.data()!;
+    const progress = rebuildAssignmentProgress(
+      cleanedAssessments,
+      (prevData.progress as Record<string, unknown> | undefined) ?? {}
+    );
     const assignmentData: DocumentData = {
       ...prevData,
       id: administrationId,
@@ -1020,6 +1027,7 @@ const readPhaseForUser = async (
       sequential: administrationData.sequential ?? false,
       readOrgs: userReadOrgs,
       assessments: cleanedAssessments,
+      progress,
       userData: userDataCopy,
       testData: administrationData.testData ?? false,
       demoData: administrationData.demoData ?? false,
