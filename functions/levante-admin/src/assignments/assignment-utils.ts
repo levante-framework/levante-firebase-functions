@@ -24,7 +24,10 @@ import type {
 import { ORG_NAMES } from "../interfaces.js";
 import { getReadOrgs, isEmptyOrgs } from "../orgs/org-utils.js";
 import { evaluateCondition } from "../administrations/conditions.js";
-import { rebuildAssignmentProgress } from "../utils/assignment.js";
+import {
+  areAssessmentsComplete,
+  rebuildAssignmentProgress,
+} from "../utils/assignment.js";
 import { parseTimestamp, removeUndefinedFields } from "../utils/utils.js";
 import {
   summarizeAssignmentForLog,
@@ -753,6 +756,7 @@ export const updateAssignmentForUser = async (
         readOrgs: userReadOrgs,
         assessments: cleanedAssessments,
         progress,
+        completed: areAssessmentsComplete(cleanedAssessments),
         userData: userDataCopy,
         testData: administrationData.testData ?? false,
         demoData: administrationData.demoData ?? false,
@@ -1028,6 +1032,7 @@ const readPhaseForUser = async (
       readOrgs: userReadOrgs,
       assessments: cleanedAssessments,
       progress,
+      completed: areAssessmentsComplete(cleanedAssessments),
       userData: userDataCopy,
       testData: administrationData.testData ?? false,
       demoData: administrationData.demoData ?? false,

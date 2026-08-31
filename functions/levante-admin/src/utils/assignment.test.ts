@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  areAssessmentsComplete,
   progressKeyFromTaskId,
   rebuildAssignmentProgress,
 } from "./assignment.js";
@@ -9,6 +10,38 @@ describe("progressKeyFromTaskId", () => {
     expect(progressKeyFromTaskId("hearts-and-flowers")).toBe(
       "hearts_and_flowers"
     );
+  });
+});
+
+describe("areAssessmentsComplete", () => {
+  it("is false when a required assessment has no completedOn", () => {
+    expect(
+      areAssessmentsComplete([
+        { taskId: "egma-math", completedOn: new Date() },
+        { taskId: "hearts-and-flowers" },
+      ])
+    ).toBe(false);
+  });
+
+  it("treats the current task as complete", () => {
+    expect(
+      areAssessmentsComplete(
+        [
+          { taskId: "egma-math", completedOn: new Date() },
+          { taskId: "hearts-and-flowers" },
+        ],
+        "hearts-and-flowers"
+      )
+    ).toBe(true);
+  });
+
+  it("treats optional assessments as complete", () => {
+    expect(
+      areAssessmentsComplete([
+        { taskId: "egma-math", completedOn: new Date() },
+        { taskId: "hearts-and-flowers", optional: true },
+      ])
+    ).toBe(true);
   });
 });
 
