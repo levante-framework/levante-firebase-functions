@@ -7,6 +7,22 @@ import {
 } from "firebase-admin/firestore";
 import { summarizeRunsForLog } from "../utils/logging.js";
 
+export function progressKeyForTaskId(taskId: string): string {
+  return taskId.replace(/-/g, "_");
+}
+
+export function isAssignmentCompletedFromProgress(
+  progress: Record<string, unknown>,
+  taskId: string,
+  progressValue: string
+): boolean {
+  const next = {
+    ...progress,
+    [progressKeyForTaskId(taskId)]: progressValue,
+  };
+  return Object.values(next).every((value) => value === "completed");
+}
+
 export const updateBestRunAndCompletion = async ({
   roarUid,
   assignmentId,
@@ -226,16 +242,14 @@ export const updateBestRunAndCompletion = async ({
 
           const progressFieldPath = new FieldPath(
             "progress",
-            taskId.replace(/-/g, "_")
+            progressKeyForTaskId(taskId)
           );
           const progressValue = completed ? "completed" : "started";
 
-          // We should also determine whether this assignment is complete by looking
-          // at all of the values in the progress object. But first, we should update
-          // the progress for this taskId.
-          progress[taskId] = progressValue;
-          const isAssignmentCompleted = Object.values(progress).every(
-            (value) => value === "completed"
+          const isAssignmentCompleted = isAssignmentCompletedFromProgress(
+            progress,
+            taskId,
+            progressValue
           );
 
           return transaction.update(
