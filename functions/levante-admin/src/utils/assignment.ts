@@ -138,6 +138,26 @@ export function rebuildAssignmentProgress(
 }
 
 /**
+ * True when every assessment is done or optional.
+ * Pass `currentTaskId` when that task is being completed in the same
+ * transaction and does not yet have `completedOn` on the snapshot.
+ */
+export function areAssessmentsComplete(
+  assessments: Array<
+    Pick<IExtendedAssignedAssessment, "completedOn" | "optional" | "taskId">
+  >,
+  currentTaskId?: string
+): boolean {
+  return assessments.every((assessment) => {
+    return (
+      Boolean(assessment.completedOn) ||
+      Boolean(assessment.optional) ||
+      (currentTaskId != null && assessment.taskId === currentTaskId)
+    );
+  });
+}
+
+/**
  * Checks if all assessments in an assignment are completed
  *
  * Note: When checking if all assessments are completed, we need to consider the current task
@@ -150,8 +170,5 @@ export function shouldCompleteAssignment(
 ): boolean {
   const data = docSnap.data();
   const assessments: IExtendedAssignedAssessment[] = data?.assessments || [];
-
-  return assessments.every((a: IExtendedAssignedAssessment) => {
-    return Boolean(a.completedOn) || a.optional || a.taskId === currentTaskId;
-  });
+  return areAssessmentsComplete(assessments, currentTaskId);
 }
