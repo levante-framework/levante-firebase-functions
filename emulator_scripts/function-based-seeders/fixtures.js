@@ -2,18 +2,21 @@ const ADMIN_USERS = [
   {
     key: "admin",
     email: "admin@levante.test",
+    password: "admin123",
     name: { first: "Admin", middle: "", last: "User" },
     role: "admin",
   },
   {
     key: "siteAdmin",
     email: "siteadmin@levante.test",
+    password: "siteadmin123",
     name: { first: "Site Admin", middle: "", last: "User" },
     role: "site_admin",
   },
   {
     key: "researchAssistant",
     email: "ra@levante.test",
+    password: "ra12345",
     name: { first: "Research Assistant", middle: "", last: "User" },
     role: "research_assistant",
   },
