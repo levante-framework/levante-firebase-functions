@@ -50,7 +50,9 @@ export function findSurveyAssessmentIndex(
 ): number {
   const preferred = surveyTaskIdForUserType(userType);
   if (preferred) {
-    const idx = assessments.findIndex((a) => a.taskId === preferred);
+    const idx = assessments.findIndex(
+      (a) => a.taskId?.toLowerCase() === preferred
+    );
     if (idx !== -1) return idx;
   }
 

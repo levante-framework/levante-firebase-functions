@@ -36,6 +36,14 @@ describe("findSurveyAssessmentIndex", () => {
     expect(findSurveyAssessmentIndex(assessments, "student")).toBe(0);
   });
 
+  it("matches the type-specific task regardless of casing", () => {
+    const assessments = [
+      { taskId: "child-survey" },
+      { taskId: "Caregiver-Survey" },
+    ];
+    expect(findSurveyAssessmentIndex(assessments, "parent")).toBe(1);
+  });
+
   it("falls back to the first survey task when no type-specific task exists", () => {
     const assessments = [{ taskId: "vocab" }, { taskId: "survey" }];
     expect(findSurveyAssessmentIndex(assessments, "parent")).toBe(1);
