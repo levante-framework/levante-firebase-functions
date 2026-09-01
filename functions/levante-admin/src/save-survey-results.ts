@@ -36,7 +36,7 @@ function isSurveyTask(taskId?: string): boolean {
   return !!taskId && taskId.toLowerCase().includes("survey");
 }
 
-function surveyTaskIdForUserType(userType?: string): string | undefined {
+export function surveyTaskIdForUserType(userType?: string): string | undefined {
   const type = userType?.toLowerCase();
   if (type === "parent" || type === "caregiver") return "caregiver-survey";
   if (type === "teacher") return "teacher-survey";
@@ -44,7 +44,7 @@ function surveyTaskIdForUserType(userType?: string): string | undefined {
   return undefined;
 }
 
-function findSurveyAssessmentIndex(
+export function findSurveyAssessmentIndex(
   assessments: { taskId?: string }[],
   userType?: string
 ): number {
