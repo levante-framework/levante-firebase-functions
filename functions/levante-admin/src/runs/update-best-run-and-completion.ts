@@ -1,11 +1,11 @@
 import { logger } from "firebase-functions/v2";
-import {
-  getFirestore,
-  Timestamp,
-  Filter,
-  FieldPath,
-} from "firebase-admin/firestore";
+import { getFirestore, Timestamp, Filter } from "firebase-admin/firestore";
 import { summarizeRunsForLog } from "../utils/logging.js";
+import {
+  areAssessmentsComplete,
+  progressKeyFromTaskId,
+  rebuildAssignmentProgress,
+} from "../utils/assignment.js";
 
 export const updateBestRunAndCompletion = async ({
   roarUid,
@@ -224,33 +224,24 @@ export const updateBestRunAndCompletion = async ({
             assessments[assessmentIdx].startedOn = startedOn;
           }
 
-          const progressFieldPath = new FieldPath(
-            "progress",
-            taskId.replace(/-/g, "_")
-          );
+          const progressKey = progressKeyFromTaskId(taskId);
           const progressValue = completed ? "completed" : "started";
-
-          // We should also determine whether this assignment is complete by looking
-          // at all of the values in the progress object. But first, we should update
-          // the progress for this taskId.
-          progress[taskId] = progressValue;
-          const isAssignmentCompleted = Object.values(progress).every(
-            (value) => value === "completed"
-          );
-
-          return transaction.update(
-            assignmentDocRef,
-            "assessments",
+          const nextProgress = rebuildAssignmentProgress(
             assessments,
-            progressFieldPath,
-            progressValue,
-            "started",
-            true,
-            "completed",
-            isAssignmentCompleted,
-            "cloudSyncTimestamp",
-            new Date().getTime()
+            progress as Record<string, unknown>
           );
+          nextProgress[progressKey] = progressValue;
+
+          return transaction.update(assignmentDocRef, {
+            assessments,
+            progress: nextProgress,
+            started: true,
+            completed: areAssessmentsComplete(
+              assessments,
+              completed ? taskId : undefined
+            ),
+            cloudSyncTimestamp: new Date().getTime(),
+          });
         },
         { maxAttempts: 1000 }
       )
