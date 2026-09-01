@@ -36,6 +36,29 @@ function isSurveyTask(taskId?: string): boolean {
   return !!taskId && taskId.toLowerCase().includes("survey");
 }
 
+export function surveyTaskIdForUserType(userType?: string): string | undefined {
+  const type = userType?.toLowerCase();
+  if (type === "parent" || type === "caregiver") return "caregiver-survey";
+  if (type === "teacher") return "teacher-survey";
+  if (type === "student" || type === "child") return "child-survey";
+  return undefined;
+}
+
+export function findSurveyAssessmentIndex(
+  assessments: { taskId?: string }[],
+  userType?: string
+): number {
+  const preferred = surveyTaskIdForUserType(userType);
+  if (preferred) {
+    const idx = assessments.findIndex(
+      (a) => a.taskId?.toLowerCase() === preferred
+    );
+    if (idx !== -1) return idx;
+  }
+
+  return assessments.findIndex((a) => isSurveyTask(a.taskId));
+}
+
 export async function writeSurveyResponses(
   requesterUid: string,
   data: SurveyResponsesInput
@@ -178,8 +201,9 @@ export async function writeSurveyResponses(
         const assessments = assignmentData?.assessments || [];
 
         // Find the survey assessment
-        const surveyAssessmentIndex = assessments.findIndex((assessment) =>
-          isSurveyTask(assessment.taskId)
+        const surveyAssessmentIndex = findSurveyAssessmentIndex(
+          assessments,
+          userType
         );
 
         if (surveyAssessmentIndex !== -1) {
