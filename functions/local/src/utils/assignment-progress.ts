@@ -1,3 +1,16 @@
+/**
+ * CANONICAL SOURCE: functions/levante-admin/src/utils/assignment.ts
+ *
+ * This is a hand-copy of the runtime's progress/completion logic, kept here
+ * because the `local` package can't import from `levante-admin`. The repair
+ * must decide the "correct" assignment state the SAME way the runtime does,
+ * or it will rewrite docs the runtime immediately re-corrupts (the exact bug
+ * this script repairs).
+ *
+ * INVARIANT: rebuildAssignmentProgress + expectedAssignmentCompleted must stay
+ * in sync with rebuildAssignmentProgress + areAssessmentsComplete in the admin
+ * util. If you change completion/progress logic there, mirror it here.
+ */
 export type AssignmentProgressStatus = "assigned" | "started" | "completed";
 
 export type AssignmentAssessment = {
@@ -88,6 +101,7 @@ function mergeProgress(
   return STATUS_RANK[current] >= STATUS_RANK[derived] ? current : derived;
 }
 
+// Mirror of rebuildAssignmentProgress in the admin util (see file header).
 export function rebuildAssignmentProgress(
   assessments: AssignmentAssessment[],
   currentProgress: Record<string, unknown>
@@ -112,6 +126,9 @@ export function rebuildAssignmentProgress(
   return rebuilt;
 }
 
+// Mirror of areAssessmentsComplete in the admin util (see file header).
+// The empty-assessments guard is a local-only safeguard: such docs are flagged
+// unrepairable upstream, so this branch never drives a repair write.
 export function expectedAssignmentCompleted(
   assessments: AssignmentAssessment[]
 ): boolean {
