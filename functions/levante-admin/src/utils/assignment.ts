@@ -73,6 +73,90 @@ export function isVisibleAssignment(
   return status !== "pending" && status !== "failed";
 }
 
+export type AssignmentProgressStatus = "assigned" | "started" | "completed";
+
+const PROGRESS_STATUS_RANK: Record<AssignmentProgressStatus, number> = {
+  assigned: 0,
+  started: 1,
+  completed: 2,
+};
+
+export function progressKeyFromTaskId(taskId: string): string {
+  return taskId.replace(/-/g, "_");
+}
+
+function isProgressStatus(value: unknown): value is AssignmentProgressStatus {
+  return value === "assigned" || value === "started" || value === "completed";
+}
+
+function progressStatusFromAssessment(assessment: {
+  completedOn?: unknown;
+  startedOn?: unknown;
+  runId?: unknown;
+}): AssignmentProgressStatus {
+  if (assessment.completedOn) return "completed";
+  if (assessment.startedOn || assessment.runId) return "started";
+  return "assigned";
+}
+
+function mergeProgressStatus(
+  existing: unknown,
+  derived: AssignmentProgressStatus
+): AssignmentProgressStatus {
+  if (!isProgressStatus(existing)) return derived;
+  return PROGRESS_STATUS_RANK[existing] >= PROGRESS_STATUS_RANK[derived]
+    ? existing
+    : derived;
+}
+
+/**
+ * Rebuilds `progress` from the current assessments.
+ * Keeps existing assigned/started/completed values when they are at least as
+ * far along as the assessment timestamps; adds missing keys; drops stale ones.
+ */
+export function rebuildAssignmentProgress(
+  assessments: Array<{
+    taskId?: string;
+    completedOn?: unknown;
+    startedOn?: unknown;
+    runId?: unknown;
+  }>,
+  existingProgress: Record<string, unknown> = {}
+): Record<string, AssignmentProgressStatus> {
+  const next: Record<string, AssignmentProgressStatus> = {};
+
+  for (const assessment of assessments) {
+    if (!assessment.taskId) continue;
+    const key = progressKeyFromTaskId(assessment.taskId);
+    next[key] = mergeProgressStatus(
+      existingProgress[key],
+      progressStatusFromAssessment(assessment)
+    );
+  }
+
+  return next;
+}
+
+/**
+ * True when every assessment is done or optional.
+ * Pass `currentTaskId` when that task is being completed in the same
+ * transaction and does not yet have `completedOn` on the snapshot.
+ */
+export function areAssessmentsComplete(
+  assessments: Array<
+    Pick<IExtendedAssignedAssessment, "completedOn" | "optional" | "taskId">
+  >,
+  currentTaskId?: string
+): boolean {
+  return assessments.every((assessment) => {
+    return (
+      Boolean(assessment.completedOn) ||
+      Boolean(assessment.optional) ||
+      (currentTaskId != null && assessment.taskId === currentTaskId)
+    );
+  });
+}
+
 /**
  * Checks if all assessments in an assignment are completed
  *
@@ -86,8 +170,5 @@ export function shouldCompleteAssignment(
 ): boolean {
   const data = docSnap.data();
   const assessments: IExtendedAssignedAssessment[] = data?.assessments || [];
-
-  return assessments.every((a: IExtendedAssignedAssessment) => {
-    return Boolean(a.completedOn) || a.optional || a.taskId === currentTaskId;
-  });
+  return areAssessmentsComplete(assessments, currentTaskId);
 }
