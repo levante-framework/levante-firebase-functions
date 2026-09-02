@@ -14,6 +14,7 @@ import {
 const REQUIRED_COLUMNS = [
   "uid",
   "administrationId",
+  "assignmentPath",
   "isCorrupted",
   "repairable",
 ] as const;
@@ -21,6 +22,7 @@ const REQUIRED_COLUMNS = [
 type InputRow = {
   uid: string;
   administrationId: string;
+  assignmentPath: string;
   isCorrupted: string;
   repairable: string;
 };
@@ -63,6 +65,7 @@ function parseInput(inputFile: string): InputRow[] {
   return parsed.data.map((row) => ({
     uid: (row.uid ?? "").trim(),
     administrationId: (row.administrationId ?? "").trim(),
+    assignmentPath: (row.assignmentPath ?? "").trim(),
     isCorrupted: (row.isCorrupted ?? "").trim(),
     repairable: (row.repairable ?? "").trim(),
   }));
@@ -79,11 +82,11 @@ async function repairAssignment(
   dryRun: boolean
 ): Promise<RepairResult> {
   const base = { ...row };
-  if (!row.uid || !row.administrationId) {
+  if (!row.assignmentPath) {
     return {
       ...base,
       status: "error",
-      message: "missing uid or administrationId",
+      message: "missing assignmentPath",
     };
   }
   if (!parseBoolean(row.isCorrupted)) {
@@ -101,11 +104,20 @@ async function repairAssignment(
     };
   }
 
-  const assignmentRef = db
-    .collection("users")
-    .doc(row.uid)
-    .collection("assignments")
-    .doc(row.administrationId);
+  const segments = row.assignmentPath.split("/");
+  if (
+    segments.length !== 4 ||
+    segments[0] !== "users" ||
+    segments[2] !== "assignments"
+  ) {
+    return {
+      ...base,
+      status: "error",
+      message: `unexpected assignmentPath: ${row.assignmentPath}`,
+    };
+  }
+
+  const assignmentRef = db.doc(row.assignmentPath);
 
   return db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(assignmentRef);
