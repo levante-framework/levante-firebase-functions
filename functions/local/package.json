@@ -39,6 +39,8 @@
     "set-superadmin": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/set-superadmin.ts",
     "identify-detached-administrations": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/identify-detached-administrations.ts",
     "reattach-administrations": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/reattach-administrations.ts",
+    "identify-corrupted-assignments": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/identify-corrupted-assignments.ts",
+    "repair-corrupted-assignments": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/repair-corrupted-assignments.ts",
     "identify-corrupted-survey-progress": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/identify-corrupted-survey-progress.ts",
     "repair-survey-progress": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/repair-survey-progress.ts"
   },
