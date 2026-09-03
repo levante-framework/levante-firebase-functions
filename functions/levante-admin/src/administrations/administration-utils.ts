@@ -492,19 +492,23 @@ export const standardizeAdministrationOrgs = async ({
   };
 };
 
+interface GetAdministrationsForAdministratorParams {
+  adminUid: string;
+  idsOnly?: boolean;
+  restrictToOpenAdministrations?: boolean;
+  siteId?: string;
+  testData?: null | boolean;
+  verbose?: boolean;
+}
+
 export const getAdministrationsForAdministrator = async ({
   adminUid,
-  restrictToOpenAdministrations = false,
-  testData = null,
   idsOnly = false,
+  restrictToOpenAdministrations = false,
+  siteId,
+  testData = null,
   verbose = false,
-}: {
-  adminUid: string;
-  restrictToOpenAdministrations?: boolean;
-  testData?: null | boolean;
-  idsOnly?: boolean;
-  verbose?: boolean;
-}) => {
+}: GetAdministrationsForAdministratorParams) => {
   const db = getFirestore();
 
   return db.runTransaction(async (transaction) => {
