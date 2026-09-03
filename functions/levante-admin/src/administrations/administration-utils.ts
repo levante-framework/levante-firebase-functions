@@ -492,104 +492,108 @@ export const standardizeAdministrationOrgs = async ({
   };
 };
 
+interface QueryAdministrationsParams {
+  restrictToOpenAdministrations: boolean;
+  siteId?: string;
+  testData: null | boolean;
+  transaction: Transaction;
+}
+
+const queryAdministrations = async ({
+  restrictToOpenAdministrations,
+  siteId,
+  testData,
+  transaction,
+}: QueryAdministrationsParams) => {
+  const db = getFirestore();
+  let administrationsQuery: CollectionReference | Query =
+    db.collection("administrations");
+  const filterComponents: Filter[] = [];
+
+  if (siteId) {
+    filterComponents.push(Filter.where("siteId", "==", siteId));
+  }
+
+  if (testData !== null) {
+    filterComponents.push(Filter.where("testData", "==", testData));
+  }
+
+  if (restrictToOpenAdministrations) {
+    filterComponents.push(Filter.where("dateClosed", ">", new Date()));
+  }
+
+  if (filterComponents.length > 0) {
+    administrationsQuery = administrationsQuery.where(
+      Filter.and(...filterComponents)
+    );
+  }
+
+  return transaction.get(administrationsQuery).then((snapshot) =>
+    snapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
+  );
+};
+
+interface GetAdministrationsForAdministratorParams {
+  adminUid: string;
+  idsOnly?: boolean;
+  restrictToOpenAdministrations?: boolean;
+  siteId?: string;
+  testData?: null | boolean;
+  verbose?: boolean;
+}
+
 export const getAdministrationsForAdministrator = async ({
   adminUid,
-  restrictToOpenAdministrations = false,
-  testData = null,
   idsOnly = false,
+  restrictToOpenAdministrations = false,
+  siteId,
+  testData = null,
   verbose = false,
-}: {
-  adminUid: string;
-  restrictToOpenAdministrations?: boolean;
-  testData?: null | boolean;
-  idsOnly?: boolean;
-  verbose?: boolean;
-}) => {
+}: GetAdministrationsForAdministratorParams) => {
   const db = getFirestore();
+  const trimmedSiteId = siteId?.trim() || undefined;
 
   return db.runTransaction(async (transaction) => {
-    const uidFieldPath = new FieldPath("claims", "adminUid");
-    const userClaimsQuery = db
-      .collection("userClaims")
-      .where(uidFieldPath, "==", adminUid);
+    if (!trimmedSiteId) {
+      const uidFieldPath = new FieldPath("claims", "adminUid");
+      const userClaimsQuery = db
+        .collection("userClaims")
+        .where(uidFieldPath, "==", adminUid);
 
-    const { adminOrgs, super_admin } = await transaction
-      .get(userClaimsQuery)
-      .then((snapshot) => {
-        if (snapshot.empty) {
-          throw new Error(`No user claims found for the UID ${adminUid}`);
-        }
+      const { super_admin } = await transaction
+        .get(userClaimsQuery)
+        .then((snapshot) => {
+          if (snapshot.empty) {
+            throw new Error(`No user claims found for the UID ${adminUid}`);
+          }
 
-        if (snapshot.docs.length > 1) {
-          throw new Error(
-            `Multiple user claims found for the same UID ${adminUid}`
-          );
-        }
+          if (snapshot.docs.length > 1) {
+            throw new Error(
+              `Multiple user claims found for the same UID ${adminUid}`
+            );
+          }
 
-        return snapshot.docs[0].data()?.claims;
-      });
+          return snapshot.docs[0].data()?.claims;
+        });
 
-    if (super_admin) {
+      if (!super_admin) {
+        throw new HttpsError("invalid-argument", "siteId is required");
+      }
+
       logger.debug(
         `Requesting administrator ${adminUid} is a super admin. Returning all administrations`
       );
-
-      const administrationsCollection = db.collection("administrations");
-
-      let administrationsQuery: CollectionReference | Query =
-        administrationsCollection;
-      const filterComponents: Filter[] = [];
-
-      if (testData !== null) {
-        filterComponents.push(Filter.where("testData", "==", testData));
-      }
-      if (restrictToOpenAdministrations) {
-        filterComponents.push(Filter.where("dateClosed", ">", new Date()));
-      }
-
-      if (filterComponents.length > 0) {
-        administrationsQuery = administrationsQuery.where(
-          Filter.and(...filterComponents)
-        );
-      }
-
-      const administrations = await transaction
-        .get(administrationsQuery)
-        .then((snapshot) => {
-          return snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }));
-        });
-
-      logger.debug(`Found administrations for ${adminUid}`, {
-        administrationSummary: summarizeAdministrationsForLog(administrations),
-      });
-
-      if (idsOnly) {
-        return administrations.map((admin) => admin.id);
-      } else {
-        return administrations;
-      }
     }
 
-    if (verbose) {
-      logger.debug(
-        `Requesting administrator ${adminUid} has adminOrgs. Returning matching administrations`,
-        { adminOrgSummary: summarizeOrgsForLog(adminOrgs) }
-      );
-    }
-
-    const { administrations, administrationData } =
-      await getAdministrationsFromOrgs({
-        orgs: adminOrgs,
-        transaction,
-        restrictToOpenAdministrations, // Restrict to open assignments. If a user has been removed from an org, we want to keep old assignments that they completed.
-        idsOnly,
-        testData: testData,
-        useReadOrgs: true,
-        adminUid,
-      });
+    const administrations = await queryAdministrations({
+      restrictToOpenAdministrations,
+      siteId: trimmedSiteId,
+      testData,
+      transaction,
+    });
 
     if (verbose) {
       logger.debug(`Found administrations for ${adminUid}`, {
@@ -598,20 +602,9 @@ export const getAdministrationsForAdministrator = async ({
     }
 
     if (idsOnly) {
-      return administrations;
+      return administrations.map((admin) => admin.id);
     }
 
-    const result = Object.entries(administrationData).map(([id, data]) => ({
-      id,
-      ...data,
-    }));
-
-    if (verbose) {
-      logger.debug(`Returning administrations for ${adminUid}`, {
-        administrationSummary: summarizeAdministrationsForLog(result),
-      });
-    }
-
-    return result;
+    return administrations;
   });
 };
