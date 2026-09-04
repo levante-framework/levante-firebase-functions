@@ -30,7 +30,9 @@ export const getTaskVariantRevisions = onCall(
     assertCanWriteTasks(userRecord.customClaims);
 
     const db = getFirestore();
-    const variantsSnap = await db.collectionGroup("variants").get();
+    // Only the ref/path is needed to locate the variant; select() keeps the
+    // collection-group scan from transferring every field.
+    const variantsSnap = await db.collectionGroup("variants").select().get();
     const variantDoc = variantsSnap.docs.find((doc) => doc.id === variantId);
 
     if (!variantDoc) {
