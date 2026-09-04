@@ -54,14 +54,10 @@ export const upsertTask = onCall(async (req): Promise<UpsertTaskResult> => {
   const taskRef = db.collection("tasks").doc(taskId);
   const existing = await taskRef.get();
   if (existing.exists) {
-    throw new HttpsError(
-      "already-exists",
-      `Task ${taskId} already exists`,
-      {
-        code: "task",
-        taskId,
-      }
-    );
+    throw new HttpsError("already-exists", `Task ${taskId} already exists`, {
+      code: "task",
+      taskId,
+    });
   }
 
   await taskRef.set({

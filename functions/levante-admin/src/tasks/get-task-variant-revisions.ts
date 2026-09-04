@@ -21,7 +21,9 @@ export const getTaskVariantRevisions = onCall(
   async (req): Promise<GetTaskVariantRevisionsResult> => {
     const uid = requireAuthUid(req.auth?.uid);
 
-    const parsed = GetTaskVariantRevisionsParamsSchema.safeParse(req.data ?? {});
+    const parsed = GetTaskVariantRevisionsParamsSchema.safeParse(
+      req.data ?? {}
+    );
     if (!parsed.success) throwSchemaError(parsed.error);
 
     const { variantId } = parsed.data;

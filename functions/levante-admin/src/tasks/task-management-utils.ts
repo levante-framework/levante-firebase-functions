@@ -329,7 +329,9 @@ export async function writeVariantRevision(
   await variantSnap.ref.collection("revisions").add({
     archived: fields.archived,
     createdAt: now,
-    ...(typeof data.createdBy === "string" ? { createdBy: data.createdBy } : {}),
+    ...(typeof data.createdBy === "string"
+      ? { createdBy: data.createdBy }
+      : {}),
     name: typeof data.name === "string" ? data.name : "",
     params: data.params ?? {},
     registered: fields.registered,
@@ -364,8 +366,8 @@ export async function resolveRegisteredFromLatestRevision(
       typeof data.updatedBy === "string"
         ? data.updatedBy
         : typeof data.createdBy === "string"
-          ? data.createdBy
-          : "system",
+        ? data.createdBy
+        : "system",
   });
 
   return registered;
@@ -377,12 +379,16 @@ export function serializeTask(snap: DocumentSnapshot): SerializedTask {
     id: snap.id,
     archived: data.archived === true,
     createdAt: requireIsoString(data, "createdAt", "updatedAt", "lastUpdated"),
-    ...(typeof data.createdBy === "string" ? { createdBy: data.createdBy } : {}),
+    ...(typeof data.createdBy === "string"
+      ? { createdBy: data.createdBy }
+      : {}),
     description: typeof data.description === "string" ? data.description : "",
     image: typeof data.image === "string" ? data.image : "",
     name: typeof data.name === "string" ? data.name : "",
     updatedAt: requireIsoString(data, "updatedAt", "lastUpdated", "createdAt"),
-    ...(typeof data.updatedBy === "string" ? { updatedBy: data.updatedBy } : {}),
+    ...(typeof data.updatedBy === "string"
+      ? { updatedBy: data.updatedBy }
+      : {}),
   };
 }
 
@@ -397,18 +403,22 @@ export function serializeTaskVariant(
     taskId,
     archived: data.archived === true,
     createdAt: requireIsoString(data, "createdAt", "updatedAt", "lastUpdated"),
-    ...(typeof data.createdBy === "string" ? { createdBy: data.createdBy } : {}),
+    ...(typeof data.createdBy === "string"
+      ? { createdBy: data.createdBy }
+      : {}),
     displayName:
       typeof data.displayName === "string"
         ? data.displayName
         : typeof data.name === "string"
-          ? data.name
-          : "",
+        ? data.name
+        : "",
     name: typeof data.name === "string" ? data.name : "",
     params: stripNullParams(data.params),
     registered,
     updatedAt: requireIsoString(data, "updatedAt", "lastUpdated", "createdAt"),
-    ...(typeof data.updatedBy === "string" ? { updatedBy: data.updatedBy } : {}),
+    ...(typeof data.updatedBy === "string"
+      ? { updatedBy: data.updatedBy }
+      : {}),
   };
 }
 
