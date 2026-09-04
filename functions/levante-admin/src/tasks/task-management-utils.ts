@@ -328,7 +328,7 @@ export async function writeVariantRevision(
   const now = FieldValue.serverTimestamp();
   await variantSnap.ref.collection("revisions").add({
     archived: fields.archived,
-    createdAt: data.createdAt ?? now,
+    createdAt: now,
     ...(typeof data.createdBy === "string" ? { createdBy: data.createdBy } : {}),
     name: typeof data.name === "string" ? data.name : "",
     params: data.params ?? {},
