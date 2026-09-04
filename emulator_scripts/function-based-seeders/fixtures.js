@@ -2,18 +2,21 @@ const ADMIN_USERS = [
   {
     key: "admin",
     email: "admin@levante.test",
+    password: "admin123",
     name: { first: "Admin", middle: "", last: "User" },
     role: "admin",
   },
   {
     key: "siteAdmin",
     email: "siteadmin@levante.test",
+    password: "siteadmin123",
     name: { first: "Site Admin", middle: "", last: "User" },
     role: "site_admin",
   },
   {
     key: "researchAssistant",
     email: "ra@levante.test",
+    password: "ra12345",
     name: { first: "Research Assistant", middle: "", last: "User" },
     role: "research_assistant",
   },
@@ -25,6 +28,7 @@ const ORG_FIXTURES = {
   originalClassName: "3rd Grade - Room 101",
   newClassName: "4th Grade - Room 102",
   cohortName: "Reading Intervention Cohort",
+  caregiverCohortName: "Caregiver Linking Cohort",
 };
 
 const ADMINISTRATION_TEMPLATES = [
@@ -70,6 +74,26 @@ const ADMINISTRATION_TEMPLATES = [
   },
 ];
 
+// Survey administration scoped to the dedicated caregiver-linking cohort. Each
+// survey task carries the same userType condition the dashboard applies, so
+// caregivers receive the caregiver survey and their children the child survey.
+const CAREGIVER_SURVEY_TEMPLATE = {
+  templateId: "caregiver-linking-survey",
+  name: "Caregiver Linking Survey",
+  sequential: false,
+  daysToClose: 90,
+  tasks: [
+    {
+      taskId: "caregiver-survey",
+      assignedCondition: { field: "userType", op: "EQUAL", value: "parent" },
+    },
+    {
+      taskId: "child-survey",
+      assignedCondition: { field: "userType", op: "EQUAL", value: "student" },
+    },
+  ],
+};
+
 const DEFAULT_LEGAL = {
   amount: "0",
   assent: null,
@@ -107,12 +131,54 @@ function chunk(array, size) {
   return chunks;
 }
 
+// Caregivers with 0, 1, and 2 linked children, isolated in their own cohort so
+// they can be targeted by a dedicated survey administration. All created users
+// still belong to the site district (createUsers derives that from siteId), so
+// the linked children also receive the site's student-conditioned assignments.
+function buildCaregiverLinkingRows({ siteId, caregiverCohortId }) {
+  const orgIds = {
+    districts: [siteId],
+    schools: [],
+    classes: [],
+    cohorts: [caregiverCohortId],
+  };
+  const cohortRow = (row) => ({ ...row, orgIds, isTestData: false });
+
+  return [
+    cohortRow({ id: "caregiverNoChild", userType: "caregiver" }),
+    cohortRow({ id: "caregiverOneChild", userType: "caregiver" }),
+    cohortRow({ id: "caregiverTwoChildren", userType: "caregiver" }),
+    cohortRow({
+      id: "childOfOneCaregiver",
+      userType: "child",
+      month: 3,
+      year: 2019,
+      parentId: "caregiverOneChild",
+    }),
+    cohortRow({
+      id: "childOfTwoCaregiversA",
+      userType: "child",
+      month: 4,
+      year: 2019,
+      parentId: "caregiverTwoChildren",
+    }),
+    cohortRow({
+      id: "childOfTwoCaregiversB",
+      userType: "child",
+      month: 5,
+      year: 2020,
+      parentId: "caregiverTwoChildren",
+    }),
+  ];
+}
+
 function buildParticipantRows({
   siteId,
   schoolId,
   originalClassId,
   newClassId,
   cohortId,
+  caregiverCohortId,
   studentCount = 200,
 }) {
   const baseOrgIds = {
@@ -144,6 +210,8 @@ function buildParticipantRows({
         userType: "child",
         month: 1,
         year: 2018,
+        parentId: "parent",
+        teacherId: "teacher",
       },
       originalClassId
     ),
@@ -162,20 +230,25 @@ function buildParticipantRows({
           userType: "child",
           month: (studentNumber % 12) + 1,
           year: Number(CHILD_BIRTH_YEARS[index % CHILD_BIRTH_YEARS.length]),
+          parentId: "parent",
+          teacherId: "teacher",
         },
         studentNumber <= Math.ceil(studentCount / 2)
           ? newClassId
           : originalClassId
       );
     }),
+    ...buildCaregiverLinkingRows({ siteId, caregiverCohortId }),
   ];
 }
 
 module.exports = {
   ADMIN_USERS,
   ADMINISTRATION_TEMPLATES,
+  CAREGIVER_SURVEY_TEMPLATE,
   DEFAULT_LEGAL,
   ORG_FIXTURES,
+  buildCaregiverLinkingRows,
   buildParticipantRows,
   chunk,
   normalizeToLowercase,

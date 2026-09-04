@@ -4,6 +4,7 @@ const {
 } = require("./seeders/tasks-from-project");
 const {
   ADMIN_USERS,
+  ORG_FIXTURES,
   buildParticipantRows,
 } = require("./function-based-seeders/fixtures");
 const {
@@ -16,6 +17,7 @@ const {
 const {
   createAdminUsers,
   createAdministrations,
+  createCaregiverSurveyAdministration,
   createOrgs,
   createParticipantUsers,
   linkParticipantUsers,
@@ -38,7 +40,7 @@ process.env.FIREBASE_AUTH_EMULATOR_HOST ||= "127.0.0.1:9199";
 const options = getFunctionsSeedOptions();
 const runtime = createFunctionsSeedRuntime({ projectId });
 
-function printTesterLogins({ createdUsers, userRows }) {
+function printTesterLogins({ createdUsers, userRows, createdAdmins }) {
   const userBySeedId = new Map(
     userRows.map((row, index) => [row.id, createdUsers[index]])
   );
@@ -48,6 +50,11 @@ function printTesterLogins({ createdUsers, userRows }) {
       email: options.superAdminEmail,
       password: options.superAdminPassword,
     },
+    ...createdAdmins.map((admin) => ({
+      label: `Admin (${admin.role})`,
+      email: admin.email,
+      password: admin.password,
+    })),
     {
       label: "Child participant",
       ...userBySeedId.get("student1"),
@@ -57,13 +64,32 @@ function printTesterLogins({ createdUsers, userRows }) {
       ...userBySeedId.get("teacher"),
     },
     {
-      label: "Parent participant",
+      label: "Caregiver participant",
       ...userBySeedId.get("parent"),
     },
   ].filter((login) => login.email && login.password);
 
   console.log("\nTester logins:");
   logins.forEach((login) => {
+    console.log(`- ${login.label}: ${login.email} / ${login.password}`);
+  });
+
+  const caregiverCohortLogins = [
+    {
+      label: "Caregiver (no children)",
+      ...userBySeedId.get("caregiverNoChild"),
+    },
+    {
+      label: "Caregiver (one child)",
+      ...userBySeedId.get("caregiverOneChild"),
+    },
+    {
+      label: "Caregiver (two children)",
+      ...userBySeedId.get("caregiverTwoChildren"),
+    },
+  ];
+  console.log(`\n${ORG_FIXTURES.caregiverCohortName} logins:`);
+  caregiverCohortLogins.forEach((login) => {
     console.log(`- ${login.label}: ${login.email} / ${login.password}`);
   });
 }
@@ -122,8 +148,14 @@ async function main() {
     originalClassId: orgs.originalClassId,
     newClassId: orgs.newClassId,
     cohortId: orgs.cohortId,
+    caregiverCohortId: orgs.caregiverCohortId,
     studentCount: options.studentCount,
   });
+  const childCount = userRows.filter((row) => row.userType === "child").length;
+  const participantCount = userRows.length;
+  const caregiverCohortMemberCount = userRows.filter((row) =>
+    row.orgIds.cohorts?.includes(orgs.caregiverCohortId)
+  ).length;
   const createdUsers = await createParticipantUsers({
     runtime,
     userRows,
@@ -151,10 +183,22 @@ async function main() {
       classIds: [orgs.originalClassId, orgs.newClassId],
       cohortId: orgs.cohortId,
       creatorName: "Super Admin User",
-      studentCount: options.studentCount,
+      childCount,
+      participantCount,
       includeOptionalAdministrationTemplates:
         options.includeOptionalAdministrationTemplates,
     });
+
+    console.log("Creating caregiver survey administration...");
+    const caregiverSurvey = await createCaregiverSurveyAdministration({
+      runtime,
+      idToken,
+      siteId: orgs.siteId,
+      caregiverCohortId: orgs.caregiverCohortId,
+      creatorName: "Super Admin User",
+      expectedAssignmentCount: caregiverCohortMemberCount,
+    });
+    if (caregiverSurvey) createdAdministrations.push(caregiverSurvey);
   } else {
     console.log("Skipping administrations for this seed profile.");
   }
@@ -165,7 +209,8 @@ async function main() {
         siteId: orgs.siteId,
         createdAdministrations,
         idToken,
-        studentCount: options.studentCount,
+        participantCount,
+        expectedGroups: 2,
         adminUsers: ADMIN_USERS,
       })
     : null;
@@ -194,7 +239,7 @@ async function main() {
     });
   }
 
-  printTesterLogins({ createdUsers, userRows });
+  printTesterLogins({ createdUsers, userRows, createdAdmins });
 }
 
 main().catch((error) => {

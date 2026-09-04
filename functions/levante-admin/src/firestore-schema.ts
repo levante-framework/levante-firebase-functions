@@ -356,8 +356,8 @@ export interface User {
   archived: boolean;
   birthMonth?: number;
   birthYear?: number;
-  childIdentifier?: string;
   childIds?: string[]; // TODO: backfill `studentIds` -> `childIds` in db
+  childLabelIndex?: number; // only for children; index into the childLabel i18n list
   classes: OrgAssociationMap;
   createdAt: Timestamp;
   disabled: boolean;
@@ -366,6 +366,7 @@ export interface User {
   email: string;
   groups: OrgAssociationMap;
   idHash?: string;
+  lastChildLabelIndex?: number; // only for caregivers; last minted childLabelIndex (omit if none)
   parentIds?: string[];
   roles: { siteId: string; role: string; siteName: string }[];
   schools: OrgAssociationMap;
@@ -601,7 +602,7 @@ export interface RunDoc {
   userData?: {
     variantId?: string;
   };
-  stopType?: string | null;
+  stopReason?: string | null;
 }
 
 /**
