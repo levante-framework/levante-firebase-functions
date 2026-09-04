@@ -950,6 +950,8 @@ export const upsertAdministration = onCall(async (request) => {
 
 export { completeTask } from "./tasks/completeTask.js";
 export { startTask } from "./tasks/startTask.js";
+export { syncOfflineRuns } from "./runs/sync-offline-runs.js";
+export { provisionOfflinePack } from "./administrations/provision-offline-pack.js";
 export { getTasks } from "./tasks/get-tasks.js";
 export { getTaskVariants } from "./tasks/get-task-variants.js";
 export { getTaskVariantRevisions } from "./tasks/get-task-variant-revisions.js";
