@@ -42,6 +42,7 @@ interface OfflineRun {
   variantParams: Record<string, unknown>;
   administrationId: string | null;
   corpusSha256: string | null;
+  bundleId?: string | null;
   child: {
     localId: string;
     uid: string | null;
@@ -197,6 +198,7 @@ export const syncOfflineRuns = onCall(async (request) => {
       deviceId: run.deviceId,
       appBuild: run.appBuild,
       corpusSha256: run.corpusSha256,
+      bundleId: run.bundleId ?? null,
       clockOffsetMs,
       deviceTimeStarted: run.timeStarted,
       deviceTimeFinished: run.timeFinished,
