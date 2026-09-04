@@ -2,6 +2,7 @@ import { ACTIONS, RESOURCES } from "@levante-framework/permissions-core";
 import { FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
+import { parseDeviceInfo, touchDevice } from "../utils/offline-devices.js";
 import { assertSiteAccess, districtsOf } from "../utils/offline-permissions.js";
 
 /**
@@ -63,6 +64,7 @@ interface OfflineRun {
 
 interface SyncOfflineRunsRequest {
   deviceId: string;
+  platform?: string;
   clientNowMs: number;
   run: OfflineRun;
   trials: OfflineTrial[];
@@ -98,12 +100,13 @@ export const syncOfflineRuns = onCall(async (request) => {
   }
   const childData = userSnap.data() ?? {};
   if (request.auth.uid !== childUid) {
-    await assertSiteAccess(
-      request.auth.uid,
-      districtsOf(childData),
-      { resource: RESOURCES.USERS, action: ACTIONS.UPDATE },
-      `sync runs for child ${childUid}`
-    );
+    // The permissions matrix has no run-level resource. Syncing is gated on what a
+    // research_assistant already holds for the child's site — assignments:read and
+    // users:read — so the account that provisioned a device can also drain it; the run
+    // itself is written with the Admin SDK, never by the caller.
+    const sites = districtsOf(childData);
+    await assertSiteAccess(request.auth.uid, sites, { resource: RESOURCES.ASSIGNMENTS, action: ACTIONS.READ }, `sync runs for child ${childUid}`);
+    await assertSiteAccess(request.auth.uid, sites, { resource: RESOURCES.USERS, action: ACTIONS.READ }, `sync runs for child ${childUid}`);
   }
 
   const serverNowMs = Date.now();
@@ -212,6 +215,17 @@ export const syncOfflineRuns = onCall(async (request) => {
     lastUpdated: FieldValue.serverTimestamp(),
   });
   await finalBatch.commit();
+
+  const device = parseDeviceInfo({ deviceId: body.deviceId, platform: body.platform, appBuild: run.appBuild });
+  if (device) {
+    await touchDevice(db, device, {
+      lastSyncAt: FieldValue.serverTimestamp(),
+      lastSyncBy: request.auth.uid,
+      lastClockOffsetMs: clockOffsetMs,
+      runsSynced: FieldValue.increment(1),
+      trialsSynced: FieldValue.increment(trials.length),
+    });
+  }
 
   logger.info(request.auth.uid, "synced offline run", {
     runId: run.runId,
