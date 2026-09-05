@@ -21,7 +21,8 @@ export interface DeviceInfo {
 export function parseDeviceInfo(value: unknown): DeviceInfo | null {
   if (!value || typeof value !== "object") return null;
   const v = value as Record<string, unknown>;
-  if (typeof v.deviceId !== "string" || !DEVICE_ID_PATTERN.test(v.deviceId)) return null;
+  if (typeof v.deviceId !== "string" || !DEVICE_ID_PATTERN.test(v.deviceId))
+    return null;
   return {
     deviceId: v.deviceId,
     platform: typeof v.platform === "string" ? v.platform.slice(0, 64) : null,

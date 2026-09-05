@@ -1,5 +1,10 @@
 import { ACTIONS, RESOURCES } from "@levante-framework/permissions-core";
-import { FieldPath, FieldValue, Timestamp, getFirestore } from "firebase-admin/firestore";
+import {
+  FieldPath,
+  FieldValue,
+  Timestamp,
+  getFirestore,
+} from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { ORG_TYPE_TO_COLLECTION } from "../orgs/constants.js";
@@ -47,9 +52,15 @@ export const provisionOfflinePack = onCall(async (request) => {
     throw new HttpsError("invalid-argument", "administrationId is required");
   }
 
-  const adminSnap = await db.collection("administrations").doc(administrationId).get();
+  const adminSnap = await db
+    .collection("administrations")
+    .doc(administrationId)
+    .get();
   if (!adminSnap.exists) {
-    throw new HttpsError("not-found", `Administration ${administrationId} not found`);
+    throw new HttpsError(
+      "not-found",
+      `Administration ${administrationId} not found`
+    );
   }
   const admin = adminSnap.data() ?? {};
   const sites = (admin.districts ?? []) as string[];
@@ -69,7 +80,10 @@ export const provisionOfflinePack = onCall(async (request) => {
     params?: Record<string, unknown>;
   }>;
   if (assessments.length === 0) {
-    throw new HttpsError("failed-precondition", "Administration has no assessments");
+    throw new HttpsError(
+      "failed-precondition",
+      "Administration has no assessments"
+    );
   }
   const tasks = assessments.map((a) => ({
     taskId: a.taskId,
@@ -77,7 +91,10 @@ export const provisionOfflinePack = onCall(async (request) => {
     variantName: a.variantName ?? null,
     variantParams: a.params ?? {},
   }));
-  const locale = String(tasks.find((t) => typeof t.variantParams.language === "string")?.variantParams.language ?? "en-US");
+  const locale = String(
+    tasks.find((t) => typeof t.variantParams.language === "string")
+      ?.variantParams.language ?? "en-US"
+  );
 
   // Roster: students in the scope (or the administration's sites) who hold a visible
   // assignment for it.
@@ -112,29 +129,49 @@ export const provisionOfflinePack = onCall(async (request) => {
   for (let i = 0; i < uids.length; i += CONCURRENCY) {
     await Promise.all(
       uids.slice(i, i + CONCURRENCY).map(async (uid) => {
-        const assignment = await db.collection("users").doc(uid).collection("assignments").doc(administrationId).get();
-        if (!assignment.exists || !isVisibleAssignment(assignment.data())) return;
+        const assignment = await db
+          .collection("users")
+          .doc(uid)
+          .collection("assignments")
+          .doc(administrationId)
+          .get();
+        if (!assignment.exists || !isVisibleAssignment(assignment.data()))
+          return;
         const data = candidates.get(uid)!;
         const name = (data.name ?? {}) as { first?: string; last?: string };
-        const assigned = (assignment.get("assessments") ?? []) as Array<{ taskId: string; completedOn?: unknown }>;
+        const assigned = (assignment.get("assessments") ?? []) as Array<{
+          taskId: string;
+          completedOn?: unknown;
+        }>;
         children.push({
           localId: uid,
           uid,
           // Minimal PII on the device: first name plus last initial, else the participant id.
-          displayName: name.first ? `${name.first} ${name.last?.[0] ?? ""}`.trim() : (data.assessmentPid ?? uid),
+          displayName: name.first
+            ? `${name.first} ${name.last?.[0] ?? ""}`.trim()
+            : data.assessmentPid ?? uid,
           assessmentPid: data.assessmentPid ?? null,
-          birthMonth: typeof data.birthMonth === "number" ? data.birthMonth : null,
+          birthMonth:
+            typeof data.birthMonth === "number" ? data.birthMonth : null,
           birthYear: typeof data.birthYear === "number" ? data.birthYear : null,
           taskIds: assigned.map((a) => a.taskId),
-          progress: progressOf(assigned, (assignment.get("progress") ?? {}) as Record<string, string>),
+          progress: progressOf(
+            assigned,
+            (assignment.get("progress") ?? {}) as Record<string, string>
+          ),
         });
       })
     );
   }
   children.sort((a, b) => a.displayName.localeCompare(b.displayName));
 
-  const dateClosed = admin.dateClosed instanceof Timestamp ? admin.dateClosed.toDate().toISOString() : null;
-  const packId = scope ? `${administrationId}-${scope.orgType}-${scope.orgId}-${locale}` : `${administrationId}-${locale}`;
+  const dateClosed =
+    admin.dateClosed instanceof Timestamp
+      ? admin.dateClosed.toDate().toISOString()
+      : null;
+  const packId = scope
+    ? `${administrationId}-${scope.orgType}-${scope.orgId}-${locale}`
+    : `${administrationId}-${locale}`;
   const pack = {
     packId,
     administrationId,
@@ -178,17 +215,40 @@ async function resolveScope(
   db: FirebaseFirestore.Firestore,
   scope: ProvisionRequest["scope"],
   sites: string[]
-): Promise<{ orgType: OfflineScopeType; orgId: string; name: string; siteId: string } | null> {
+): Promise<{
+  orgType: OfflineScopeType;
+  orgId: string;
+  name: string;
+  siteId: string;
+} | null> {
   if (!scope) return null;
-  if ((scope.orgType !== "school" && scope.orgType !== "cohort") || typeof scope.orgId !== "string" || !scope.orgId) {
-    throw new HttpsError("invalid-argument", "scope must be {orgType: 'school' | 'cohort', orgId}");
+  if (
+    (scope.orgType !== "school" && scope.orgType !== "cohort") ||
+    typeof scope.orgId !== "string" ||
+    !scope.orgId
+  ) {
+    throw new HttpsError(
+      "invalid-argument",
+      "scope must be {orgType: 'school' | 'cohort', orgId}"
+    );
   }
   const siteId = await resolveSiteId(db, scope.orgType, scope.orgId);
   if (!sites.includes(siteId)) {
-    throw new HttpsError("failed-precondition", `${scope.orgType} ${scope.orgId} does not belong to this administration's site`);
+    throw new HttpsError(
+      "failed-precondition",
+      `${scope.orgType} ${scope.orgId} does not belong to this administration's site`
+    );
   }
-  const org = await db.collection(ORG_TYPE_TO_COLLECTION[scope.orgType]).doc(scope.orgId).get();
-  return { orgType: scope.orgType, orgId: scope.orgId, name: String(org.get("name") ?? scope.orgId), siteId };
+  const org = await db
+    .collection(ORG_TYPE_TO_COLLECTION[scope.orgType])
+    .doc(scope.orgId)
+    .get();
+  return {
+    orgType: scope.orgType,
+    orgId: scope.orgId,
+    name: String(org.get("name") ?? scope.orgId),
+    siteId,
+  };
 }
 
 // The assignment's progress map is keyed by task id with underscores (and, from some
@@ -200,7 +260,12 @@ function progressOf(
   const out: Record<string, ProgressState> = {};
   for (const a of assigned) {
     const raw = progress[a.taskId.replace(/-/g, "_")] ?? progress[a.taskId];
-    out[a.taskId] = a.completedOn || raw === "completed" ? "completed" : raw === "started" ? "started" : "assigned";
+    out[a.taskId] =
+      a.completedOn || raw === "completed"
+        ? "completed"
+        : raw === "started"
+        ? "started"
+        : "assigned";
   }
   return out;
 }

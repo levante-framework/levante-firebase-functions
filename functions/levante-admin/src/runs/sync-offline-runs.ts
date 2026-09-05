@@ -71,7 +71,8 @@ interface SyncOfflineRunsRequest {
   trials: OfflineTrial[];
 }
 
-const RUN_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const RUN_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const MAX_TRIALS = 5000;
 const BATCH_LIMIT = 450;
 
@@ -106,8 +107,18 @@ export const syncOfflineRuns = onCall(async (request) => {
     // users:read — so the account that provisioned a device can also drain it; the run
     // itself is written with the Admin SDK, never by the caller.
     const sites = districtsOf(childData);
-    await assertSiteAccess(request.auth.uid, sites, { resource: RESOURCES.ASSIGNMENTS, action: ACTIONS.READ }, `sync runs for child ${childUid}`);
-    await assertSiteAccess(request.auth.uid, sites, { resource: RESOURCES.USERS, action: ACTIONS.READ }, `sync runs for child ${childUid}`);
+    await assertSiteAccess(
+      request.auth.uid,
+      sites,
+      { resource: RESOURCES.ASSIGNMENTS, action: ACTIONS.READ },
+      `sync runs for child ${childUid}`
+    );
+    await assertSiteAccess(
+      request.auth.uid,
+      sites,
+      { resource: RESOURCES.USERS, action: ACTIONS.READ },
+      `sync runs for child ${childUid}`
+    );
   }
 
   const serverNowMs = Date.now();
@@ -116,14 +127,19 @@ export const syncOfflineRuns = onCall(async (request) => {
       ? serverNowMs - body.clientNowMs
       : 0;
   const corrected = (ms: number | null | undefined) =>
-    typeof ms === "number" && Number.isFinite(ms) ? Timestamp.fromMillis(ms + clockOffsetMs) : null;
+    typeof ms === "number" && Number.isFinite(ms)
+      ? Timestamp.fromMillis(ms + clockOffsetMs)
+      : null;
 
   // Copy the org context from the child's assignment, as firekit does at startRun.
   let assigningOrgs: unknown = null;
   let readOrgs: unknown = null;
   let orphan = true;
   if (run.administrationId) {
-    const assignmentSnap = await userRef.collection("assignments").doc(run.administrationId).get();
+    const assignmentSnap = await userRef
+      .collection("assignments")
+      .doc(run.administrationId)
+      .get();
     if (assignmentSnap.exists) {
       assigningOrgs = assignmentSnap.get("assigningOrgs") ?? null;
       readOrgs = assignmentSnap.get("readOrgs") ?? null;
@@ -131,11 +147,14 @@ export const syncOfflineRuns = onCall(async (request) => {
     }
   }
   if (orphan) {
-    logger.warn("syncOfflineRuns: run has no matching assignment; ingesting as orphan", {
-      runId: run.runId,
-      childUid,
-      administrationId: run.administrationId,
-    });
+    logger.warn(
+      "syncOfflineRuns: run has no matching assignment; ingesting as orphan",
+      {
+        runId: run.runId,
+        childUid,
+        administrationId: run.administrationId,
+      }
+    );
   }
 
   const runRef = userRef.collection("runs").doc(run.runId);
@@ -145,7 +164,9 @@ export const syncOfflineRuns = onCall(async (request) => {
   let batch = db.batch();
   let ops = 0;
   for (const trial of trials) {
-    const trialRef = runRef.collection("trials").doc(trialDocId(trial.trialIndex));
+    const trialRef = runRef
+      .collection("trials")
+      .doc(trialDocId(trial.trialIndex));
     batch.set(trialRef, {
       ...trial.data,
       taskId: run.taskId,
@@ -213,12 +234,18 @@ export const syncOfflineRuns = onCall(async (request) => {
   finalBatch.set(runRef, runDoc);
   finalBatch.update(userRef, {
     tasks: FieldValue.arrayUnion(run.taskId),
-    ...(run.variantId ? { variants: FieldValue.arrayUnion(run.variantId) } : {}),
+    ...(run.variantId
+      ? { variants: FieldValue.arrayUnion(run.variantId) }
+      : {}),
     lastUpdated: FieldValue.serverTimestamp(),
   });
   await finalBatch.commit();
 
-  const device = parseDeviceInfo({ deviceId: body.deviceId, platform: body.platform, appBuild: run.appBuild });
+  const device = parseDeviceInfo({
+    deviceId: body.deviceId,
+    platform: body.platform,
+    appBuild: run.appBuild,
+  });
   if (device) {
     await touchDevice(db, device, {
       lastSyncAt: FieldValue.serverTimestamp(),
@@ -238,7 +265,13 @@ export const syncOfflineRuns = onCall(async (request) => {
     orphan,
   });
 
-  return { status: "ok", runId: run.runId, trialsWritten: trials.length, clockOffsetMs, orphan };
+  return {
+    status: "ok",
+    runId: run.runId,
+    trialsWritten: trials.length,
+    clockOffsetMs,
+    orphan,
+  };
 });
 
 function validateRun(run: unknown): OfflineRun {
@@ -266,19 +299,35 @@ function validateTrials(trials: unknown, run: OfflineRun): OfflineTrial[] {
     throw new HttpsError("invalid-argument", "trials must be an array");
   }
   if (trials.length > MAX_TRIALS) {
-    throw new HttpsError("invalid-argument", `too many trials (${trials.length} > ${MAX_TRIALS})`);
+    throw new HttpsError(
+      "invalid-argument",
+      `too many trials (${trials.length} > ${MAX_TRIALS})`
+    );
   }
   const seen = new Set<number>();
   for (const t of trials as OfflineTrial[]) {
     if (t.runId !== run.runId) {
-      throw new HttpsError("invalid-argument", "trial.runId does not match run.runId");
+      throw new HttpsError(
+        "invalid-argument",
+        "trial.runId does not match run.runId"
+      );
     }
-    if (!Number.isInteger(t.trialIndex) || t.trialIndex < 0 || seen.has(t.trialIndex)) {
-      throw new HttpsError("invalid-argument", `invalid or duplicate trialIndex ${t.trialIndex}`);
+    if (
+      !Number.isInteger(t.trialIndex) ||
+      t.trialIndex < 0 ||
+      seen.has(t.trialIndex)
+    ) {
+      throw new HttpsError(
+        "invalid-argument",
+        `invalid or duplicate trialIndex ${t.trialIndex}`
+      );
     }
     seen.add(t.trialIndex);
     if (!t.data || typeof t.data !== "object") {
-      throw new HttpsError("invalid-argument", `trial ${t.trialIndex} has no data`);
+      throw new HttpsError(
+        "invalid-argument",
+        `trial ${t.trialIndex} has no data`
+      );
     }
   }
   return trials as OfflineTrial[];
@@ -286,19 +335,38 @@ function validateTrials(trials: unknown, run: OfflineRun): OfflineTrial[] {
 
 // Mirrors the `scores.raw.composite` counters firekit maintains per trial online.
 function summarizeScores(trials: OfflineTrial[]) {
-  const stages = { practice: "practice_response", test: "test_response" } as const;
-  const raw: Record<string, { numAttempted: number; numCorrect: number; numIncorrect: number; thetaEstimate: number | null; thetaSE: number | null }> = {};
+  const stages = {
+    practice: "practice_response",
+    test: "test_response",
+  } as const;
+  const raw: Record<
+    string,
+    {
+      numAttempted: number;
+      numCorrect: number;
+      numIncorrect: number;
+      thetaEstimate: number | null;
+      thetaSE: number | null;
+    }
+  > = {};
   for (const [key, stage] of Object.entries(stages)) {
     const rows = trials.filter((t) => t.data.assessment_stage === stage);
-    const numCorrect = rows.filter((t) => t.data.correct === true || t.data.correct === 1).length;
+    const numCorrect = rows.filter(
+      (t) => t.data.correct === true || t.data.correct === 1
+    ).length;
     // core-tasks attaches the running CAT estimate to each scored trial; keep the last one.
-    const last = [...rows].reverse().find((t) => typeof t.data.thetaEstimate === "number");
+    const last = [...rows]
+      .reverse()
+      .find((t) => typeof t.data.thetaEstimate === "number");
     raw[key] = {
       numAttempted: rows.length,
       numCorrect,
       numIncorrect: rows.length - numCorrect,
       thetaEstimate: last ? (last.data.thetaEstimate as number) : null,
-      thetaSE: last && typeof last.data.thetaSE === "number" ? (last.data.thetaSE as number) : null,
+      thetaSE:
+        last && typeof last.data.thetaSE === "number"
+          ? (last.data.thetaSE as number)
+          : null,
     };
   }
   return { raw: { composite: raw } };

@@ -31,14 +31,21 @@ export const listOfflineScopes = onCall(async (request) => {
   if (!request.auth) {
     throw new HttpsError("unauthenticated", "User must be authenticated");
   }
-  const { administrationId } = (request.data ?? {}) as Partial<ListScopesRequest>;
+  const { administrationId } = (request.data ??
+    {}) as Partial<ListScopesRequest>;
   if (!administrationId || typeof administrationId !== "string") {
     throw new HttpsError("invalid-argument", "administrationId is required");
   }
 
-  const adminSnap = await db.collection("administrations").doc(administrationId).get();
+  const adminSnap = await db
+    .collection("administrations")
+    .doc(administrationId)
+    .get();
   if (!adminSnap.exists) {
-    throw new HttpsError("not-found", `Administration ${administrationId} not found`);
+    throw new HttpsError(
+      "not-found",
+      `Administration ${administrationId} not found`
+    );
   }
   const admin = adminSnap.data() ?? {};
   const sites = (admin.districts ?? []) as string[];
@@ -50,10 +57,22 @@ export const listOfflineScopes = onCall(async (request) => {
   );
 
   const scopes: OfflineScope[] = [
-    ...(await loadScopes(db, "school", sites, (admin.schools ?? []) as string[])),
-    ...(await loadScopes(db, "cohort", sites, (admin.groups ?? []) as string[])),
+    ...(await loadScopes(
+      db,
+      "school",
+      sites,
+      (admin.schools ?? []) as string[]
+    )),
+    ...(await loadScopes(
+      db,
+      "cohort",
+      sites,
+      (admin.groups ?? []) as string[]
+    )),
   ];
-  scopes.sort((a, b) => a.orgType.localeCompare(b.orgType) || a.name.localeCompare(b.name));
+  scopes.sort(
+    (a, b) => a.orgType.localeCompare(b.orgType) || a.name.localeCompare(b.name)
+  );
 
   return { status: "ok", administrationId, siteIds: sites, scopes };
 });
@@ -68,11 +87,16 @@ async function loadScopes(
   const siteField = orgType === "cohort" ? "parentOrgId" : "districtId";
   const docs: FirebaseFirestore.DocumentSnapshot[] = [];
   if (targeted.length > 0) {
-    const snaps = await Promise.all(targeted.map((id) => db.collection(collection).doc(id).get()));
+    const snaps = await Promise.all(
+      targeted.map((id) => db.collection(collection).doc(id).get())
+    );
     docs.push(...snaps.filter((s) => s.exists));
   } else {
     for (const site of sites) {
-      const snap = await db.collection(collection).where(siteField, "==", site).get();
+      const snap = await db
+        .collection(collection)
+        .where(siteField, "==", site)
+        .get();
       docs.push(...snap.docs);
     }
   }

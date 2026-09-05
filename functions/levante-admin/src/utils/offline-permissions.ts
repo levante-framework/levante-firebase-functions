@@ -28,7 +28,10 @@ export async function assertSiteAccess(
   if (claims.super_admin === true) return;
 
   if (siteIds.length === 0) {
-    throw new HttpsError("failed-precondition", `Cannot ${what}: no site to check permissions against`);
+    throw new HttpsError(
+      "failed-precondition",
+      `Cannot ${what}: no site to check permissions against`
+    );
   }
 
   if (claims.useNewPermissions === true) {
@@ -36,16 +39,29 @@ export async function assertSiteAccess(
     const user = buildPermissionsUserFromAuthRecord(record);
     if (filterSitesByPermission(user, siteIds, check).length > 0) return;
   } else {
-    const claimsDoc = await getFirestore().collection("userClaims").doc(callerUid).get();
-    const adminOrgs = (claimsDoc.get("claims.adminOrgs") ?? {}) as { districts?: string[] };
+    const claimsDoc = await getFirestore()
+      .collection("userClaims")
+      .doc(callerUid)
+      .get();
+    const adminOrgs = (claimsDoc.get("claims.adminOrgs") ?? {}) as {
+      districts?: string[];
+    };
     if ((adminOrgs.districts ?? []).some((d) => siteIds.includes(d))) return;
   }
 
-  throw new HttpsError("permission-denied", `You do not have permission to ${what}`);
+  throw new HttpsError(
+    "permission-denied",
+    `You do not have permission to ${what}`
+  );
 }
 
 /** Districts a user document belongs to (current membership first, then history). */
-export function districtsOf(userData: FirebaseFirestore.DocumentData | undefined): string[] {
-  const districts = (userData?.districts ?? {}) as { current?: string[]; all?: string[] };
+export function districtsOf(
+  userData: FirebaseFirestore.DocumentData | undefined
+): string[] {
+  const districts = (userData?.districts ?? {}) as {
+    current?: string[];
+    all?: string[];
+  };
   return [...new Set([...(districts.current ?? []), ...(districts.all ?? [])])];
 }
