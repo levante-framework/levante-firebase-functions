@@ -151,9 +151,8 @@ export const provisionOfflinePack = onCall(async (request) => {
             ? `${name.first} ${name.last?.[0] ?? ""}`.trim()
             : data.assessmentPid ?? uid,
           assessmentPid: data.assessmentPid ?? null,
-          birthMonth:
-            typeof data.birthMonth === "number" ? data.birthMonth : null,
-          birthYear: typeof data.birthYear === "number" ? data.birthYear : null,
+          birthMonth: birthNumber(data.birthMonth, 1, 12),
+          birthYear: birthNumber(data.birthYear, 1000, 9999),
           taskIds: assigned.map((a) => a.taskId),
           progress: progressOf(
             assigned,
@@ -249,6 +248,13 @@ async function resolveScope(
     name: String(org.get("name") ?? scope.orgId),
     siteId,
   };
+}
+
+/** Coerce Firestore birth fields the way levante-zod MonthSchema / YearSchema do. */
+function birthNumber(value: unknown, min: number, max: number): number | null {
+  if (value === undefined || value === null || value === "") return null;
+  const n = typeof value === "number" ? value : Number(value);
+  return Number.isInteger(n) && n >= min && n <= max ? n : null;
 }
 
 // The assignment's progress map is keyed by task id with underscores (and, from some
