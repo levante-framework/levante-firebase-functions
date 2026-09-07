@@ -51,6 +51,11 @@ function isRoarUserType(value: unknown): value is RoarUserType {
 /**
  * Keep the child's current index if it already exceeds every caregiver's last
  * minted index; otherwise mint the next one above the highest caregiver index.
+ *
+ * Source of truth: `nextChildLabelIndex` in
+ * `functions/levante-admin/src/users/link-users.ts`. This is an intentional
+ * copy (the local package can't import from levante-admin) — keep the two in
+ * sync if the minting rule changes.
  */
 function nextChildLabelIndex(
   existing: number | undefined,
