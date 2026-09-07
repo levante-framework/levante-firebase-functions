@@ -95,6 +95,12 @@ type CaregiverPlan = {
   action: "bump-last-index" | "keep" | "missing";
 };
 
+type DuplicateLabel = {
+  caregiverUid: string;
+  index: number;
+  childUids: string[];
+};
+
 const CSV_COLUMNS = [
   "kind",
   "uid",
@@ -123,7 +129,8 @@ const argv = yargs(process.argv.slice(2))
       default: ".env.local",
     },
     siteId: {
-      description: "Limit to users whose districts.current contains this site id",
+      description:
+        "Limit to users whose districts.current contains this site id",
       type: "string",
     },
     apply: {
@@ -278,7 +285,11 @@ function bumpLast(
 function planBackfill(
   children: Array<{ uid: string; data: DocumentData; user: BackfillUser }>,
   caregivers: Map<string, { exists: boolean; last?: number }>
-): { childPlans: ChildPlan[]; caregiverPlans: CaregiverPlan[] } {
+): {
+  childPlans: ChildPlan[];
+  caregiverPlans: CaregiverPlan[];
+  duplicateLabels: DuplicateLabel[];
+} {
   const lastByCaregiver = new Map<string, number | undefined>();
   for (const [uid, caregiver] of caregivers) {
     lastByCaregiver.set(uid, caregiver.exists ? caregiver.last : undefined);
@@ -355,6 +366,31 @@ function planBackfill(
     });
   }
 
+  // A caregiver must not have two children sharing a childLabelIndex; newly
+  // minted indices never collide, so any duplicate here is a pre-existing
+  // stored index this script intentionally leaves as-is.
+  const labelsByCaregiver = new Map<string, Map<number, string[]>>();
+  for (const plan of childPlans) {
+    if (plan.planned === undefined) continue;
+    for (const caregiverUid of plan.presentCaregiverUids) {
+      const byIndex =
+        labelsByCaregiver.get(caregiverUid) ?? new Map<number, string[]>();
+      const uids = byIndex.get(plan.planned) ?? [];
+      uids.push(plan.uid);
+      byIndex.set(plan.planned, uids);
+      labelsByCaregiver.set(caregiverUid, byIndex);
+    }
+  }
+
+  const duplicateLabels: DuplicateLabel[] = [];
+  for (const [caregiverUid, byIndex] of labelsByCaregiver) {
+    for (const [index, childUids] of byIndex) {
+      if (childUids.length > 1) {
+        duplicateLabels.push({ caregiverUid, index, childUids });
+      }
+    }
+  }
+
   const caregiverPlans: CaregiverPlan[] = [];
   for (const [uid, caregiver] of caregivers) {
     if (!caregiver.exists) {
@@ -378,7 +414,7 @@ function planBackfill(
     });
   }
 
-  return { childPlans, caregiverPlans };
+  return { childPlans, caregiverPlans, duplicateLabels };
 }
 
 function writeCsv(
@@ -528,7 +564,10 @@ async function main(): Promise<void> {
       });
     }
 
-    const { childPlans, caregiverPlans } = planBackfill(children, caregivers);
+    const { childPlans, caregiverPlans, duplicateLabels } = planBackfill(
+      children,
+      caregivers
+    );
     const toSet = childPlans.filter((row) => row.action === "set-child-label");
     const toBump = caregiverPlans.filter(
       (row) => row.action === "bump-last-index"
@@ -554,6 +593,20 @@ async function main(): Promise<void> {
     console.log(`Bump lastChildLabelIndex: ${toBump.length}`);
     console.log(`Skip (no living caregivers): ${skipped.length}`);
     console.log(`Report: ${outputPath}`);
+
+    if (duplicateLabels.length > 0) {
+      console.warn(
+        `\nWARNING: ${duplicateLabels.length} caregiver/index collisions ` +
+          "among already-stored childLabelIndex values. These are NOT auto-fixed."
+      );
+      console.table(
+        duplicateLabels.slice(0, 20).map((d) => ({
+          caregiver: d.caregiverUid,
+          index: d.index,
+          children: d.childUids.join("|"),
+        }))
+      );
+    }
 
     if (toSet.length > 0) {
       console.log("\nSample child updates:");
