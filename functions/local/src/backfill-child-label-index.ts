@@ -307,7 +307,10 @@ function planBackfill(
     const aIndex = a.user.childLabelIndex ?? Number.MAX_SAFE_INTEGER;
     const bIndex = b.user.childLabelIndex ?? Number.MAX_SAFE_INTEGER;
     if (aIndex !== bIndex) return aIndex - bIndex;
-    return createdAtMs(a.data.createdAt) - createdAtMs(b.data.createdAt);
+    const aCreated = createdAtMs(a.data.createdAt);
+    const bCreated = createdAtMs(b.data.createdAt);
+    if (aCreated !== bCreated) return aCreated - bCreated;
+    return a.uid.localeCompare(b.uid);
   });
 
   const childPlans: ChildPlan[] = [];
