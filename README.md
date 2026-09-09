@@ -33,7 +33,7 @@ The project includes comprehensive Firebase emulator support for local developme
 
 Before running the Firebase emulators, ensure you have the following installed:
 
-- **Node.js** (version 20 or higher)
+- **Node.js** 24 (Active LTS)
 - **Java** (version 21 or higher) - Required for Firebase emulators
   - On **macOS**: Install using Homebrew: `brew install openjdk@21`
   - On **Windows**: Download from [Oracle JDK](https://www.oracle.com/java/technologies/downloads/) or use [OpenJDK](https://openjdk.java.net/)

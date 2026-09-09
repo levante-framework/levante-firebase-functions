@@ -225,6 +225,7 @@ async function createTasks(adminApp) {
       // Create variant document in subcollection
       const variantRef = taskRef.collection("variants").doc();
       const variantData = {
+        displayName: "en",
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         name: "en",
         registered: true,
@@ -272,6 +273,7 @@ async function createTasks(adminApp) {
       // Create variant document in subcollection
       const variantRef = taskRef.collection("variants").doc();
       const variantData = {
+        displayName: "en",
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         name: "en",
         registered: true,
@@ -326,6 +328,7 @@ async function createTasks(adminApp) {
       // Create variant document in subcollection
       const variantRef = taskRef.collection("variants").doc();
       const variantData = {
+        displayName: "All Languages",
         lastUpdated: admin.firestore.FieldValue.serverTimestamp(),
         name: "All Languages",
         registered: true,

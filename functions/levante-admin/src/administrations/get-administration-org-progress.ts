@@ -51,6 +51,19 @@ export interface TaskProgressSummaryRow {
   completed: number;
 }
 
+export type UserTaskProgressStatus =
+  | "notAssigned"
+  | "notStarted"
+  | "started"
+  | "completed";
+
+export interface UserTaskProgressRow {
+  taskId: string;
+  status: UserTaskProgressStatus;
+  startedAt: string | null;
+  completedAt: string | null;
+}
+
 export interface UserAdministrationProgressRow {
   userId: string;
   email: string | null;
@@ -59,6 +72,7 @@ export interface UserAdministrationProgressRow {
   status: AssignmentRollupStatus;
   startedAt: string | null;
   completedAt: string | null;
+  tasks: UserTaskProgressRow[];
 }
 
 export interface GetAdministrationOrgProgressResult {
@@ -69,6 +83,19 @@ export interface GetAdministrationOrgProgressResult {
   taskSummary: TaskProgressSummaryRow[];
   users: UserAdministrationProgressRow[];
 }
+
+export interface GetAdministrationProgressResult {
+  administrationId: string;
+  taskProgress: TaskProgressBreakdown[];
+  taskSummary: TaskProgressSummaryRow[];
+  users: UserAdministrationProgressRow[];
+}
+
+type TaskDefinition = {
+  taskId: string;
+  variantId: string;
+  variantName: string;
+};
 
 function toIso(value: unknown): string | null {
   if (value == null) return null;
@@ -207,80 +234,18 @@ async function assertCallerMayAccessAdministration(
   }
 }
 
-export async function getAdministrationOrgProgressHandler(
-  requestingUid: string,
-  data: {
-    administrationId: string;
-    orgId: string;
-    orgType?: OrgCollectionKey;
-  }
-): Promise<GetAdministrationOrgProgressResult> {
-  const { administrationId, orgId } = data;
-  if (!administrationId || typeof administrationId !== "string") {
-    throw new HttpsError(
-      "invalid-argument",
-      "administrationId is required and must be a string"
-    );
-  }
-  if (!orgId || typeof orgId !== "string") {
-    throw new HttpsError(
-      "invalid-argument",
-      "orgId is required and must be a string"
-    );
-  }
-
-  const db = getFirestore();
-  let orgType: OrgCollectionKey;
-  if (data.orgType) {
-    const orgSnap = await db.collection(data.orgType).doc(orgId).get();
-    if (!orgSnap.exists) {
-      throw new HttpsError(
-        "not-found",
-        `Organization ${orgId} was not found in ${data.orgType}`
-      );
-    }
-    orgType = data.orgType;
-  } else {
-    orgType = await resolveOrgType(db, orgId);
-  }
-
-  const adminSnap = await db
-    .collection("administrations")
-    .doc(administrationId)
-    .get();
-  if (!adminSnap.exists) {
-    throw new HttpsError("not-found", "Administration not found");
-  }
-
-  const adminData = adminSnap.data() as {
-    siteId?: string;
-    assessments?: {
-      taskId: string;
-      variantId: string;
-      variantName: string;
-    }[];
-  };
-
-  await assertCallerMayAccessAdministration(
-    db,
-    requestingUid,
-    adminData.siteId
-  );
-
-  const taskDefinitions = adminData.assessments ?? [];
-  if (taskDefinitions.length === 0) {
-    logger.warn("Administration has no assessments", { administrationId });
-  }
-
-  const orgs: IOrgsList = { [orgType]: [orgId] };
-  const userIds = await db.runTransaction(async (transaction) => {
-    return getUsersFromOrgs({
-      orgs,
-      transaction,
-      userTypes: ["student", "parent", "teacher"],
-      includeArchived: false,
-    });
-  });
+async function buildProgressRollup(params: {
+  db: Firestore;
+  administrationId: string;
+  siteId: string | undefined;
+  taskDefinitions: TaskDefinition[];
+  userIds: string[];
+}): Promise<{
+  taskProgress: TaskProgressBreakdown[];
+  taskSummary: TaskProgressSummaryRow[];
+  users: UserAdministrationProgressRow[];
+}> {
+  const { db, administrationId, siteId, taskDefinitions, userIds } = params;
 
   const assignmentRefs = userIds.map((uid) =>
     getAssignmentDocRef(db, uid, administrationId)
@@ -329,7 +294,7 @@ export async function getAdministrationOrgProgressHandler(
     const userType = (userData?.userType as string) || "unknown";
     const role = pickRoleForSite(
       userData?.roles as { siteId: string; role: string }[] | undefined,
-      adminData.siteId
+      siteId
     );
 
     const assignmentSnap = assignmentByUserId.get(uid)!;
@@ -365,6 +330,16 @@ export async function getAdministrationOrgProgressHandler(
       rollup = "notAssigned";
     }
 
+    const tasks: UserTaskProgressRow[] = taskDefinitions.map((def) => {
+      const assessment = assessments.find((a) => a.taskId === def.taskId);
+      return {
+        taskId: def.taskId,
+        status: classifyTaskForUser(assessments, def.taskId),
+        startedAt: toIso(assessment?.startedOn),
+        completedAt: toIso(assessment?.completedOn),
+      };
+    });
+
     users.push({
       userId: uid,
       email,
@@ -373,6 +348,7 @@ export async function getAdministrationOrgProgressHandler(
       status: rollup,
       startedAt,
       completedAt,
+      tasks,
     });
 
     for (let i = 0; i < taskDefinitions.length; i++) {
@@ -394,10 +370,158 @@ export async function getAdministrationOrgProgressHandler(
     completed: t.counts.completed,
   }));
 
+  return { taskProgress, taskSummary, users };
+}
+
+export async function getAdministrationOrgProgressHandler(
+  requestingUid: string,
+  data: {
+    administrationId: string;
+    orgId: string;
+    orgType?: OrgCollectionKey;
+  }
+): Promise<GetAdministrationOrgProgressResult> {
+  const { administrationId, orgId } = data;
+  if (!administrationId || typeof administrationId !== "string") {
+    throw new HttpsError(
+      "invalid-argument",
+      "administrationId is required and must be a string"
+    );
+  }
+  if (!orgId || typeof orgId !== "string") {
+    throw new HttpsError(
+      "invalid-argument",
+      "orgId is required and must be a string"
+    );
+  }
+
+  const db = getFirestore();
+  let orgType: OrgCollectionKey;
+  if (data.orgType) {
+    const orgSnap = await db.collection(data.orgType).doc(orgId).get();
+    if (!orgSnap.exists) {
+      throw new HttpsError(
+        "not-found",
+        `Organization ${orgId} was not found in ${data.orgType}`
+      );
+    }
+    orgType = data.orgType;
+  } else {
+    orgType = await resolveOrgType(db, orgId);
+  }
+
+  const adminSnap = await db
+    .collection("administrations")
+    .doc(administrationId)
+    .get();
+  if (!adminSnap.exists) {
+    throw new HttpsError("not-found", "Administration not found");
+  }
+
+  const adminData = adminSnap.data() as {
+    siteId?: string;
+    assessments?: TaskDefinition[];
+  };
+
+  await assertCallerMayAccessAdministration(
+    db,
+    requestingUid,
+    adminData.siteId
+  );
+
+  const taskDefinitions = adminData.assessments ?? [];
+  if (taskDefinitions.length === 0) {
+    logger.warn("Administration has no assessments", { administrationId });
+  }
+
+  const orgs: IOrgsList = { [orgType]: [orgId] };
+  const userIds = await db.runTransaction(async (transaction) => {
+    return getUsersFromOrgs({
+      orgs,
+      transaction,
+      userTypes: ["student", "parent", "teacher"],
+      includeArchived: false,
+    });
+  });
+
+  const { taskProgress, taskSummary, users } = await buildProgressRollup({
+    db,
+    administrationId,
+    siteId: adminData.siteId,
+    taskDefinitions,
+    userIds,
+  });
+
   return {
     administrationId,
     orgId,
     orgType,
+    taskProgress,
+    taskSummary,
+    users,
+  };
+}
+
+export async function getAdministrationProgressHandler(
+  requestingUid: string,
+  data: {
+    administrationId: string;
+  }
+): Promise<GetAdministrationProgressResult> {
+  const { administrationId } = data;
+  if (!administrationId || typeof administrationId !== "string") {
+    throw new HttpsError(
+      "invalid-argument",
+      "administrationId is required and must be a string"
+    );
+  }
+
+  const db = getFirestore();
+  const adminSnap = await db
+    .collection("administrations")
+    .doc(administrationId)
+    .get();
+  if (!adminSnap.exists) {
+    throw new HttpsError("not-found", "Administration not found");
+  }
+
+  const adminData = adminSnap.data() as {
+    siteId?: string;
+    assessments?: TaskDefinition[];
+    minimalOrgs?: IOrgsList;
+  };
+
+  await assertCallerMayAccessAdministration(
+    db,
+    requestingUid,
+    adminData.siteId
+  );
+
+  const taskDefinitions = adminData.assessments ?? [];
+  if (taskDefinitions.length === 0) {
+    logger.warn("Administration has no assessments", { administrationId });
+  }
+
+  const orgs: IOrgsList = adminData.minimalOrgs ?? {};
+  const userIds = await db.runTransaction(async (transaction) => {
+    return getUsersFromOrgs({
+      orgs,
+      transaction,
+      userTypes: ["student", "parent", "teacher"],
+      includeArchived: false,
+    });
+  });
+
+  const { taskProgress, taskSummary, users } = await buildProgressRollup({
+    db,
+    administrationId,
+    siteId: adminData.siteId,
+    taskDefinitions,
+    userIds,
+  });
+
+  return {
+    administrationId,
     taskProgress,
     taskSummary,
     users,

@@ -5,7 +5,8 @@ async function validateDashboardVisibleData({
   siteId,
   createdAdministrations,
   idToken,
-  studentCount,
+  participantCount,
+  expectedGroups = 1,
   adminUsers = ADMIN_USERS,
 }) {
   const administrationsResult = await runtime.callFunction(
@@ -54,7 +55,6 @@ async function validateDashboardVisibleData({
     },
     idToken
   );
-  const participantCount = studentCount + 3;
   const visibleSiteUsers = siteUsers.filter((row) => row.document);
   if (visibleSiteUsers.length !== participantCount) {
     throw new Error(
@@ -87,7 +87,7 @@ async function validateDashboardVisibleData({
     districts: 1,
     schools: 1,
     classes: 2,
-    groups: 1,
+    groups: expectedGroups,
     administrations: createdAdministrations.length,
   };
   const actualCounts = {

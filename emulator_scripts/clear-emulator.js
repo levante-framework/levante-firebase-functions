@@ -129,6 +129,7 @@ async function clearDatabase() {
     await deleteCollectionGroup("assignedOrgs");
     await deleteCollectionGroup("readOrgs");
     await deleteCollectionGroup("stats");
+    await deleteCollectionGroup("revisions");
     await deleteCollectionGroup("variants");
 
     await recursiveDeleteCollection("users");
@@ -143,6 +144,7 @@ async function clearDatabase() {
       "schools",
       "classes",
       "groups",
+      "variantParamSpecs",
     ];
     for (const collectionName of flatCollections) {
       console.log(`  Clearing ${collectionName}...`);

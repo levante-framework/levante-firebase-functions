@@ -17,6 +17,7 @@ const { createUserClaims } = require("./seeders/userClaims");
 const { linkUsersToGroups } = require("./seeders/associations");
 const { updateUserRoles } = require("./seeders/roles");
 const { createTasks } = require("./seeders/tasks");
+const { seedVariantParamSpecs } = require("./seeders/variant-param-specs");
 const { createAdministrations } = require("./seeders/administrations");
 const { createSystemPermissions } = require("./seeders/permissions");
 
@@ -63,6 +64,11 @@ async function seedDatabase() {
     console.log("Step 7: Creating tasks and variants...");
     const tasks = await createTasks(adminApp);
     console.log("✅ Tasks and variants created successfully\n");
+
+    // Step 7b: Derive variantParamSpecs from all variant params
+    console.log("Step 7b: Seeding variantParamSpecs...");
+    await seedVariantParamSpecs({ targetApp: adminApp, verbose: true });
+    console.log("✅ variantParamSpecs created successfully\n");
 
     // Step 8: Create administrations with subcollections
     console.log("Step 8: Creating administrations...");

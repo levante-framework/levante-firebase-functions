@@ -21,6 +21,7 @@
     "deploy:levante-admin": "firebase deploy --only functions --prefix ./functions/levante-admin/firebase.json",
     "deploy:levante-admin:assessment-dev": "npm run build && (cd functions/levante-admin && firebase deploy --only functions --project hs-levante-assessment-dev)",
     "dev": "EMULATOR=TRUE firebase emulators:start --import=./emulator_data --export-on-exit=./emulator_data",
+    "dev:clean": "EMULATOR=TRUE firebase emulators:start --import=./emulator_data",
     "emulator:seed": "EMULATOR=1 node emulator_scripts/seed-emulator-functions.js",
     "emulator:seed:legacy": "EMULATOR=1 node emulator_scripts/seed-emulator.js",
     "emulator:seed:functions": "EMULATOR=1 node emulator_scripts/seed-emulator-functions.js",
@@ -37,7 +38,7 @@
     "reset:dev": "CONFIRM_CLEAR=1 npm run clear:dev && npm run seed:dev"
   },
   "engines": {
-    "node": "20"
+    "node": "24"
   },
   "repository": {
     "type": "git",
@@ -65,20 +66,23 @@
     "*.{js,css,md}": "prettier --write"
   },
   "dependencies": {
-    "@levante-framework/levante-zod": "^1.2.4",
+    "@levante-framework/levante-zod": "^2.1.0",
     "firebase": "^11.6.1",
     "firebase-admin": "^11.11.1",
     "firebase-tools": "^14.27.0"
   },
   "devDependencies": {
     "@firebase/rules-unit-testing": "^4.0.0",
-    "@types/node": "^22.7.9",
+    "@types/node": "^24",
     "@vitest/coverage-v8": "^3.2.4",
     "prettier": "2.8.3",
     "puppeteer": "^24.8.0",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "vitest": "^3.2.4"
+  },
+  "overrides": {
+    "@types/node": "^24"
   },
   "private": true,
   "fireConfig": {}

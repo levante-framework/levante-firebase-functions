@@ -36,7 +36,7 @@ import {
   summarizeOrgsForLog,
 } from "../utils/logging.js";
 import { getAuth } from "firebase-admin/auth";
-import { HttpsError } from "firebase-functions/v1/https";
+import { HttpsError } from "firebase-functions/v2/https";
 
 /**
  * Retrieve all administrations associated with the provided orgs.

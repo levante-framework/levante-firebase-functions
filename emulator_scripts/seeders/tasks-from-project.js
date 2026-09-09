@@ -1,4 +1,5 @@
 const { GoogleAuth } = require("google-auth-library");
+const { seedVariantParamSpecs } = require("./variant-param-specs");
 
 const FIRESTORE_BASE_URL = "https://firestore.googleapis.com/v1";
 
@@ -145,9 +146,16 @@ async function seedRegisteredTasksFromProject({
     });
 
     for (const variant of variants) {
-      await taskRef.collection("variants").doc(variant.id).set(variant.data, {
-        merge: true,
-      });
+      await taskRef
+        .collection("variants")
+        .doc(variant.id)
+        .set(
+          {
+            ...variant.data,
+            displayName: variant.data.displayName || variant.data.name,
+          },
+          { merge: true }
+        );
       variantsWritten++;
     }
   }
@@ -164,7 +172,18 @@ async function seedRegisteredTasksFromProject({
     );
   }
 
-  return summary;
+  if (verbose) {
+    console.log("  Seeding variantParamSpecs from task variant params...");
+  }
+  const variantParamSpecs = await seedVariantParamSpecs({
+    targetApp,
+    verbose,
+  });
+
+  return {
+    ...summary,
+    variantParamSpecsWritten: variantParamSpecs.written,
+  };
 }
 
 module.exports = { seedRegisteredTasksFromProject };

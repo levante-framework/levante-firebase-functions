@@ -356,8 +356,8 @@ export interface User {
   archived: boolean;
   birthMonth?: number;
   birthYear?: number;
-  childIdentifier?: string;
   childIds?: string[]; // TODO: backfill `studentIds` -> `childIds` in db
+  childLabelIndex?: number; // only for children; index into the childLabel i18n list
   classes: OrgAssociationMap;
   createdAt: Timestamp;
   disabled: boolean;
@@ -366,6 +366,7 @@ export interface User {
   email: string;
   groups: OrgAssociationMap;
   idHash?: string;
+  lastChildLabelIndex?: number; // only for caregivers; last minted childLabelIndex (omit if none)
   parentIds?: string[];
   roles: { siteId: string; role: string; siteName: string }[];
   schools: OrgAssociationMap;
@@ -495,12 +496,17 @@ export interface SystemPermissions {
  * Document ID: Task identifier (e.g., `matrix-reasoning`).
  */
 export interface TaskDoc {
+  archived?: boolean;
+  createdAt?: Timestamp | string;
+  createdBy?: string;
   description?: string;
   image?: string; // URL
   lastUpdated?: Timestamp;
   name?: string;
   registered?: boolean;
   taskURL?: string; // Optional
+  updatedAt?: Timestamp | string;
+  updatedBy?: string;
 }
 
 /**
@@ -509,12 +515,34 @@ export interface TaskDoc {
  * Document ID: Variant identifier.
  */
 export interface VariantDoc {
+  archived?: boolean;
+  createdAt?: Timestamp | string;
+  createdBy?: string;
+  displayName?: string;
   lastUpdated?: Timestamp;
   name?: string; // e.g., "default", "adaptive"
-  params?: Record<string, any>; // Task-specific, variable structure
+  params?: Record<string, boolean | number | string | null>;
   registered?: boolean;
   taskURL?: string; // Optional
+  updatedAt?: Timestamp | string;
+  updatedBy?: string;
   variantURL?: string; // Optional
+}
+
+/**
+ * Interface for documents in the `variantParamSpecs` collection.
+ * Catalog of allowed variant parameter names and types.
+ * Document ID: semantic param name (e.g. `maxTime`).
+ */
+export interface VariantParamSpecDoc {
+  archived: boolean;
+  createdAt: Timestamp | string;
+  createdBy: string;
+  description: string;
+  name: string;
+  type: "boolean" | "number" | "string" | "unknown";
+  updatedAt: Timestamp | string;
+  updatedBy: string;
 }
 
 // --- Guest & Assessment Run Data --- interfaces
@@ -574,6 +602,7 @@ export interface RunDoc {
   userData?: {
     variantId?: string;
   };
+  stopReason?: string | null;
 }
 
 /**
