@@ -1,6 +1,6 @@
 import type {
-  UpdateUserInfoParams,
-  UpdateUserInfoResult,
+  UpdateUsersInfoParams,
+  UpdateUsersInfoResult,
 } from "@levante-framework/levante-zod";
 import type { HttpsCallable } from "firebase/functions";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -36,16 +36,16 @@ async function seedUser(
   });
 }
 
-describe("updateUserInfo (e2e)", () => {
+describe("updateUsersInfo (e2e)", () => {
   let client: ReturnType<typeof getClient>;
-  let updateUserInfo: HttpsCallable<UpdateUserInfoParams, UpdateUserInfoResult>;
+  let updateUsersInfo: HttpsCallable<UpdateUsersInfoParams, UpdateUsersInfoResult>;
 
   beforeEach(async () => {
     await Promise.all([clearFirestore(), clearAuth()]);
     await seedSystemPermissions();
     client = getClient();
-    updateUserInfo = client.call<UpdateUserInfoParams, UpdateUserInfoResult>(
-      "updateUserInfo"
+    updateUsersInfo = client.call<UpdateUsersInfoParams, UpdateUsersInfoResult>(
+      "updateUsersInfo"
     );
   });
 
@@ -53,7 +53,7 @@ describe("updateUserInfo (e2e)", () => {
 
   it("rejects unauthenticated callers", async () => {
     await expect(
-      updateUserInfo({ users: [{ uid: "u-1", archived: true }] })
+      updateUsersInfo({ users: [{ uid: "u-1", archived: true }] })
     ).rejects.toMatchObject({ code: "functions/unauthenticated" });
   });
 
@@ -62,7 +62,7 @@ describe("updateUserInfo (e2e)", () => {
 
     await expect(
       // @ts-expect-error intentionally missing uid
-      updateUserInfo({ users: [{ archived: true }] })
+      updateUsersInfo({ users: [{ archived: true }] })
     ).rejects.toMatchObject({
       code: "functions/invalid-argument",
       details: {
@@ -83,14 +83,14 @@ describe("updateUserInfo (e2e)", () => {
     });
     await seedUser("u-1");
     await expect(
-      updateUserInfo({ users: [{ uid: "u-1", archived: true }] })
+      updateUsersInfo({ users: [{ uid: "u-1", archived: true }] })
     ).rejects.toMatchObject({ code: "functions/permission-denied" });
   });
 
   it("returns not-found for a user that does not exist", async () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
     await expect(
-      updateUserInfo({ users: [{ uid: "missing", archived: true }] })
+      updateUsersInfo({ users: [{ uid: "missing", archived: true }] })
     ).rejects.toMatchObject({
       code: "functions/not-found",
       details: { code: "users", uids: ["missing"] },
@@ -103,7 +103,7 @@ describe("updateUserInfo (e2e)", () => {
     await seedUser("u-cross", { districts: { current: [SITE, OTHER_SITE] } });
 
     await expect(
-      updateUserInfo({ users: [{ uid: "u-cross", disabled: true }] })
+      updateUsersInfo({ users: [{ uid: "u-cross", disabled: true }] })
     ).rejects.toMatchObject({ code: "functions/permission-denied" });
 
     const doc = await adminDb.doc("users/u-cross").get();
@@ -114,7 +114,7 @@ describe("updateUserInfo (e2e)", () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
     await Promise.all([seedUser("u-1"), seedUser("u-2")]);
 
-    const { data } = await updateUserInfo({
+    const { data } = await updateUsersInfo({
       users: [
         { uid: "u-1", archived: true, disabled: true },
         { uid: "u-2", archived: true },
@@ -141,7 +141,7 @@ describe("updateUserInfo (e2e)", () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
     await seedUser("u-1", { archived: false, disabled: true });
 
-    await updateUserInfo({ users: [{ uid: "u-1", archived: true }] });
+    await updateUsersInfo({ users: [{ uid: "u-1", archived: true }] });
 
     const u1 = await adminDb.doc("users/u-1").get();
     expect(u1.get("archived")).toBe(true);

@@ -1,6 +1,6 @@
 import {
-  UpdateUserInfoParamsSchema,
-  type UpdateUserInfoResult,
+  UpdateUsersInfoParamsSchema,
+  type UpdateUsersInfoResult,
 } from "@levante-framework/levante-zod";
 import { ACTIONS, RESOURCES } from "@levante-framework/permissions-core";
 import { getAuth } from "firebase-admin/auth";
@@ -19,13 +19,13 @@ import {
  * caller must have USERS/UPDATE permission on every site each target user
  * belongs to. Users missing either flag in the request are left untouched.
  */
-export const updateUserInfo = onCall(
-  async (req): Promise<UpdateUserInfoResult> => {
+export const updateUsersInfo = onCall(
+  async (req): Promise<UpdateUsersInfoResult> => {
     const uid = req.auth?.uid;
     if (!uid)
       throw new HttpsError("unauthenticated", "User must be authenticated");
 
-    const parsed = UpdateUserInfoParamsSchema.safeParse(req.data);
+    const parsed = UpdateUsersInfoParamsSchema.safeParse(req.data);
     if (!parsed.success) {
       throw new HttpsError("invalid-argument", "Invalid input", {
         code: "schema",
