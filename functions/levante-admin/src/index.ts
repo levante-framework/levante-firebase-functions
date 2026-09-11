@@ -976,6 +976,8 @@ export const syncOnRunDocUpdate = onDocumentWritten(
 
 export { getSiteOverview } from "./sites/get-site-overview.js";
 export { getSyncStatus } from "./sites/get-sync-status.js";
+export { getUserOverview } from "./users/get-user-overview.js";
 export { getUsersByOrg } from "./users/get-users-by-org.js";
 export { createUsers, syncCreatedUsersTask } from "./users/create-users.js";
 export { linkUsers } from "./users/link-users.js";
+export { updateUsersInfo } from "./users/update-users-info.js";

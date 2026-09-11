@@ -81,15 +81,17 @@ export const getUsersByOrg = onCall(
         "array-contains",
         orgId
       )
-      .select("email", "userType", "childLabelIndex")
+      .select("archived", "disabled", "email", "userType", "childLabelIndex")
       .get();
 
     const users: GetUsersByOrgResult["users"] = [];
     const invalidUsers: { uid: string; [key: string]: unknown }[] = [];
     for (const doc of usersSnap.docs) {
+      const archived = doc.get("archived") === true;
+      const disabled = doc.get("disabled") === true;
+      const email = doc.get("email");
       const roarUserType = doc.get("userType");
       const userType = ROAR_TO_LEVANTE_USERTYPE[roarUserType];
-      const email = doc.get("email");
       const childLabelIndex = doc.get("childLabelIndex");
 
       if (!userType || typeof email !== "string") {
@@ -99,6 +101,8 @@ export const getUsersByOrg = onCall(
 
       users.push({
         uid: doc.id,
+        archived,
+        disabled,
         email,
         userType,
         ...(typeof childLabelIndex === "number" ? { childLabelIndex } : {}),
