@@ -110,6 +110,18 @@ describe("updateUsersInfo (e2e)", () => {
     expect(doc.get("disabled")).toBe(false);
   });
 
+  it("rejects when the target has no site membership", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedUser("u-orphan", { districts: { current: [] } });
+
+    await expect(
+      updateUsersInfo({ users: [{ uid: "u-orphan", disabled: true }] })
+    ).rejects.toMatchObject({ code: "functions/permission-denied" });
+
+    const doc = await adminDb.doc("users/u-orphan").get();
+    expect(doc.get("disabled")).toBe(false);
+  });
+
   it("updates archived and disabled flags for authorized users", async () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
     await Promise.all([seedUser("u-1"), seedUser("u-2")]);

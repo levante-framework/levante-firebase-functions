@@ -77,11 +77,12 @@ export const updateUsersInfo = onCall(
         action: ACTIONS.UPDATE,
       })
     );
-    const unauthorized = snaps.filter((snap) =>
-      (snap.data()?.districts?.current ?? []).some(
-        (siteId: string) => !allowedSites.has(siteId)
-      )
-    );
+    const unauthorized = snaps.filter((snap) => {
+      const sites: string[] = snap.data()?.districts?.current ?? [];
+      return (
+        sites.length === 0 || sites.some((siteId) => !allowedSites.has(siteId))
+      );
+    });
     if (unauthorized.length > 0) {
       logger.warn("Permission denied for updating user info", {
         requestingUid: uid,
