@@ -113,7 +113,10 @@ export const getUserOverview = onCall(
 
     const [orgSnaps, assignmentsSnap] = await Promise.all([
       orgRefs.length ? db.getAll(...orgRefs.map((o) => o.ref)) : [],
-      userRef.collection("assignments").get(),
+      userRef
+        .collection("assignments")
+        .select("name", "dateOpened", "dateClosed", "syncStatus")
+        .get(),
     ]);
 
     const orgs: GetUserOverviewResult["orgs"] = [];
