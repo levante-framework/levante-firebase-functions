@@ -979,3 +979,4 @@ export { getSyncStatus } from "./sites/get-sync-status.js";
 export { getUsersByOrg } from "./users/get-users-by-org.js";
 export { createUsers, syncCreatedUsersTask } from "./users/create-users.js";
 export { linkUsers } from "./users/link-users.js";
+export { cartoBasemapTile } from "./carto-basemap-tile.js";
