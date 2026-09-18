@@ -6,6 +6,30 @@ import {
   createUserWithClaims,
 } from "./test-utils";
 
+const TASK_PERMISSIONS = {
+  permissions: {
+    super_admin: { tasks: ["create", "read", "update", "delete"] },
+    admin: { tasks: ["read", "update"] },
+    participant: { tasks: [] },
+  },
+};
+
+function adminUser(testEnv: import("@firebase/rules-unit-testing").RulesTestEnvironment) {
+  return createUserWithClaims(testEnv, "admin1", { rolesSet: ["admin"] });
+}
+
+function superAdminUser(
+  testEnv: import("@firebase/rules-unit-testing").RulesTestEnvironment,
+) {
+  return createUserWithClaims(testEnv, "super1", { rolesSet: ["super_admin"] });
+}
+
+function participantUser(
+  testEnv: import("@firebase/rules-unit-testing").RulesTestEnvironment,
+) {
+  return createUserWithClaims(testEnv, "child1", { rolesSet: ["participant"] });
+}
+
 describe("Tasks", () => {
   let testEnv: import("@firebase/rules-unit-testing").RulesTestEnvironment;
 
@@ -21,6 +45,9 @@ describe("Tasks", () => {
 
   beforeEach(async () => {
     await testEnv.clearFirestore();
+    await setupTestData(testEnv, async (ctx) => {
+      await ctx.firestore().doc("system/permissions").set(TASK_PERMISSIONS);
+    });
   });
 
   describe("task reading", () => {
@@ -51,7 +78,7 @@ describe("Tasks", () => {
 
   describe("task creation", () => {
     test("authenticated user can create task without registered field", async () => {
-      const user = createUserWithClaims(testEnv, "user1");
+      const user = superAdminUser(testEnv);
       await assertSucceeds(
         user
           .firestore()
@@ -65,7 +92,7 @@ describe("Tasks", () => {
     });
 
     test("user cannot create task with registered field", async () => {
-      const user = createUserWithClaims(testEnv, "user1");
+      const user = superAdminUser(testEnv);
       await assertFails(
         user.firestore().doc("tasks/newTask").set({
           name: "New Task",
@@ -76,7 +103,7 @@ describe("Tasks", () => {
     });
 
     test("user can create task with all allowed fields", async () => {
-      const user = createUserWithClaims(testEnv, "user1");
+      const user = superAdminUser(testEnv);
       await assertSucceeds(
         user
           .firestore()
@@ -116,7 +143,7 @@ describe("Tasks", () => {
           });
       });
 
-      const user = createUserWithClaims(testEnv, "user1");
+      const user = adminUser(testEnv);
       await assertSucceeds(
         user
           .firestore()
@@ -138,7 +165,7 @@ describe("Tasks", () => {
         });
       });
 
-      const user = createUserWithClaims(testEnv, "user1");
+      const user = adminUser(testEnv);
       await assertFails(
         user.firestore().doc("tasks/task1").update({
           registered: true,
@@ -159,7 +186,7 @@ describe("Tasks", () => {
           });
       });
 
-      const user = createUserWithClaims(testEnv, "user1");
+      const user = adminUser(testEnv);
       await assertSucceeds(
         user
           .firestore()
@@ -183,7 +210,7 @@ describe("Tasks", () => {
           });
       });
 
-      const user = createUserWithClaims(testEnv, "user1");
+      const user = adminUser(testEnv);
       await assertFails(
         user
           .firestore()
@@ -207,7 +234,7 @@ describe("Tasks", () => {
           });
       });
 
-      const user = createUserWithClaims(testEnv, "user1");
+      const user = adminUser(testEnv);
       await assertFails(
         user
           .firestore()
@@ -231,7 +258,7 @@ describe("Tasks", () => {
           });
       });
 
-      const user = createUserWithClaims(testEnv, "user1");
+      const user = adminUser(testEnv);
       await assertSucceeds(
         user
           .firestore()
@@ -255,10 +282,27 @@ describe("Tasks", () => {
         });
       });
 
-      const user = createUserWithClaims(testEnv, "user1");
+      const user = adminUser(testEnv);
       await assertFails(
         user.firestore().doc("tasks/task1").update({
           name: "Updated Name", // name is not in allowed update fields
+        }),
+      );
+    });
+
+    test("participant cannot update tasks", async () => {
+      await setupTestData(testEnv, async (ctx) => {
+        await ctx.firestore().doc("tasks/task1").set({
+          name: "Test Task",
+          description: "A test task",
+          params: { difficulty: "easy" },
+        });
+      });
+
+      const child = participantUser(testEnv);
+      await assertFails(
+        child.firestore().doc("tasks/task1").update({
+          description: "Hacked",
         }),
       );
     });
@@ -294,7 +338,7 @@ describe("Tasks", () => {
         });
       });
 
-      const user = createUserWithClaims(testEnv, "user1");
+      const user = superAdminUser(testEnv);
       await assertSucceeds(
         user
           .firestore()
@@ -321,7 +365,7 @@ describe("Tasks", () => {
           });
       });
 
-      const user = createUserWithClaims(testEnv, "user1");
+      const user = adminUser(testEnv);
       await assertSucceeds(
         user
           .firestore()
@@ -329,6 +373,25 @@ describe("Tasks", () => {
           .update({
             params: { level: 2 },
           }),
+      );
+    });
+
+    test("participant cannot update task variants", async () => {
+      await setupTestData(testEnv, async (ctx) => {
+        await ctx.firestore().doc("tasks/task1").set({
+          name: "Test Task",
+        });
+        await ctx.firestore().doc("tasks/task1/variants/variant1").set({
+          name: "Variant 1",
+          params: { level: 1 },
+        });
+      });
+
+      const child = participantUser(testEnv);
+      await assertFails(
+        child.firestore().doc("tasks/task1/variants/variant1").update({
+          params: { level: 99 },
+        }),
       );
     });
 
@@ -340,7 +403,7 @@ describe("Tasks", () => {
         });
       });
 
-      const user = createUserWithClaims(testEnv, "user1");
+      const user = superAdminUser(testEnv);
       await assertFails(
         user
           .firestore()

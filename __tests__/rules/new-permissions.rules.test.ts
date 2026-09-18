@@ -272,13 +272,34 @@ describe("New Permission System", () => {
 
       const admin = createUserWithClaims(testEnv, "admin", {
         useNewPermissions: true,
-        roles: ["admin"],
+        rolesSet: ["admin"],
       });
 
       await assertSucceeds(admin.firestore().doc("tasks/testTask").get());
       await assertSucceeds(
         admin.firestore().doc("tasks/testTask").update({
           description: "Updated description",
+        }),
+      );
+    });
+
+    test("participant cannot update tasks", async () => {
+      await setupTestData(testEnv, async (ctx) => {
+        await ctx.firestore().doc("tasks/testTask").set({
+          name: "Test Task",
+          description: "Original description",
+        });
+      });
+
+      const participant = createUserWithClaims(testEnv, "participant", {
+        useNewPermissions: true,
+        rolesSet: ["participant"],
+      });
+
+      await assertSucceeds(participant.firestore().doc("tasks/testTask").get());
+      await assertFails(
+        participant.firestore().doc("tasks/testTask").update({
+          description: "Hacked",
         }),
       );
     });
