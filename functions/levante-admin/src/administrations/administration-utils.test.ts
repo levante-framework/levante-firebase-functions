@@ -1,3 +1,4 @@
+import { ACTIONS, RESOURCES } from "@levante-framework/permissions-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const filterWhere = vi.fn((field: string, op: string, value: unknown) => ({
@@ -27,8 +28,31 @@ vi.mock("firebase-admin/firestore", () => ({
   getFirestore,
 }));
 
+const {
+  buildPermissionsUserFromAuthRecord,
+  ensurePermissionsLoaded,
+  filterSitesByPermission,
+  getAuth,
+  getUser,
+} = vi.hoisted(() => {
+  const getUser = vi.fn();
+  return {
+    buildPermissionsUserFromAuthRecord: vi.fn(),
+    ensurePermissionsLoaded: vi.fn(),
+    filterSitesByPermission: vi.fn(),
+    getAuth: vi.fn(() => ({ getUser })),
+    getUser,
+  };
+});
+
 vi.mock("firebase-admin/auth", () => ({
-  getAuth: vi.fn(),
+  getAuth,
+}));
+
+vi.mock("../utils/permission-helpers.js", () => ({
+  buildPermissionsUserFromAuthRecord,
+  ensurePermissionsLoaded,
+  filterSitesByPermission,
 }));
 
 vi.mock("firebase-functions/v2", () => ({
@@ -109,9 +133,20 @@ function mockFirestore(adminDocs: AdminDoc[] = []) {
   return { administrationsQuery, db };
 }
 
+const allowedUser = { uid: "admin-1", email: "admin@example.com", roles: [] };
+
+function mockAllowedSiteAccess(siteId = "site-1") {
+  getUser.mockResolvedValue({
+    customClaims: { useNewPermissions: true },
+  });
+  buildPermissionsUserFromAuthRecord.mockReturnValue(allowedUser);
+  filterSitesByPermission.mockReturnValue([siteId]);
+}
+
 describe("queryAdministrations", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAllowedSiteAccess();
   });
 
   it("applies only the siteId filter when testData is null and open restriction is off", async () => {
@@ -267,5 +302,96 @@ describe("queryAdministrations", () => {
         siteId: "site-1",
       })
     ).resolves.toEqual([]);
+  });
+
+  it("queries administrations when the user has a role on the site", async () => {
+    const { db } = mockFirestore();
+
+    await getAdministrationsForAdministrator({
+      adminUid: "admin-1",
+      siteId: "site-1",
+    });
+
+    expect(getAuth).toHaveBeenCalledTimes(1);
+    expect(getUser).toHaveBeenCalledWith("admin-1");
+    expect(ensurePermissionsLoaded).toHaveBeenCalledTimes(1);
+    expect(buildPermissionsUserFromAuthRecord).toHaveBeenCalledTimes(1);
+    expect(filterSitesByPermission).toHaveBeenCalledWith(
+      allowedUser,
+      ["site-1"],
+      {
+        resource: RESOURCES.ASSIGNMENTS,
+        action: ACTIONS.READ,
+      }
+    );
+    expect(db.runTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("queries administrations when a super admin requests a site", async () => {
+    const superAdmin = {
+      uid: "super-admin",
+      email: "super@example.com",
+      roles: [{ siteId: "hq", role: "super_admin" }],
+    };
+    getUser.mockResolvedValue({
+      customClaims: { useNewPermissions: true },
+    });
+    buildPermissionsUserFromAuthRecord.mockReturnValue(superAdmin);
+    filterSitesByPermission.mockReturnValue(["any-site"]);
+    const { db } = mockFirestore();
+
+    await getAdministrationsForAdministrator({
+      adminUid: "super-admin",
+      siteId: "any-site",
+    });
+
+    expect(filterSitesByPermission).toHaveBeenCalledWith(
+      superAdmin,
+      ["any-site"],
+      {
+        resource: RESOURCES.ASSIGNMENTS,
+        action: ACTIONS.READ,
+      }
+    );
+    expect(db.runTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("denies access when the user has no role on the site", async () => {
+    filterSitesByPermission.mockReturnValue([]);
+    const { db, administrationsQuery } = mockFirestore();
+
+    await expect(
+      getAdministrationsForAdministrator({
+        adminUid: "admin-1",
+        siteId: "site-1",
+      })
+    ).rejects.toMatchObject({
+      code: "permission-denied",
+      message:
+        "You do not have permission to read administrations in site site-1",
+    });
+
+    expect(db.runTransaction).not.toHaveBeenCalled();
+    expect(administrationsQuery.where).not.toHaveBeenCalled();
+  });
+
+  it("denies access when useNewPermissions is missing", async () => {
+    getUser.mockResolvedValue({ customClaims: {} });
+    const { db, administrationsQuery } = mockFirestore();
+
+    await expect(
+      getAdministrationsForAdministrator({
+        adminUid: "admin-1",
+        siteId: "site-1",
+      })
+    ).rejects.toMatchObject({
+      code: "permission-denied",
+      message: "New permission system must be enabled to get administrations",
+    });
+
+    expect(ensurePermissionsLoaded).not.toHaveBeenCalled();
+    expect(filterSitesByPermission).not.toHaveBeenCalled();
+    expect(db.runTransaction).not.toHaveBeenCalled();
+    expect(administrationsQuery.where).not.toHaveBeenCalled();
   });
 });

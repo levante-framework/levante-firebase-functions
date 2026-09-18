@@ -37,6 +37,12 @@ import {
 } from "../utils/logging.js";
 import { getAuth } from "firebase-admin/auth";
 import { HttpsError } from "firebase-functions/v2/https";
+import { ACTIONS, RESOURCES } from "@levante-framework/permissions-core";
+import {
+  buildPermissionsUserFromAuthRecord,
+  ensurePermissionsLoaded,
+  filterSitesByPermission,
+} from "../utils/permission-helpers.js";
 
 /**
  * Retrieve all administrations associated with the provided orgs.
@@ -555,6 +561,42 @@ export const getAdministrationsForAdministrator = async ({
 }: GetAdministrationsForAdministratorParams) => {
   const db = getFirestore();
   const trimmedSiteId = siteId?.trim() || undefined;
+
+  if (trimmedSiteId) {
+    const userRecord = await getAuth().getUser(adminUid);
+    if (userRecord.customClaims?.useNewPermissions !== true) {
+      logger.warn(
+        "Permission denied for getting administrations: legacy permissions",
+        {
+          requestingUid: adminUid,
+          siteId: trimmedSiteId,
+        }
+      );
+      throw new HttpsError(
+        "permission-denied",
+        "New permission system must be enabled to get administrations"
+      );
+    }
+
+    await ensurePermissionsLoaded();
+    const user = buildPermissionsUserFromAuthRecord(userRecord);
+    const allowed =
+      filterSitesByPermission(user, [trimmedSiteId], {
+        resource: RESOURCES.ASSIGNMENTS,
+        action: ACTIONS.READ,
+      }).length > 0;
+
+    if (!allowed) {
+      logger.warn("Permission denied for getting administrations", {
+        requestingUid: adminUid,
+        siteId: trimmedSiteId,
+      });
+      throw new HttpsError(
+        "permission-denied",
+        `You do not have permission to read administrations in site ${trimmedSiteId}`
+      );
+    }
+  }
 
   return db.runTransaction(async (transaction) => {
     if (!trimmedSiteId) {
