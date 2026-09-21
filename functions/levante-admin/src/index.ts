@@ -442,17 +442,17 @@ export const getAdministrations = onCall(async (request) => {
   const adminUid = request.auth!.uid;
 
   const idsOnly = request.data.idsOnly ?? true;
-
   const restrictToOpenAdministrations =
     request.data.restrictToOpenAdministrations ?? false;
-
+  const siteId = request.data?.siteId;
   const testData = request.data.testData ?? null;
 
   const administrations = await getAdministrationsForAdministrator({
     adminUid,
-    restrictToOpenAdministrations,
-    testData,
     idsOnly,
+    restrictToOpenAdministrations,
+    siteId,
+    testData,
   });
 
   return { status: "ok", data: administrations };
