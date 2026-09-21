@@ -32,10 +32,7 @@ describe("validateResponseShape", () => {
 
   it("allows a partial payload of valid values", () => {
     expect(
-      validateResponseShape(
-        { notes: "ok", sampleApproach: ["other"] },
-        fields
-      )
+      validateResponseShape({ notes: "ok", sampleApproach: ["other"] }, fields)
     ).toEqual([]);
   });
 
@@ -78,9 +75,11 @@ describe("validateResponseShape", () => {
   });
 
   it("rejects a non-string single-select value", () => {
-    expect(validateResponseShape({ numTeachers: ["10_to_24"] }, fields)).toEqual(
-      [{ path: "responses.numTeachers", message: "Expected a string." }]
-    );
+    expect(
+      validateResponseShape({ numTeachers: ["10_to_24"] }, fields)
+    ).toEqual([
+      { path: "responses.numTeachers", message: "Expected a string." },
+    ]);
   });
 
   it("rejects a single-select value outside options", () => {
@@ -93,9 +92,9 @@ describe("validateResponseShape", () => {
   });
 
   it("accepts a valid single-select value", () => {
-    expect(
-      validateResponseShape({ numTeachers: "10_to_24" }, fields)
-    ).toEqual([]);
+    expect(validateResponseShape({ numTeachers: "10_to_24" }, fields)).toEqual(
+      []
+    );
   });
 
   it("rejects a non-array multi-select value", () => {

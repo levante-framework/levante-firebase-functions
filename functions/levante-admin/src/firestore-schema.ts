@@ -253,7 +253,8 @@ export interface SchoolInformationAnswers {
  * Allowed values for select fields are sourced from the runtime form definition,
  * so they are typed as strings here rather than hardcoded literal unions.
  */
-export type SchoolInformation = SchoolInformationCore & SchoolInformationAnswers;
+export type SchoolInformation = SchoolInformationCore &
+  SchoolInformationAnswers;
 
 /** Response field keys shared across org-information forms (site and school). */
 export type InformationFieldKey =
