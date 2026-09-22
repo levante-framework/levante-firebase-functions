@@ -105,7 +105,7 @@ try {
       if (argv.apply) {
         await auth.updateUser(uid, { password: newPassword });
         await auth.revokeRefreshTokens(uid);
-        console.log(`[admin] password reset and sessions revoked for ${uid}`);
+        console.log(`Password reset and sessions revoked for ${uid}`);
       }
 
       results.push({ uid, email: user.email ?? undefined, newPassword });
