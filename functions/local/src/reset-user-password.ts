@@ -97,7 +97,7 @@ try {
   const results: Array<Record<string, unknown>> = [];
   const csvRows: string[] = [];
 
-  for (const uid of argv.uids) {
+  for (const uid of new Set(argv.uids)) {
     try {
       const user = await auth.getUser(uid);
       const newPassword = generateRandomString();
