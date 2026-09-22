@@ -19,9 +19,13 @@ import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { initAdmin } from "./utils/init-admin.js";
 
-type Environment = "dev" | "prod";
-
-/** Generates a random string in the same way levante-admin does. */
+/**
+ * Generates a random string in the same way levante-admin does.
+ *
+ * Copied from `generateRandomString` in
+ * functions/levante-admin/src/users/create-users.ts. Keep in sync: passwords
+ * set here must match the format that function produces for new users.
+ */
 function generateRandomString(length = 10): string {
   const chars = "abcdefghijklmnopqrstuvwxyz0123456789";
   const charsLength = chars.length;
@@ -56,7 +60,7 @@ const argv = yargs(hideBin(process.argv))
   .help("help")
   .alias("help", "h")
   .parseSync() as {
-  environment: Environment;
+  environment: "dev" | "prod";
   uid: string;
   apply: boolean;
 };
