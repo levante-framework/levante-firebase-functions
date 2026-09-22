@@ -1,20 +1,23 @@
 /**
- * Resets a single users's password to a freshly generated one, matching how
+ * Resets one or more users' passwords to freshly generated ones, matching how
  * levante-admin generates passwords (a-z0-9, length 10).
  *
- * Defaults to the dev project and to a dry run: it prints the new password
- * without writing it. Pass --apply to actually update the user, and relay the
- * printed password to the user (there is no other way to recover it).
+ * Defaults to the dev project and to a dry run: it prints the new passwords
+ * without writing them. Pass --apply to actually update the users, and relay
+ * each printed password to its user (there is no other way to recover it).
  *
- * Applying also revokes the user's refresh tokens, invalidating existing
+ * Applying also revokes each user's refresh tokens, invalidating existing
  * sessions so the old password can no longer be used.
  *
+ * Each UID is processed independently: a failure on one (e.g. unknown UID)
+ * does not stop the others, and the script exits non-zero if any failed.
+ *
  * Usage:
- *   # Dry run against dev (prints the password that would be set)
- *   npm run reset-user-password -- --uid <UID>
+ *   # Dry run against dev (prints the passwords that would be set)
+ *   npm run reset-user-password -- --uids <UID> [<UID> ...]
  *
  *   # Apply against prod
- *   npm run reset-user-password -- --uid <UID> -e prod --apply
+ *   npm run reset-user-password -- --uids <UID> [<UID> ...] -e prod --apply
  */
 import { deleteApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
@@ -49,13 +52,14 @@ const argv = yargs(hideBin(process.argv))
       choices: ["dev", "prod"] as const,
       default: "dev" as const,
     },
-    uid: {
-      description: "Target user's Firebase Auth UID",
-      type: "string",
+    uids: {
+      description: "Target users' Firebase Auth UIDs",
+      type: "array",
+      string: true,
       demandOption: true,
     },
     apply: {
-      description: "Write the new password (dry-run by default)",
+      description: "Write the new passwords (dry-run by default)",
       type: "boolean",
       default: false,
     },
@@ -64,7 +68,7 @@ const argv = yargs(hideBin(process.argv))
   .alias("help", "h")
   .parseSync() as {
   environment: "dev" | "prod";
-  uid: string;
+  uids: string[];
   apply: boolean;
 };
 
@@ -75,40 +79,41 @@ const { app } = await initAdmin({ environment: argv.environment });
 const auth = getAuth(app);
 
 try {
-  const user = await auth.getUser(argv.uid);
+  const results: Array<Record<string, unknown>> = [];
 
-  const newPassword = generateRandomString();
+  for (const uid of argv.uids) {
+    try {
+      const user = await auth.getUser(uid);
+      const newPassword = generateRandomString();
+
+      if (argv.apply) {
+        await auth.updateUser(uid, { password: newPassword });
+        await auth.revokeRefreshTokens(uid);
+        console.log(`[admin] password reset and sessions revoked for ${uid}`);
+      }
+
+      results.push({ uid, email: user.email ?? undefined, newPassword });
+    } catch (error) {
+      process.exitCode = 1;
+      if ((error as { code?: string }).code === "auth/user-not-found") {
+        console.error(`No user found in ${projectId} with UID ${uid}`);
+        results.push({ uid, error: "user-not-found" });
+      } else {
+        console.error(`Failed to reset password for ${uid}`, error);
+        results.push({ uid, error: "failed" });
+      }
+    }
+  }
 
   console.log(
-    JSON.stringify(
-      {
-        projectId,
-        uid: argv.uid,
-        email: user.email ?? undefined,
-        apply: argv.apply,
-        newPassword,
-      },
-      null,
-      2
-    )
+    JSON.stringify({ projectId, apply: argv.apply, results }, null, 2)
   );
 
-  if (argv.apply) {
-    await auth.updateUser(argv.uid, { password: newPassword });
-    await auth.revokeRefreshTokens(argv.uid);
-    console.log(`[admin] password reset and sessions revoked for ${argv.uid}`);
-  } else {
+  if (!argv.apply) {
     console.log(
-      "Dry run: password was not changed. Re-run with --apply to write."
+      "Dry run: passwords were not changed. Re-run with --apply to write."
     );
   }
-} catch (error) {
-  if ((error as { code?: string }).code === "auth/user-not-found") {
-    console.error(`No user found in ${projectId} with UID ${argv.uid}`);
-  } else {
-    console.error(error);
-  }
-  process.exitCode = 1;
 } finally {
   await deleteApp(app);
 }
