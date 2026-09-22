@@ -6,6 +6,9 @@
  * without writing it. Pass --apply to actually update the user, and relay the
  * printed password to the user (there is no other way to recover it).
  *
+ * Applying also revokes the user's refresh tokens, invalidating existing
+ * sessions so the old password can no longer be used.
+ *
  * Usage:
  *   # Dry run against dev (prints the password that would be set)
  *   npm run reset-user-password -- --uid <UID>
@@ -92,7 +95,8 @@ try {
 
   if (argv.apply) {
     await auth.updateUser(argv.uid, { password: newPassword });
-    console.log(`[admin] password reset for ${argv.uid}`);
+    await auth.revokeRefreshTokens(argv.uid);
+    console.log(`[admin] password reset and sessions revoked for ${argv.uid}`);
   } else {
     console.log(
       "Dry run: password was not changed. Re-run with --apply to write."
