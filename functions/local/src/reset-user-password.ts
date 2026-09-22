@@ -12,8 +12,8 @@
  * Each UID is processed independently: a failure on one (e.g. unknown UID)
  * does not stop the others, and the script exits non-zero if any failed.
  *
- * The generated uid,password pairs are written as a CSV to the path given by
- * --output, in both dry-run and apply modes.
+ * The generated uid,email,password rows are written as a CSV to the path given
+ * by --output, in both dry-run and apply modes.
  *
  * Usage:
  *   # Dry run against dev (prints the passwords that would be set)
@@ -92,7 +92,7 @@ const auth = getAuth(app);
 try {
   // Fail fast: prove the output path is writable before applying any
   // (irreversible) password changes, so generated passwords can't be lost.
-  fs.writeFileSync(argv.output, "uid,password\n");
+  fs.writeFileSync(argv.output, "uid,email,password\n");
 
   const results: Array<Record<string, unknown>> = [];
   const csvRows: string[] = [];
@@ -109,7 +109,7 @@ try {
       }
 
       results.push({ uid, email: user.email ?? undefined, newPassword });
-      csvRows.push(`${uid},${newPassword}`);
+      csvRows.push(`${uid},${user.email ?? ""},${newPassword}`);
     } catch (error) {
       process.exitCode = 1;
       if ((error as { code?: string }).code === "auth/user-not-found") {
