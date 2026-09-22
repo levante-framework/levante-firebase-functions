@@ -67,31 +67,40 @@ const projectId =
 const { app } = await initAdmin({ environment: argv.environment });
 const auth = getAuth(app);
 
-const user = await auth.getUser(argv.uid);
+try {
+  const user = await auth.getUser(argv.uid);
 
-const newPassword = generateRandomString();
+  const newPassword = generateRandomString();
 
-console.log(
-  JSON.stringify(
-    {
-      projectId,
-      uid: argv.uid,
-      email: user.email ?? undefined,
-      apply: argv.apply,
-      newPassword,
-    },
-    null,
-    2
-  )
-);
-
-if (argv.apply) {
-  await auth.updateUser(argv.uid, { password: newPassword });
-  console.log(`[admin] password reset for ${argv.uid}`);
-} else {
   console.log(
-    "Dry run: password was not changed. Re-run with --apply to write."
+    JSON.stringify(
+      {
+        projectId,
+        uid: argv.uid,
+        email: user.email ?? undefined,
+        apply: argv.apply,
+        newPassword,
+      },
+      null,
+      2
+    )
   );
-}
 
-await deleteApp(app);
+  if (argv.apply) {
+    await auth.updateUser(argv.uid, { password: newPassword });
+    console.log(`[admin] password reset for ${argv.uid}`);
+  } else {
+    console.log(
+      "Dry run: password was not changed. Re-run with --apply to write."
+    );
+  }
+} catch (error) {
+  if ((error as { code?: string }).code === "auth/user-not-found") {
+    console.error(`No user found in ${projectId} with UID ${argv.uid}`);
+  } else {
+    console.error(error);
+  }
+  process.exitCode = 1;
+} finally {
+  await deleteApp(app);
+}
