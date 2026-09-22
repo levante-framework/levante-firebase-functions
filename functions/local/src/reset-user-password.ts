@@ -12,13 +12,17 @@
  * Each UID is processed independently: a failure on one (e.g. unknown UID)
  * does not stop the others, and the script exits non-zero if any failed.
  *
+ * The generated uid,password pairs are written as a CSV to the path given by
+ * --output, in both dry-run and apply modes.
+ *
  * Usage:
  *   # Dry run against dev (prints the passwords that would be set)
- *   npm run reset-user-password -- --uids <UID> [<UID> ...]
+ *   npm run reset-user-password -- --uids <UID> [<UID> ...] -o out.csv
  *
  *   # Apply against prod
- *   npm run reset-user-password -- --uids <UID> [<UID> ...] -e prod --apply
+ *   npm run reset-user-password -- --uids <UID> [<UID> ...] -o out.csv -e prod --apply
  */
+import * as fs from "fs";
 import { deleteApp } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import yargs from "yargs";
@@ -58,6 +62,12 @@ const argv = yargs(hideBin(process.argv))
       string: true,
       demandOption: true,
     },
+    output: {
+      alias: "o",
+      description: "Filepath to write CSV output",
+      type: "string",
+      demandOption: true,
+    },
     apply: {
       description: "Write the new passwords (dry-run by default)",
       type: "boolean",
@@ -69,6 +79,7 @@ const argv = yargs(hideBin(process.argv))
   .parseSync() as {
   environment: "dev" | "prod";
   uids: string[];
+  output: string;
   apply: boolean;
 };
 
@@ -80,6 +91,7 @@ const auth = getAuth(app);
 
 try {
   const results: Array<Record<string, unknown>> = [];
+  const csvRows: string[] = ["uid,password"];
 
   for (const uid of argv.uids) {
     try {
@@ -93,6 +105,7 @@ try {
       }
 
       results.push({ uid, email: user.email ?? undefined, newPassword });
+      csvRows.push(`${uid},${newPassword}`);
     } catch (error) {
       process.exitCode = 1;
       if ((error as { code?: string }).code === "auth/user-not-found") {
@@ -104,6 +117,9 @@ try {
       }
     }
   }
+
+  fs.writeFileSync(argv.output, `${csvRows.join("\n")}\n`);
+  console.log(`Wrote ${csvRows.length - 1} row(s) to ${argv.output}`);
 
   console.log(
     JSON.stringify({ projectId, apply: argv.apply, results }, null, 2)
