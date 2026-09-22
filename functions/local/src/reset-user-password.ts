@@ -90,8 +90,12 @@ const { app } = await initAdmin({ environment: argv.environment });
 const auth = getAuth(app);
 
 try {
+  // Fail fast: prove the output path is writable before applying any
+  // (irreversible) password changes, so generated passwords can't be lost.
+  fs.writeFileSync(argv.output, "uid,password\n");
+
   const results: Array<Record<string, unknown>> = [];
-  const csvRows: string[] = ["uid,password"];
+  const csvRows: string[] = [];
 
   for (const uid of argv.uids) {
     try {
@@ -118,8 +122,10 @@ try {
     }
   }
 
-  fs.writeFileSync(argv.output, `${csvRows.join("\n")}\n`);
-  console.log(`Wrote ${csvRows.length - 1} row(s) to ${argv.output}`);
+  if (csvRows.length > 0) {
+    fs.appendFileSync(argv.output, `${csvRows.join("\n")}\n`);
+  }
+  console.log(`Wrote ${csvRows.length} row(s) to ${argv.output}`);
 
   console.log(
     JSON.stringify({ projectId, apply: argv.apply, results }, null, 2)
