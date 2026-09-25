@@ -441,6 +441,7 @@ export async function getAdministrationOrgProgressHandler(
       transaction,
       userTypes: ["student", "parent", "teacher"],
       includeArchived: false,
+      includeDisabled: false,
     });
   });
 
@@ -509,6 +510,7 @@ export async function getAdministrationProgressHandler(
       transaction,
       userTypes: ["student", "parent", "teacher"],
       includeArchived: false,
+      includeDisabled: false,
     });
   });
 
