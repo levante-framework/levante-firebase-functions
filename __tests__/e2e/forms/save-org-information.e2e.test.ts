@@ -2,21 +2,28 @@ import type {
   SaveOrgInformationParams,
   SaveOrgInformationResult,
 } from "@levante-framework/levante-zod";
-import { Timestamp, type DocumentData } from "firebase-admin/firestore";
 import type { HttpsCallable } from "firebase/functions";
+import { type DocumentData, Timestamp } from "firebase-admin/firestore";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   adminDb,
   clearAuth,
   clearFirestore,
   getClient,
+  seedSystemPermissions,
   signInAs,
 } from "../app";
 
 const SITE = "site-1";
+const OTHER_SITE = "site-2";
 const SCHOOL = "school-1";
 const SUPER_ADMIN_UID = "u-super";
 const SITE_ADMIN_UID = "u-admin";
+
+const SUPER_ADMIN_CLAIMS = {
+  useNewPermissions: true,
+  siteRoles: { [SITE]: ["super_admin"] },
+};
 
 const validSiteDraft = (): SaveOrgInformationParams => ({
   orgType: "site",
@@ -28,12 +35,6 @@ const validSiteDraft = (): SaveOrgInformationParams => ({
   },
   status: "draft",
 });
-
-async function seedSuperAdminClaims(uid: string) {
-  await adminDb.doc(`userClaims/${uid}`).set({
-    claims: { super_admin: true },
-  });
-}
 
 async function seedFormVersion(
   formId: "siteInformation" | "schoolInformation",
@@ -73,8 +74,8 @@ const siteFields = [
 ];
 
 function dataWithoutTimestamps(data: DocumentData | undefined) {
-  expect(data).toBeDefined();
-  const { createdAt, updatedAt, ...rest } = data!;
+  if (!data) throw new Error("Expected document data to be defined");
+  const { createdAt, updatedAt, ...rest } = data;
   expect(createdAt).toBeInstanceOf(Timestamp);
   expect(updatedAt).toBeInstanceOf(Timestamp);
   return {
@@ -102,6 +103,7 @@ describe("saveOrgInformation (e2e)", () => {
 
   beforeEach(async () => {
     await Promise.all([clearFirestore(), clearAuth()]);
+    await seedSystemPermissions();
     client = getClient();
     saveOrgInformation = client.call<
       SaveOrgInformationParams,
@@ -118,8 +120,7 @@ describe("saveOrgInformation (e2e)", () => {
   });
 
   it("rejects invalid input with a per-field details payload", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await expect(
       // @ts-expect-error intentionally missing orgId
       saveOrgInformation({
@@ -142,13 +143,11 @@ describe("saveOrgInformation (e2e)", () => {
     });
   });
 
-  it("rejects callers who are not super admins", async () => {
-    await signInAs(client, SITE_ADMIN_UID, {
+  it("rejects callers without update permission on the org's site", async () => {
+    // research_assistant has read-only access to groups.sites.
+    await signInAs(client, "u-ra", {
       useNewPermissions: true,
-      siteRoles: { [SITE]: ["site_admin"] },
-    });
-    await adminDb.doc(`userClaims/${SITE_ADMIN_UID}`).set({
-      claims: { super_admin: false },
+      siteRoles: { [SITE]: ["research_assistant"] },
     });
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
 
@@ -157,9 +156,43 @@ describe("saveOrgInformation (e2e)", () => {
     });
   });
 
+  it("rejects admins whose update permission is on a different site", async () => {
+    await signInAs(client, SITE_ADMIN_UID, {
+      useNewPermissions: true,
+      siteRoles: { [OTHER_SITE]: ["site_admin"] },
+    });
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+
+    await expect(saveOrgInformation(validSiteDraft())).rejects.toMatchObject({
+      code: "functions/permission-denied",
+    });
+  });
+
+  it("rejects callers who have not been migrated to the new permission system", async () => {
+    await signInAs(client, SUPER_ADMIN_UID, {
+      siteRoles: { [SITE]: ["super_admin"] },
+    });
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+
+    await expect(saveOrgInformation(validSiteDraft())).rejects.toMatchObject({
+      code: "functions/permission-denied",
+    });
+  });
+
+  it("allows a site admin to save org information for their own site", async () => {
+    await signInAs(client, SITE_ADMIN_UID, {
+      useNewPermissions: true,
+      siteRoles: { [SITE]: ["site_admin"] },
+    });
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await seedFormVersion("siteInformation", "version-1", siteFields);
+
+    const { data } = await saveOrgInformation(validSiteDraft());
+    expect(data.status).toBe("draft");
+  });
+
   it("rejects when the org document does not exist", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
 
     await expect(saveOrgInformation(validSiteDraft())).rejects.toMatchObject({
       code: "functions/not-found",
@@ -167,8 +200,7 @@ describe("saveOrgInformation (e2e)", () => {
   });
 
   it("rejects when the form version does not exist", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
 
     await expect(saveOrgInformation(validSiteDraft())).rejects.toMatchObject({
@@ -177,21 +209,20 @@ describe("saveOrgInformation (e2e)", () => {
   });
 
   it("rejects when the form version is not registered", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
     await seedFormVersion("siteInformation", "version-1", siteFields, false);
 
     const draft = validSiteDraft();
     await expect(saveOrgInformation(draft)).rejects.toMatchObject({
       code: "functions/failed-precondition",
-      message: `Form version "${draft.formVersion}" is not registered.`,
+      message: "Form version is not registered",
+      details: { code: "unregistered", id: draft.formVersion },
     });
   });
 
   it("rejects unknown response keys", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
     await seedFormVersion("siteInformation", "version-1", [
       { variableName: "sampleApproach", kind: "multi-select" },
@@ -205,7 +236,7 @@ describe("saveOrgInformation (e2e)", () => {
     ).rejects.toMatchObject({
       code: "functions/invalid-argument",
       details: {
-        code: "schema",
+        code: "responses",
         issues: [
           expect.objectContaining({
             path: "responses.notAField",
@@ -217,8 +248,7 @@ describe("saveOrgInformation (e2e)", () => {
   });
 
   it("rejects responses with the wrong value type", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
     await seedFormVersion("siteInformation", "version-1", siteFields);
 
@@ -230,7 +260,7 @@ describe("saveOrgInformation (e2e)", () => {
     ).rejects.toMatchObject({
       code: "functions/invalid-argument",
       details: {
-        code: "schema",
+        code: "responses",
         issues: [
           expect.objectContaining({
             path: "responses.sampleApproach",
@@ -242,8 +272,7 @@ describe("saveOrgInformation (e2e)", () => {
   });
 
   it("rejects values outside the field options", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
     await seedFormVersion("siteInformation", "version-1", siteFields);
 
@@ -255,7 +284,7 @@ describe("saveOrgInformation (e2e)", () => {
     ).rejects.toMatchObject({
       code: "functions/invalid-argument",
       details: {
-        code: "schema",
+        code: "responses",
         issues: [
           expect.objectContaining({
             path: "responses.sampleApproach",
@@ -267,8 +296,7 @@ describe("saveOrgInformation (e2e)", () => {
   });
 
   it("merges site responses onto districts/{orgId}/siteInformation/version-1", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
     await seedFormVersion("siteInformation", "version-1", siteFields);
 
@@ -317,8 +345,7 @@ describe("saveOrgInformation (e2e)", () => {
   });
 
   it("rejects complete when a required field is missing", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
     await seedFormVersion("siteInformation", "version-1", siteFields);
 
@@ -341,8 +368,7 @@ describe("saveOrgInformation (e2e)", () => {
   });
 
   it("rejects complete when a required text field is only whitespace", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
     await seedFormVersion("siteInformation", "version-1", siteFields);
 
@@ -359,13 +385,13 @@ describe("saveOrgInformation (e2e)", () => {
       })
     ).rejects.toMatchObject({
       code: "functions/failed-precondition",
-      message: "Required fields are missing: siteRecruitment",
+      message: "Required fields are missing",
+      details: { code: "missing-fields", fields: ["siteRecruitment"] },
     });
   });
 
   it("rejects complete when Other is selected without Other text", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
     await seedFormVersion("siteInformation", "version-1", siteFields);
 
@@ -386,8 +412,7 @@ describe("saveOrgInformation (e2e)", () => {
   });
 
   it("allows complete without Other text when Other is not selected", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
     await seedFormVersion("siteInformation", "version-1", siteFields);
 
@@ -406,8 +431,7 @@ describe("saveOrgInformation (e2e)", () => {
   });
 
   it("ignores a late draft after the form is complete", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
     await seedFormVersion("siteInformation", "version-1", siteFields);
 
@@ -446,8 +470,7 @@ describe("saveOrgInformation (e2e)", () => {
   });
 
   it("ignores a late school draft even if the school name is later missing", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
     await adminDb
       .doc(`schools/${SCHOOL}`)
@@ -488,8 +511,7 @@ describe("saveOrgInformation (e2e)", () => {
   });
 
   it("deletes Other text when Other is unselected and the field is sent as null", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
     await seedFormVersion("siteInformation", "version-1", siteFields);
 
@@ -517,8 +539,7 @@ describe("saveOrgInformation (e2e)", () => {
   });
 
   it("treats null on a never-saved field as a no-op", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
     await seedFormVersion("siteInformation", "version-1", siteFields);
 
@@ -541,8 +562,7 @@ describe("saveOrgInformation (e2e)", () => {
   });
 
   it("merges school responses onto schools/{orgId}/schoolInformation/version-2", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
     await adminDb
       .doc(`schools/${SCHOOL}`)
@@ -573,8 +593,7 @@ describe("saveOrgInformation (e2e)", () => {
   });
 
   it("rejects when the school document has no districtId", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
     await adminDb.doc(`schools/${SCHOOL}`).set({ name: "School 1" });
     await seedFormVersion("schoolInformation", "version-2", schoolFields);
@@ -588,14 +607,14 @@ describe("saveOrgInformation (e2e)", () => {
         status: "draft",
       })
     ).rejects.toMatchObject({
-      code: "functions/not-found",
-      message: `districtId was not found on schools document "${SCHOOL}".`,
+      code: "functions/internal",
+      message: "School has no site",
+      details: { code: "org-incomplete", type: "school", id: SCHOOL },
     });
   });
 
   it("rejects when the school's district document does not exist", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb
       .doc(`schools/${SCHOOL}`)
       .set({ name: "School 1", districtId: SITE });
@@ -610,14 +629,14 @@ describe("saveOrgInformation (e2e)", () => {
         status: "draft",
       })
     ).rejects.toMatchObject({
-      code: "functions/not-found",
-      message: `districts document "${SITE}" was not found.`,
+      code: "functions/internal",
+      message: "School references a missing site",
+      details: { code: "org-incomplete", type: "school", id: SCHOOL },
     });
   });
 
   it("rejects when the school document has no name", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
     await adminDb.doc(`schools/${SCHOOL}`).set({ districtId: SITE });
     await seedFormVersion("schoolInformation", "version-2", schoolFields);
@@ -631,14 +650,14 @@ describe("saveOrgInformation (e2e)", () => {
         status: "draft",
       })
     ).rejects.toMatchObject({
-      code: "functions/not-found",
-      message: `name was not found on schools document "${SCHOOL}".`,
+      code: "functions/internal",
+      message: "School has no name",
+      details: { code: "org-incomplete", type: "school", id: SCHOOL },
     });
   });
 
   it("rejects when the school name is blank", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
     await adminDb
       .doc(`schools/${SCHOOL}`)
@@ -654,14 +673,14 @@ describe("saveOrgInformation (e2e)", () => {
         status: "draft",
       })
     ).rejects.toMatchObject({
-      code: "functions/not-found",
-      message: `name was not found on schools document "${SCHOOL}".`,
+      code: "functions/internal",
+      message: "School has no name",
+      details: { code: "org-incomplete", type: "school", id: SCHOOL },
     });
   });
 
   it("rejects when the school's district document has no name", async () => {
-    await signInAs(client, SUPER_ADMIN_UID, { super_admin: true });
-    await seedSuperAdminClaims(SUPER_ADMIN_UID);
+    await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
     await adminDb.doc(`districts/${SITE}`).set({});
     await adminDb
       .doc(`schools/${SCHOOL}`)
@@ -677,8 +696,9 @@ describe("saveOrgInformation (e2e)", () => {
         status: "draft",
       })
     ).rejects.toMatchObject({
-      code: "functions/not-found",
-      message: `name was not found on districts document "${SITE}".`,
+      code: "functions/internal",
+      message: "Site has no name",
+      details: { code: "org-incomplete", type: "site", id: SITE },
     });
   });
 });

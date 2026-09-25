@@ -4,10 +4,22 @@ import {
   LoadFormDefinitionsParamsSchema,
   type LoadFormDefinitionsResult,
 } from "@levante-framework/levante-zod";
+import {
+  ACTIONS,
+  GROUP_SUB_RESOURCES,
+  RESOURCES,
+} from "@levante-framework/permissions-core";
+import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
-import { formIdFromOrgType, orgCollectionFromOrgType } from "./org-paths.js";
+import { ORG_TYPE_TO_COLLECTION } from "../orgs/constants.js";
+import {
+  buildPermissionsUserFromAuthRecord,
+  ensurePermissionsLoaded,
+  filterSitesByPermission,
+} from "../utils/permission-helpers.js";
+import { ORG_TYPE_TO_FORM_ID } from "./org-paths.js";
 
 /**
  * Reads a form definition and its registered (live) version from Firestore.
@@ -16,17 +28,18 @@ import { formIdFromOrgType, orgCollectionFromOrgType } from "./org-paths.js";
  *  1. `formDefinitions/{formId}.currentVersionId`, if that version is `registered`.
  *  2. otherwise the highest `versionNumber` among `registered` versions.
  */
-async function loadFormDefinition(formId: string) {
+async function loadFormDefinition(orgType: "site" | "school") {
   const db = getFirestore();
 
+  const formId = ORG_TYPE_TO_FORM_ID[orgType];
   const formRef = db.collection("formDefinitions").doc(formId);
   const formSnap = await formRef.get();
 
   if (!formSnap.exists) {
-    throw new HttpsError(
-      "not-found",
-      `Form definition "${formId}" was not found.`
-    );
+    throw new HttpsError("not-found", "Form definition not found", {
+      code: "form-definition",
+      id: formId,
+    });
   }
 
   const form = formSnap.data() as {
@@ -50,7 +63,11 @@ async function loadFormDefinition(formId: string) {
     if (registeredSnap.empty) {
       throw new HttpsError(
         "failed-precondition",
-        `Form "${formId}" has no registered version.`
+        "Form definition has no registered version",
+        {
+          code: "unregistered",
+          id: formId,
+        }
       );
     }
 
@@ -94,33 +111,70 @@ export const loadFormDefinitions = onCall(
     }
     const { orgType, orgId } = parsed.data;
 
-    try {
-      const orgCollection = orgCollectionFromOrgType(orgType);
-      const orgSnap = await getFirestore()
-        .collection(orgCollection)
-        .doc(orgId)
-        .get();
+    const userRecord = await getAuth().getUser(request.auth.uid);
+    // Legacy permissions
+    // TODO: remove after migration
+    if (userRecord.customClaims?.useNewPermissions !== true) {
+      throw new HttpsError(
+        "permission-denied",
+        "New permission system must be enabled to load form definitions"
+      );
+    }
 
-      if (!orgSnap.exists) {
-        throw new HttpsError(
-          "not-found",
-          `${orgCollection} document "${orgId}" was not found.`
-        );
-      }
+    const orgCollection = ORG_TYPE_TO_COLLECTION[orgType];
+    const orgSnap = await getFirestore()
+      .collection(orgCollection)
+      .doc(orgId)
+      .get();
 
-      const formId = formIdFromOrgType(orgType);
-      const definition = await loadFormDefinition(formId);
+    if (!orgSnap.exists) {
+      throw new HttpsError("not-found", "Org not found", {
+        code: "org",
+        type: orgType,
+        id: orgId,
+      });
+    }
 
-      return {
-        ...definition,
+    const siteId = orgType === "site" ? orgId : orgSnap.get("districtId");
+    if (typeof siteId !== "string") {
+      throw new HttpsError("internal", "School has no site", {
+        code: "org-incomplete",
+        type: "school",
+        id: orgId,
+      });
+    }
+
+    await ensurePermissionsLoaded();
+    const user = buildPermissionsUserFromAuthRecord(userRecord);
+    const allowed =
+      filterSitesByPermission(user, [siteId], {
+        resource: RESOURCES.GROUPS,
+        action: ACTIONS.READ,
+        subResource:
+          orgType === "site"
+            ? GROUP_SUB_RESOURCES.SITES
+            : GROUP_SUB_RESOURCES.SCHOOLS,
+      }).length > 0;
+    if (!allowed) {
+      logger.warn("Permission denied for loading form definitions", {
+        requestingUid: request.auth.uid,
         orgType,
         orgId,
-        savedResponses: [],
-      };
-    } catch (error) {
-      if (error instanceof HttpsError) throw error;
-      logger.error("loadFormDefinitions failed", { error, orgType, orgId });
-      throw new HttpsError("internal", "Failed to load form definitions.");
+        siteId,
+      });
+      throw new HttpsError(
+        "permission-denied",
+        `You do not have permission to load form definitions for ${orgType} ${orgId}`
+      );
     }
+
+    const definition = await loadFormDefinition(orgType);
+
+    return {
+      ...definition,
+      orgType,
+      orgId,
+      savedResponses: [],
+    };
   }
 );

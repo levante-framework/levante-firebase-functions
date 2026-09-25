@@ -9,12 +9,19 @@ import {
   clearAuth,
   clearFirestore,
   getClient,
+  seedSystemPermissions,
   signInAs,
 } from "../app";
 
 const SITE = "site-1";
+const OTHER_SITE = "site-2";
 const SCHOOL = "school-1";
 const UID = "u-user";
+
+const SITE_ADMIN_CLAIMS = {
+  useNewPermissions: true,
+  siteRoles: { [SITE]: ["site_admin"] },
+};
 
 const validSiteLoad = (): LoadFormDefinitionsParams => ({
   orgType: "site",
@@ -90,6 +97,7 @@ describe("loadFormDefinitions (e2e)", () => {
 
   beforeEach(async () => {
     await Promise.all([clearFirestore(), clearAuth()]);
+    await seedSystemPermissions();
     client = getClient();
     loadFormDefinitions = client.call<
       LoadFormDefinitionsParams,
@@ -106,7 +114,7 @@ describe("loadFormDefinitions (e2e)", () => {
   });
 
   it("rejects invalid input with a per-field details payload", async () => {
-    await signInAs(client, UID, {});
+    await signInAs(client, UID, SITE_ADMIN_CLAIMS);
     await expect(
       // @ts-expect-error intentionally missing orgId
       loadFormDefinitions({ orgType: "site" })
@@ -124,8 +132,43 @@ describe("loadFormDefinitions (e2e)", () => {
     });
   });
 
+  it("rejects callers who have not been migrated to the new permission system", async () => {
+    await signInAs(client, "u-legacy", {
+      siteRoles: { [SITE]: ["site_admin"] },
+    });
+    await seedSite();
+    await expect(loadFormDefinitions(validSiteLoad())).rejects.toMatchObject({
+      code: "functions/permission-denied",
+    });
+  });
+
+  it("rejects migrated callers with no site roles", async () => {
+    await signInAs(client, "u-no-roles", { useNewPermissions: true });
+    await seedSite();
+    await expect(loadFormDefinitions(validSiteLoad())).rejects.toMatchObject({
+      code: "functions/permission-denied",
+    });
+  });
+
+  it("rejects callers without read access to the org's site", async () => {
+    await signInAs(client, "u-other", {
+      useNewPermissions: true,
+      siteRoles: { [OTHER_SITE]: ["site_admin"] },
+    });
+    await seedSchool();
+
+    await expect(loadFormDefinitions(validSiteLoad())).rejects.toMatchObject({
+      code: "functions/permission-denied",
+    });
+    // Permission is enforced on the resolved site, so a school owned by SITE
+    // is also off-limits to an OTHER_SITE admin.
+    await expect(
+      loadFormDefinitions({ orgType: "school", orgId: SCHOOL })
+    ).rejects.toMatchObject({ code: "functions/permission-denied" });
+  });
+
   it("rejects when the org document does not exist", async () => {
-    await signInAs(client, UID, {});
+    await signInAs(client, UID, SITE_ADMIN_CLAIMS);
 
     await expect(loadFormDefinitions(validSiteLoad())).rejects.toMatchObject({
       code: "functions/not-found",
@@ -133,7 +176,7 @@ describe("loadFormDefinitions (e2e)", () => {
   });
 
   it("rejects when the form definition does not exist", async () => {
-    await signInAs(client, UID, {});
+    await signInAs(client, UID, SITE_ADMIN_CLAIMS);
     await seedSite();
 
     await expect(loadFormDefinitions(validSiteLoad())).rejects.toMatchObject({
@@ -142,7 +185,7 @@ describe("loadFormDefinitions (e2e)", () => {
   });
 
   it("rejects when there is no registered version", async () => {
-    await signInAs(client, UID, {});
+    await signInAs(client, UID, SITE_ADMIN_CLAIMS);
     await seedSite();
     await seedForm(
       "siteInformation",
@@ -158,7 +201,7 @@ describe("loadFormDefinitions (e2e)", () => {
   });
 
   it("returns the currentVersionId when that version is registered", async () => {
-    await signInAs(client, UID, {});
+    await signInAs(client, UID, SITE_ADMIN_CLAIMS);
     await seedSite();
     await seedForm(
       "siteInformation",
@@ -190,7 +233,7 @@ describe("loadFormDefinitions (e2e)", () => {
   });
 
   it("falls back to the highest registered versionNumber when currentVersionId is missing", async () => {
-    await signInAs(client, UID, {});
+    await signInAs(client, UID, SITE_ADMIN_CLAIMS);
     await seedSite();
     await seedForm(
       "siteInformation",
@@ -215,7 +258,7 @@ describe("loadFormDefinitions (e2e)", () => {
   });
 
   it("falls back when currentVersionId points to an unregistered version", async () => {
-    await signInAs(client, UID, {});
+    await signInAs(client, UID, SITE_ADMIN_CLAIMS);
     await seedSite();
     await seedForm(
       "siteInformation",
@@ -233,7 +276,7 @@ describe("loadFormDefinitions (e2e)", () => {
   });
 
   it("loads schoolInformation for a school org", async () => {
-    await signInAs(client, UID, {});
+    await signInAs(client, UID, SITE_ADMIN_CLAIMS);
     await seedSchool();
     await seedForm(
       "schoolInformation",
