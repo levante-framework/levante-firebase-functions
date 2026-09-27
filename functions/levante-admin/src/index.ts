@@ -980,3 +980,7 @@ export { getUsersByOrg } from "./users/get-users-by-org.js";
 export { createUsers, syncCreatedUsersTask } from "./users/create-users.js";
 export { linkUsers } from "./users/link-users.js";
 export { cartoBasemapTile } from "./carto-basemap-tile.js";
+export {
+  populationKonturH3,
+  populationWorldpopH3,
+} from "./population-h3.js";

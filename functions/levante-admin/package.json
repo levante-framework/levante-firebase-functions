@@ -20,7 +20,7 @@
     "update:indexes": "firebase firestore:indexes --project dev > firestore.indexes.json && npm run normalize:indexes"
   },
   "engines": {
-    "node": "24"
+    "node": "22"
   },
   "license": "Stanford Academic Software License for LEVANTE",
   "main": "lib/index.js",
@@ -39,6 +39,7 @@
     "dotenv": "^16.0.0",
     "firebase-admin": "^13.4.0",
     "firebase-functions": "^6.3.2",
+    "h3-js": "^4.5.0",
     "lodash-es": "^4.17.21",
     "status-code-enum": "^1.0.0",
     "uuid": "^9.0.0"
