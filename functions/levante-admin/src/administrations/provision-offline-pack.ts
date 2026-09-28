@@ -22,9 +22,9 @@ import type { OfflineScopeType } from "./list-offline-scopes.js";
  * second device knows what a first one already collected). Assets are fetched by the
  * device itself from the public bucket.
  *
- * A device is scoped to one school or one cohort of the administration; without a
- * scope the roster is every child in the administration's sites (small sites, or a
- * site with no schools/cohorts yet).
+ * A device is scoped to one school, classroom, or cohort of the administration;
+ * without a scope the roster is every child in the administration's sites (small
+ * sites, or a site with no schools/classes/cohorts yet).
  *
  * Identity is never minted here: children come only from existing user documents, so
  * runs synced later attribute to the same uids the online platform uses.
@@ -222,13 +222,15 @@ async function resolveScope(
 } | null> {
   if (!scope) return null;
   if (
-    (scope.orgType !== "school" && scope.orgType !== "cohort") ||
+    (scope.orgType !== "school" &&
+      scope.orgType !== "class" &&
+      scope.orgType !== "cohort") ||
     typeof scope.orgId !== "string" ||
     !scope.orgId
   ) {
     throw new HttpsError(
       "invalid-argument",
-      "scope must be {orgType: 'school' | 'cohort', orgId}"
+      "scope must be {orgType: 'school' | 'class' | 'cohort', orgId}"
     );
   }
   const siteId = await resolveSiteId(db, scope.orgType, scope.orgId);

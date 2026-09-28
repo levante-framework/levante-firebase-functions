@@ -953,6 +953,10 @@ export { startTask } from "./tasks/startTask.js";
 export { syncOfflineRuns } from "./runs/sync-offline-runs.js";
 export { provisionOfflinePack } from "./administrations/provision-offline-pack.js";
 export { listOfflineScopes } from "./administrations/list-offline-scopes.js";
+export {
+  listOfflinePacks,
+  saveOfflinePack,
+} from "./administrations/offline-packs.js";
 export { getTasks } from "./tasks/get-tasks.js";
 export { getTaskVariants } from "./tasks/get-task-variants.js";
 export { getTaskVariantRevisions } from "./tasks/get-task-variant-revisions.js";

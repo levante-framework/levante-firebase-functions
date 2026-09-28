@@ -5,15 +5,15 @@ import { ORG_TYPE_TO_COLLECTION } from "../orgs/constants.js";
 import { assertSiteAccess } from "../utils/offline-permissions.js";
 
 /**
- * The schools and cohorts an offline device can be scoped to for one administration.
- * A device is provisioned for one school or one cohort (not a whole site), so the
- * launcher asks for this list right after the proctor picks an administration.
+ * The schools, classrooms, and cohorts an offline device can be scoped to for one
+ * administration. A device is provisioned for one of those (not a whole site), so
+ * the launcher asks for this list right after the proctor picks an administration.
  *
- * If the administration targets specific schools/cohorts, only those are offered;
- * otherwise every unarchived school and cohort under the administration's sites.
+ * If the administration targets specific orgs, only those are offered; otherwise
+ * every unarchived school, class, and cohort under the administration's sites.
  */
 
-export type OfflineScopeType = "school" | "cohort";
+export type OfflineScopeType = "school" | "class" | "cohort";
 
 export interface OfflineScope {
   orgType: OfflineScopeType;
@@ -62,6 +62,12 @@ export const listOfflineScopes = onCall(async (request) => {
       "school",
       sites,
       (admin.schools ?? []) as string[]
+    )),
+    ...(await loadScopes(
+      db,
+      "class",
+      sites,
+      (admin.classes ?? []) as string[]
     )),
     ...(await loadScopes(
       db,
