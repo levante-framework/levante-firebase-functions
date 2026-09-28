@@ -9,6 +9,7 @@ const appDir = process.env.E2E_APP_DIR
   : path.resolve(__dirname, "..", "..", "levante-dashboard");
 const bootstrapScript = path.resolve(__dirname, "bootstrap-ui-seed.js");
 const seedScript = path.resolve(__dirname, "seed-emulator-functions.js");
+const formSeedScript = path.resolve(__dirname, "seed-form-definitions.js");
 const firebaseBin =
   process.env.FIREBASE_BIN ||
   path.resolve(rootDir, "node_modules", ".bin", "firebase");
@@ -205,6 +206,12 @@ async function main() {
     "Seeding visible emulator dashboard data through Firebase Functions..."
   );
   runChecked("node", [seedScript], {
+    cwd: rootDir,
+    env: seedEnv,
+  });
+
+  console.log("Seeding org-information form definitions...");
+  runChecked("node", [formSeedScript], {
     cwd: rootDir,
     env: seedEnv,
   });
