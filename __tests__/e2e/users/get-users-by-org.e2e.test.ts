@@ -138,29 +138,49 @@ describe("getUsersByOrg (e2e)", () => {
 
     expect(data.users).toEqual(
       expect.arrayContaining([
-        { uid: "u-teacher", email: "teacher@example.com", userType: "teacher" },
+        {
+          uid: "u-teacher",
+          email: "teacher@example.com",
+          userType: "teacher",
+          archived: false,
+          disabled: false,
+        },
         {
           uid: "u-child",
           email: "child@example.com",
           userType: "child",
           childLabelIndex: 3,
+          archived: false,
+          disabled: false,
         },
         {
           uid: "u-caregiver",
           email: "caregiver@example.com",
           userType: "caregiver",
+          archived: false,
+          disabled: false,
         },
-        { uid: "u-site-admin", email: "admin@example.com", userType: "admin" },
+        {
+          uid: "u-site-admin",
+          email: "admin@example.com",
+          userType: "admin",
+          archived: false,
+          disabled: false,
+        },
         // archived and disabled users are no longer filtered out
         {
           uid: "u-archived",
           email: "archived@example.com",
           userType: "teacher",
+          archived: true,
+          disabled: false,
         },
         {
           uid: "u-disabled",
           email: "disabled@example.com",
           userType: "teacher",
+          archived: false,
+          disabled: true,
         },
       ])
     );

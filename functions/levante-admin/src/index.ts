@@ -442,17 +442,17 @@ export const getAdministrations = onCall(async (request) => {
   const adminUid = request.auth!.uid;
 
   const idsOnly = request.data.idsOnly ?? true;
-
   const restrictToOpenAdministrations =
     request.data.restrictToOpenAdministrations ?? false;
-
+  const siteId = request.data?.siteId;
   const testData = request.data.testData ?? null;
 
   const administrations = await getAdministrationsForAdministrator({
     adminUid,
-    restrictToOpenAdministrations,
-    testData,
     idsOnly,
+    restrictToOpenAdministrations,
+    siteId,
+    testData,
   });
 
   return { status: "ok", data: administrations };
@@ -950,6 +950,9 @@ export const upsertAdministration = onCall(async (request) => {
 
 export { completeTask } from "./tasks/completeTask.js";
 export { startTask } from "./tasks/startTask.js";
+export { syncOfflineRuns } from "./runs/sync-offline-runs.js";
+export { provisionOfflinePack } from "./administrations/provision-offline-pack.js";
+export { listOfflineScopes } from "./administrations/list-offline-scopes.js";
 export { getTasks } from "./tasks/get-tasks.js";
 export { getTaskVariants } from "./tasks/get-task-variants.js";
 export { getTaskVariantRevisions } from "./tasks/get-task-variant-revisions.js";
@@ -976,6 +979,7 @@ export const syncOnRunDocUpdate = onDocumentWritten(
 
 export { getSiteOverview } from "./sites/get-site-overview.js";
 export { getSyncStatus } from "./sites/get-sync-status.js";
+export { getUserOverview } from "./users/get-user-overview.js";
 export { getUsersByOrg } from "./users/get-users-by-org.js";
 export { createUsers, syncCreatedUsersTask } from "./users/create-users.js";
 export { linkUsers } from "./users/link-users.js";
@@ -984,3 +988,4 @@ export {
   populationKonturH3,
   populationWorldpopH3,
 } from "./population-h3.js";
+export { updateUsersInfo } from "./users/update-users-info.js";
