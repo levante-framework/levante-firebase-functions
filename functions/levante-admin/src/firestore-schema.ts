@@ -373,6 +373,7 @@ export interface User {
     started: string[]; // Document IDs from `administrations` collection that are started
   };
   archived: boolean;
+  birthDateUpdatedAt?: Timestamp;
   birthMonth?: number;
   birthYear?: number;
   childIds?: string[]; // TODO: backfill `studentIds` -> `childIds` in db

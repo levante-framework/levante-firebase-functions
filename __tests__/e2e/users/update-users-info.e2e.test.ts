@@ -38,7 +38,10 @@ async function seedUser(
 
 describe("updateUsersInfo (e2e)", () => {
   let client: ReturnType<typeof getClient>;
-  let updateUsersInfo: HttpsCallable<UpdateUsersInfoParams, UpdateUsersInfoResult>;
+  let updateUsersInfo: HttpsCallable<
+    UpdateUsersInfoParams,
+    UpdateUsersInfoResult
+  >;
 
   beforeEach(async () => {
     await Promise.all([clearFirestore(), clearAuth()]);
@@ -159,5 +162,73 @@ describe("updateUsersInfo (e2e)", () => {
     expect(u1.get("archived")).toBe(true);
     // disabled was not in the payload, so it stays as seeded.
     expect(u1.get("disabled")).toBe(true);
+  });
+
+  it("rejects birthMonth/birthYear for non-child users", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    // Default seeded userType is "teacher", i.e. not a child.
+    await seedUser("u-teacher");
+
+    await expect(
+      updateUsersInfo({
+        users: [{ uid: "u-teacher", birthMonth: 5, birthYear: 2015 }],
+      })
+    ).rejects.toMatchObject({
+      code: "functions/invalid-argument",
+      details: { code: "child-only-fields", uids: ["u-teacher"] },
+    });
+
+    const doc = await adminDb.doc("users/u-teacher").get();
+    expect(doc.get("birthMonth")).toBeUndefined();
+    expect(doc.get("birthYear")).toBeUndefined();
+  });
+
+  it("checks permissions before the child-only birth-field guard", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    // Non-child user on a site the caller cannot update. The caller must not
+    // learn the user's type, so permission-denied takes precedence.
+    await seedUser("u-cross", { districts: { current: [SITE, OTHER_SITE] } });
+
+    await expect(
+      updateUsersInfo({ users: [{ uid: "u-cross", birthMonth: 5 }] })
+    ).rejects.toMatchObject({ code: "functions/permission-denied" });
+  });
+
+  it("updates birthMonth and birthYear for child users", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedUser("u-child", { userType: "student" });
+
+    const { data } = await updateUsersInfo({
+      users: [{ uid: "u-child", birthMonth: 5, birthYear: 2015 }],
+    });
+
+    expect(data).toEqual({
+      users: [{ uid: "u-child", birthMonth: 5, birthYear: 2015 }],
+    });
+
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("birthMonth")).toBe(5);
+    expect(child.get("birthYear")).toBe(2015);
+    expect(child.get("birthDateUpdatedAt")).toBeDefined();
+  });
+
+  it("does not stamp birthDateUpdatedAt when birth values are unchanged", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedUser("u-child", {
+      userType: "student",
+      birthMonth: 5,
+      birthYear: 2015,
+    });
+
+    // Resend identical birth values alongside a real flag change.
+    await updateUsersInfo({
+      users: [
+        { uid: "u-child", birthMonth: 5, birthYear: 2015, archived: true },
+      ],
+    });
+
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("archived")).toBe(true);
+    expect(child.get("birthDateUpdatedAt")).toBeUndefined();
   });
 });

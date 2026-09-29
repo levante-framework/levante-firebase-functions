@@ -1,4 +1,5 @@
 import {
+  type UpdateUsersInfoParams,
   UpdateUsersInfoParamsSchema,
   type UpdateUsersInfoResult,
 } from "@levante-framework/levante-zod";
@@ -8,6 +9,7 @@ import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import _chunk from "lodash-es/chunk.js";
+import type { User } from "../firestore-schema.js";
 import {
   buildPermissionsUserFromAuthRecord,
   ensurePermissionsLoaded,
@@ -15,9 +17,10 @@ import {
 } from "../utils/permission-helpers.js";
 
 /**
- * Callable that updates the `archived` and `disabled` flags on user docs. The
- * caller must have USERS/UPDATE permission on every site each target user
- * belongs to. Users missing either flag in the request are left untouched.
+ * Callable that updates the `archived`, `disabled`, `birthMonth`, and
+ * `birthYear` fields on user docs. The caller must have USERS/UPDATE permission
+ * on every site each target user belongs to. Each field is optional per user;
+ * any field omitted from the request is left untouched.
  */
 export const updateUsersInfo = onCall(
   async (req): Promise<UpdateUsersInfoResult> => {
@@ -94,12 +97,55 @@ export const updateUsersInfo = onCall(
       );
     }
 
-    for (const chunk of _chunk(users, 500)) {
+    const dataByUid = new Map(
+      snaps.map((snap) => [snap.id, snap.data() as Partial<User>])
+    );
+    const nonChildBirthFieldUids = users
+      .filter(
+        (user) =>
+          (user.birthMonth !== undefined || user.birthYear !== undefined) &&
+          dataByUid.get(user.uid)?.userType !== "student"
+      )
+      .map((user) => user.uid);
+    if (nonChildBirthFieldUids.length > 0) {
+      throw new HttpsError(
+        "invalid-argument",
+        "birthMonth and birthYear can only be set for child users",
+        {
+          code: "child-only-fields",
+          uids: nonChildBirthFieldUids,
+        }
+      );
+    }
+
+    for (const chunk of _chunk(
+      users,
+      500
+    ) as UpdateUsersInfoParams["users"][]) {
       const batch = db.batch();
       for (const user of chunk) {
+        const existing = dataByUid.get(user.uid);
         const update: Record<string, unknown> = {};
         if (user.archived !== undefined) update.archived = user.archived;
         if (user.disabled !== undefined) update.disabled = user.disabled;
+        let birthChanged = false;
+        if (
+          user.birthMonth !== undefined &&
+          user.birthMonth !== existing?.birthMonth
+        ) {
+          update.birthMonth = user.birthMonth;
+          birthChanged = true;
+        }
+        if (
+          user.birthYear !== undefined &&
+          user.birthYear !== existing?.birthYear
+        ) {
+          update.birthYear = user.birthYear;
+          birthChanged = true;
+        }
+        if (birthChanged) {
+          update.birthDateUpdatedAt = FieldValue.serverTimestamp();
+        }
         if (Object.keys(update).length === 0) continue;
         update.updatedAt = FieldValue.serverTimestamp();
         batch.update(usersRef.doc(user.uid), update);
