@@ -17,6 +17,8 @@ export ROAR_ADMIN_FIREBASE_CREDENTIALS=path/to/credentials/for/admin/project.jso
 export ROAR_ASSESSMENT_FIREBASE_CREDENTIALS=path/to/credentials/for/assessment/project.json`
 ```
 
+One-off Firestore migrations live in [`migrations/`](./migrations/) (see that folder's README). They are run with `npx tsx`, not npm scripts.
+
 ## Functions
 
 This section describes each of the npm scripts available to you.

@@ -9,3 +9,4 @@ typings/
 node_modules/
 .DS_Store
 credentials/
+.secret.local
