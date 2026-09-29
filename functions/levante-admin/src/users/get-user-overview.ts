@@ -168,12 +168,16 @@ export const getUserOverview = onCall(
       });
     }
 
+    const birthMonth = userSnap.get("birthMonth");
+    const birthYear = userSnap.get("birthYear");
     const childLabelIndex = userSnap.get("childLabelIndex");
 
     return {
       uid: targetUid,
       email: String(userSnap.get("email")),
       userType,
+      ...(typeof birthMonth === "number" ? { birthMonth } : {}),
+      ...(typeof birthYear === "number" ? { birthYear } : {}),
       ...(typeof childLabelIndex === "number" ? { childLabelIndex } : {}),
       archived: userSnap.get("archived") === true,
       disabled: userSnap.get("disabled") === true,
