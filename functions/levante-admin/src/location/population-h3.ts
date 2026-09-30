@@ -17,7 +17,10 @@ const populationRequestOptions = {
 };
 
 function sendJson(res: Response, statusCode: number, payload: unknown): void {
-  res.status(statusCode).set("Content-Type", "application/json").send(JSON.stringify(payload));
+  res
+    .status(statusCode)
+    .set("Content-Type", "application/json")
+    .send(JSON.stringify(payload));
 }
 
 function rejectNonGet(req: Request, res: Response): boolean {
@@ -29,73 +32,91 @@ function rejectNonGet(req: Request, res: Response): boolean {
   return false;
 }
 
-export const populationKonturH3 = onRequest(populationRequestOptions, async (req, res) => {
-  if (rejectNonGet(req, res)) return;
+export const populationKonturH3 = onRequest(
+  populationRequestOptions,
+  async (req, res) => {
+    if (rejectNonGet(req, res)) return;
 
-  try {
-    const cellId = String(req.query?.cellId || "").trim();
-    const resolution = parseResolution(req.query?.resolution);
-    const worldpopYear = parsePositiveInt(req.query?.year, 2020);
-    if (!cellId || resolution == null) {
-      sendJson(res, 400, { success: false, error: "Missing/invalid cellId or resolution" });
-      return;
-    }
+    try {
+      const cellId = String(req.query?.cellId || "").trim();
+      const resolution = parseResolution(req.query?.resolution);
+      const worldpopYear = parsePositiveInt(req.query?.year, 2020);
+      if (!cellId || resolution == null) {
+        sendJson(res, 400, {
+          success: false,
+          error: "Missing/invalid cellId or resolution",
+        });
+        return;
+      }
 
-    const konturPopulation = await resolveKonturPopulation(cellId, resolution);
-    if (typeof konturPopulation === "number") {
+      const konturPopulation = await resolveKonturPopulation(
+        cellId,
+        resolution
+      );
+      if (typeof konturPopulation === "number") {
+        sendJson(res, 200, {
+          success: true,
+          source: "kontur",
+          population: konturPopulation,
+          resolution,
+          cellId,
+          cachePath: resolveShardUrlForCell(cellId),
+        });
+        return;
+      }
+
+      const polygon = buildCellPolygon(cellId);
+      const worldpopPopulation = await queryWorldPopForPolygon(
+        polygon,
+        worldpopYear
+      );
       sendJson(res, 200, {
         success: true,
-        source: "kontur",
-        population: konturPopulation,
+        source: "worldpop",
+        fallbackFrom: "kontur",
+        population: Math.round(worldpopPopulation),
         resolution,
         cellId,
-        cachePath: resolveShardUrlForCell(cellId),
       });
-      return;
+    } catch (error) {
+      sendJson(res, 500, {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
     }
-
-    const polygon = buildCellPolygon(cellId);
-    const worldpopPopulation = await queryWorldPopForPolygon(polygon, worldpopYear);
-    sendJson(res, 200, {
-      success: true,
-      source: "worldpop",
-      fallbackFrom: "kontur",
-      population: Math.round(worldpopPopulation),
-      resolution,
-      cellId,
-    });
-  } catch (error) {
-    sendJson(res, 500, {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
   }
-});
+);
 
-export const populationWorldpopH3 = onRequest(populationRequestOptions, async (req, res) => {
-  if (rejectNonGet(req, res)) return;
+export const populationWorldpopH3 = onRequest(
+  populationRequestOptions,
+  async (req, res) => {
+    if (rejectNonGet(req, res)) return;
 
-  try {
-    const cellId = String(req.query?.cellId || "").trim();
-    const resolution = parseResolution(req.query?.resolution);
-    const worldpopYear = parsePositiveInt(req.query?.year, 2020);
-    if (!cellId || resolution == null) {
-      sendJson(res, 400, { success: false, error: "Missing/invalid cellId or resolution" });
-      return;
+    try {
+      const cellId = String(req.query?.cellId || "").trim();
+      const resolution = parseResolution(req.query?.resolution);
+      const worldpopYear = parsePositiveInt(req.query?.year, 2020);
+      if (!cellId || resolution == null) {
+        sendJson(res, 400, {
+          success: false,
+          error: "Missing/invalid cellId or resolution",
+        });
+        return;
+      }
+      const polygon = buildCellPolygon(cellId);
+      const population = await queryWorldPopForPolygon(polygon, worldpopYear);
+      sendJson(res, 200, {
+        success: true,
+        source: "worldpop",
+        population: Math.round(population),
+        resolution,
+        cellId,
+      });
+    } catch (error) {
+      sendJson(res, 500, {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      });
     }
-    const polygon = buildCellPolygon(cellId);
-    const population = await queryWorldPopForPolygon(polygon, worldpopYear);
-    sendJson(res, 200, {
-      success: true,
-      source: "worldpop",
-      population: Math.round(population),
-      resolution,
-      cellId,
-    });
-  } catch (error) {
-    sendJson(res, 500, {
-      success: false,
-      error: error instanceof Error ? error.message : "Unknown error",
-    });
   }
-});
+);

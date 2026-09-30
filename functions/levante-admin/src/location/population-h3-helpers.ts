@@ -57,7 +57,9 @@ function getShardCacheLimit(): number {
   return Number.isFinite(raw) && raw > 0 ? Math.round(raw) : 64;
 }
 
-function parseKonturShardJson(json: { resolutions?: unknown }): KonturShard | null {
+function parseKonturShardJson(json: {
+  resolutions?: unknown;
+}): KonturShard | null {
   const resolutions = json?.resolutions;
   if (!resolutions || typeof resolutions !== "object") return null;
   return {
@@ -65,7 +67,9 @@ function parseKonturShardJson(json: { resolutions?: unknown }): KonturShard | nu
   };
 }
 
-async function loadKonturShardFromUrl(shardUrl: string): Promise<KonturShard | null> {
+async function loadKonturShardFromUrl(
+  shardUrl: string
+): Promise<KonturShard | null> {
   try {
     const response = await fetch(shardUrl);
     if (!response.ok) return null;
@@ -91,7 +95,9 @@ function resolveShardUrl(shardCellId: string): string {
   return `${getShardBaseUrl()}/${shardCellId}.json.gz`;
 }
 
-async function loadKonturShard(shardCellId: string): Promise<KonturShard | null> {
+async function loadKonturShard(
+  shardCellId: string
+): Promise<KonturShard | null> {
   const cacheKey = getShardCacheKey(shardCellId);
   const existing = konturShardCache.get(cacheKey);
   if (existing) {
@@ -147,7 +153,12 @@ function parseWorldPopSum(payload: Record<string, unknown>): number | null {
 }
 
 function parseWorldPopTaskId(payload: Record<string, unknown>): string | null {
-  const candidates = [payload?.taskid, payload?.taskId, payload?.task_id, payload?.id];
+  const candidates = [
+    payload?.taskid,
+    payload?.taskId,
+    payload?.task_id,
+    payload?.id,
+  ];
   for (let i = 0; i < candidates.length; i += 1) {
     const value = String(candidates[i] || "").trim();
     if (value) return value;
@@ -181,15 +192,22 @@ export async function queryWorldPopForPolygon(
   }
 
   for (let attempt = 0; attempt < 8; attempt += 1) {
-    const taskResponse = await fetch(`${WORLDPOP_TASK_URL}/${encodeURIComponent(taskId)}`);
+    const taskResponse = await fetch(
+      `${WORLDPOP_TASK_URL}/${encodeURIComponent(taskId)}`
+    );
     if (!taskResponse.ok) {
       throw new Error(`WorldPop task polling failed (${taskResponse.status})`);
     }
-    const taskPayload = (await taskResponse.json().catch(() => ({}))) as Record<string, unknown>;
+    const taskPayload = (await taskResponse.json().catch(() => ({}))) as Record<
+      string,
+      unknown
+    >;
     const sum = parseWorldPopSum(taskPayload);
     if (typeof sum === "number") return sum;
 
-    const status = String(taskPayload?.status || taskPayload?.state || "").toLowerCase();
+    const status = String(
+      taskPayload?.status || taskPayload?.state || ""
+    ).toLowerCase();
     if (status.includes("failed") || status.includes("error")) {
       throw new Error(`WorldPop task ${taskId} failed`);
     }
