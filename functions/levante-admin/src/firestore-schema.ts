@@ -1,3 +1,4 @@
+import type { CoarseLocation } from "@levante-framework/levante-zod";
 import * as admin from "firebase-admin";
 
 // Type alias for Firestore Timestamp
@@ -386,6 +387,7 @@ export interface User {
   groups: OrgAssociationMap;
   idHash?: string;
   lastChildLabelIndex?: number; // only for caregivers; last minted childLabelIndex (omit if none)
+  location?: CoarseLocation;
   parentIds?: string[];
   roles: { siteId: string; role: string; siteName: string }[];
   schools: OrgAssociationMap;
@@ -396,7 +398,6 @@ export interface User {
   testData?: boolean;
   uid?: string;
   updatedAt: Timestamp;
-  location?: LocationV1;
 }
 
 // Interface for the assignments subcollection of `users`
@@ -650,19 +651,4 @@ export interface TrialDoc {
   response?: string | number;
   responseType?: string;
   trialIndex?: number;
-}
-
-export interface LocationV1 {
-  schemaVersion: 'location_v1';
-    latLon: {
-      lat: number;
-      lon: number;
-      source: 'h3_center';
-    };
-    scheme: 'h3_v1';
-    h3CellId: string;
-    h3Cellresolution: number;
-    populationThreshold: number;
-    populationSource: 'kontur' | 'worldpop' | 'unknown';
-    computedAt: string;
 }
