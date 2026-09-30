@@ -115,9 +115,34 @@ service cloud.firestore {
           && resource.data.parentIds.hasAny([getUid()]);
       }
 
+      function targetUserData() {
+        return get(/databases/$(database)/documents/users/$(uid)).data;
+      }
+
+      // Admin accounts leave districts.current empty and record their site membership
+      // only in roles[].siteId. Bounded to ten entries to match _anySiteWithRole.
+      function siteIdsFromRoles(roles) {
+        return [
+          roles.size() > 0 ? roles[0].get('siteId', 'nullId') : 'nullId',
+          roles.size() > 1 ? roles[1].get('siteId', 'nullId') : 'nullId',
+          roles.size() > 2 ? roles[2].get('siteId', 'nullId') : 'nullId',
+          roles.size() > 3 ? roles[3].get('siteId', 'nullId') : 'nullId',
+          roles.size() > 4 ? roles[4].get('siteId', 'nullId') : 'nullId',
+          roles.size() > 5 ? roles[5].get('siteId', 'nullId') : 'nullId',
+          roles.size() > 6 ? roles[6].get('siteId', 'nullId') : 'nullId',
+          roles.size() > 7 ? roles[7].get('siteId', 'nullId') : 'nullId',
+          roles.size() > 8 ? roles[8].get('siteId', 'nullId') : 'nullId',
+          roles.size() > 9 ? roles[9].get('siteId', 'nullId') : 'nullId'
+        ];
+      }
+
       // TARGET USER SITES (aka districts)
       function getTargetUserSites() {
-        return get(/databases/$(database)/documents/users/$(uid)).data.get(['districts', 'current'], []);
+        let targetData = targetUserData();
+        let districtSites = targetData.get(['districts', 'current'], []);
+        let roles = targetData.get('roles', []);
+        return districtSites.size() > 0 ? districtSites
+          : (roles.size() > 0 ? siteIdsFromRoles(roles) : []);
       }
 
       function canReadUser() {
