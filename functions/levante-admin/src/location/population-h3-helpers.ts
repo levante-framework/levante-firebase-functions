@@ -8,6 +8,9 @@ const WORLDPOP_TASK_URL = "https://api.worldpop.org/v1/tasks";
 const DEFAULT_SHARD_BASE_URL =
   "https://storage.googleapis.com/levante-assets-dev/maps/kontur-h3-r5";
 
+const WORLDPOP_POLL_ATTEMPTS = 12;
+const WORLDPOP_POLL_INTERVAL_MS = 5000;
+
 const konturH3CacheUrl = defineString("KONTUR_H3_CACHE_URL", {
   default: DEFAULT_SHARD_BASE_URL,
 });
@@ -191,7 +194,7 @@ export async function queryWorldPopForPolygon(
     throw new Error("WorldPop response missing stats and task id");
   }
 
-  for (let attempt = 0; attempt < 8; attempt += 1) {
+  for (let attempt = 0; attempt < WORLDPOP_POLL_ATTEMPTS; attempt += 1) {
     const taskResponse = await fetch(
       `${WORLDPOP_TASK_URL}/${encodeURIComponent(taskId)}`
     );
@@ -211,7 +214,8 @@ export async function queryWorldPopForPolygon(
     if (status.includes("failed") || status.includes("error")) {
       throw new Error(`WorldPop task ${taskId} failed`);
     }
-    await wait(600);
+  
+    if (attempt < WORLDPOP_POLL_ATTEMPTS - 1) await wait(WORLDPOP_POLL_INTERVAL_MS);
   }
 
   throw new Error(`WorldPop task ${taskId} timed out`);

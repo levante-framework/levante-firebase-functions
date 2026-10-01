@@ -1,4 +1,4 @@
-import { onRequest } from "firebase-functions/v2/https";
+import { onRequest, type HttpsOptions } from "firebase-functions/v2/https";
 import type { Request, Response } from "express";
 import {
   buildCellPolygon,
@@ -9,11 +9,11 @@ import {
   resolveShardUrlForCell,
 } from "./population-h3-helpers.js";
 
-const populationRequestOptions = {
+const populationRequestOptions: HttpsOptions = {
   cors: true,
-  invoker: "public" as const,
-  timeoutSeconds: 60,
-  memory: "256MiB" as const,
+  invoker: "public",
+  timeoutSeconds: 90,
+  memory: "256MiB",
 };
 
 function sendJson(res: Response, statusCode: number, payload: unknown): void {

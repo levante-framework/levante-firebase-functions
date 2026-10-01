@@ -1,7 +1,7 @@
 import axios from "axios";
 import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions/v2";
-import { onRequest } from "firebase-functions/v2/https";
+import { onRequest, type HttpsOptions } from "firebase-functions/v2/https";
 import type { Request, Response } from "express";
 
 const cartoBasemapApiKey = defineSecret("CARTO_BASEMAP_API_KEY");
@@ -17,6 +17,14 @@ type ParsedTilePath = {
   x: number;
   y: number;
   scale: "" | "@2x";
+};
+
+const cartoRequestOptions: HttpsOptions = {
+  cors: true,
+  invoker: "public",
+  timeoutSeconds: 60,
+  memory: "256MiB",
+  secrets: [cartoBasemapApiKey]
 };
 
 function parseTilePath(rawPath: string): ParsedTilePath | null {
@@ -59,7 +67,7 @@ function buildCartoUpstreamUrl(tile: ParsedTilePath, apiKey: string): string {
 }
 
 export const cartoBasemapTile = onRequest(
-  { secrets: [cartoBasemapApiKey] },
+  cartoRequestOptions,
   async (req: Request, res: Response) => {
     if (req.method !== "GET") {
       res.set("Allow", "GET");
@@ -106,7 +114,14 @@ export const cartoBasemapTile = onRequest(
       res.set("Cache-Control", cacheControl);
       res.status(200).send(Buffer.from(upstream.data));
     } catch (error) {
-      logger.error("Carto basemap proxy failed", { error });
+      logger.error("Carto basemap proxy failed", { 
+        message: error instanceof Error ? error.message : String(error),
+        code: axios.isAxiosError(error) ? error.code : undefined,
+        z: tile.z,
+        x: tile.x,
+        y: tile.y,
+      });
+      
       res.status(502).send("Bad Gateway");
     }
   }
