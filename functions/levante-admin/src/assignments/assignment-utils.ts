@@ -34,9 +34,9 @@ import {
   summarizeAssessmentsForLog,
   summarizeIdListForLog,
 } from "../utils/logging.js";
-import type { AdminStatsBuffer } from "./assignment-sync-in-transaction.js";
+import type { AdminStatsBuffer } from "./admin-stats-buffer.js";
+import { AdminStatsBufferRegistry } from "./admin-stats-buffer.js";
 import {
-  AdminStatsBufferRegistry,
   syncOnAssignmentCreated,
   syncOnAssignmentDeleted,
   syncOnAssignmentUpdated,

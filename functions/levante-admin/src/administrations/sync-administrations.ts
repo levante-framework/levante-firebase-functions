@@ -32,7 +32,7 @@ import {
   removeAssignmentFromUsers,
   updateAssignmentsForUserFromAdministrations,
 } from "../assignments/assignment-utils.js";
-import { AdminStatsBufferRegistry } from "../assignments/assignment-sync-in-transaction.js";
+import { AdminStatsBufferRegistry } from "../assignments/admin-stats-buffer.js";
 import {
   getAdministrationsFromOrgs,
   standardizeAdministrationOrgs,

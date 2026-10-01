@@ -3,18 +3,12 @@
  * Replaces event-driven onDocumentCreated/Updated/Deleted triggers with
  * atomic, inline sync that fails with the calling transaction.
  */
-import { logger } from "firebase-functions/v2";
-import type {
-  CollectionReference,
-  Firestore,
-  Transaction,
-} from "firebase-admin/firestore";
+import type { Transaction } from "firebase-admin/firestore";
 import { getFirestore, FieldValue, FieldPath } from "firebase-admin/firestore";
 import _reduce from "lodash-es/reduce.js";
 import _without from "lodash-es/without.js";
 import type { IOrgsList } from "../interfaces.js";
-
-type Status = "assigned" | "started" | "completed";
+import type { AdminStatsBuffer } from "./admin-stats-buffer.js";
 
 interface AssignmentData {
   assigningOrgs?: IOrgsList;
@@ -26,166 +20,6 @@ interface AssignmentData {
   dateAssigned?: Date;
   started?: boolean;
   completed?: boolean;
-}
-
-type OrgDelta = {
-  assignment: Partial<Record<Status, number>>;
-  tasks: Map<string, Partial<Record<Status, number>>>;
-};
-
-export type AdminStatsBuffer = {
-  recordIncrements: (
-    orgList: string[],
-    status: Status,
-    taskIds: string[],
-    incrementBy: number,
-    updateAssignmentTotal: boolean
-  ) => void;
-  flush: (transaction: Transaction) => void;
-};
-
-export function createAdminStatsBuffer(
-  completionCollectionRef: CollectionReference
-): AdminStatsBuffer {
-  const byOrg = new Map<string, OrgDelta>();
-
-  const getOrgDelta = (org: string): OrgDelta => {
-    let d = byOrg.get(org);
-    if (!d) {
-      d = { assignment: {}, tasks: new Map() };
-      byOrg.set(org, d);
-    }
-    return d;
-  };
-
-  return {
-    recordIncrements(
-      orgList: string[],
-      status: Status,
-      taskIds: string[],
-      incrementBy: number,
-      updateAssignmentTotal: boolean
-    ) {
-      for (const org of orgList) {
-        const orgDelta = getOrgDelta(org);
-        if (updateAssignmentTotal) {
-          orgDelta.assignment[status] =
-            (orgDelta.assignment[status] ?? 0) + incrementBy;
-        }
-        for (const taskId of taskIds) {
-          let taskDelta = orgDelta.tasks.get(taskId);
-          if (!taskDelta) {
-            taskDelta = {};
-            orgDelta.tasks.set(taskId, taskDelta);
-          }
-          taskDelta[status] = (taskDelta[status] ?? 0) + incrementBy;
-        }
-      }
-    },
-
-    flush(transaction: Transaction) {
-      for (const [org, delta] of byOrg) {
-        const data: Record<string, unknown> = {};
-        let hasIncrement = false;
-
-        const assignmentPayload: Record<string, unknown> = {};
-        for (const s of ["assigned", "started", "completed"] as const) {
-          const n = delta.assignment[s];
-          if (n !== undefined && n !== 0) {
-            assignmentPayload[s] = FieldValue.increment(n);
-            hasIncrement = true;
-          }
-        }
-        if (Object.keys(assignmentPayload).length > 0) {
-          data.assignment = assignmentPayload;
-        }
-
-        for (const [taskId, taskDelta] of delta.tasks) {
-          const taskPayload: Record<string, unknown> = {};
-          for (const s of ["assigned", "started", "completed"] as const) {
-            const n = taskDelta[s];
-            if (n !== undefined && n !== 0) {
-              taskPayload[s] = FieldValue.increment(n);
-              hasIncrement = true;
-            }
-          }
-          if (Object.keys(taskPayload).length > 0) {
-            data[taskId] = taskPayload;
-          }
-        }
-
-        if (!hasIncrement) {
-          continue;
-        }
-
-        data.updatedAt = FieldValue.serverTimestamp();
-        const completionDocRef = completionCollectionRef.doc(org);
-        const topLevelKeys = Object.keys(data);
-        const taskKeyCount = [...delta.tasks.keys()].filter((tid) => {
-          const td = delta.tasks.get(tid);
-          return (
-            td && Object.values(td).some((v) => v !== undefined && v !== 0)
-          );
-        }).length;
-        const estimatedTransforms =
-          1 +
-          Object.keys(assignmentPayload).length +
-          [...delta.tasks.values()].reduce(
-            (acc, td) =>
-              acc +
-              (["assigned", "started", "completed"] as const).filter(
-                (s) => td[s] !== undefined && td[s] !== 0
-              ).length,
-            0
-          );
-        if (org === "total" || taskKeyCount >= 200) {
-          logger.info(
-            "DIAG_STATS_MERGE: transaction.set merge on completion doc",
-            {
-              completionDocPath: completionDocRef.path,
-              org,
-              aggregatedFlush: true,
-              taskKeyCount,
-              topLevelFieldCount: topLevelKeys.length,
-              estimatedFieldTransformsLowerBound: estimatedTransforms,
-              firestoreFieldTransformLimit: 500,
-            }
-          );
-        }
-
-        transaction.set(completionDocRef, data, { merge: true });
-      }
-    },
-  };
-}
-
-export class AdminStatsBufferRegistry {
-  private readonly db: Firestore;
-  private readonly map = new Map<string, AdminStatsBuffer>();
-
-  constructor(db: Firestore) {
-    this.db = db;
-  }
-
-  forAdministration(administrationId: string): AdminStatsBuffer {
-    let b = this.map.get(administrationId);
-    if (!b) {
-      b = createAdminStatsBuffer(
-        this.db
-          .collection("administrations")
-          .doc(administrationId)
-          .collection("stats")
-      );
-      this.map.set(administrationId, b);
-    }
-    return b;
-  }
-
-  flush(transaction: Transaction): void {
-    for (const b of this.map.values()) {
-      b.flush(transaction);
-    }
-  }
 }
 
 const getOrgList = (assigningOrgs: IOrgsList | undefined): string[] => {
