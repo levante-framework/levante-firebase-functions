@@ -1,9 +1,20 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { syncOnAssignmentUpdated } from "../assignments/assignment-sync-in-transaction.js";
 import {
   buildReopenedCaregiverSurveyUpdates,
   isAssignmentOpen,
   reopenCaregiverSurveyAssignments,
 } from "./reopen-caregiver-survey-assignments.js";
+
+vi.mock("../assignments/assignment-sync-in-transaction.js", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("../assignments/assignment-sync-in-transaction.js")
+    >();
+  return { ...actual, syncOnAssignmentUpdated: vi.fn() };
+});
+
+const mockSyncOnAssignmentUpdated = vi.mocked(syncOnAssignmentUpdated);
 
 const now = new Date("2026-09-15T12:00:00.000Z");
 const opened = new Date("2026-09-01T00:00:00.000Z");
@@ -168,6 +179,10 @@ function firestoreStub() {
 }
 
 describe("reopenCaregiverSurveyAssignments", () => {
+  beforeEach(() => {
+    mockSyncOnAssignmentUpdated.mockReset();
+  });
+
   it("does not load assignments when no caregivers were newly linked", async () => {
     const transaction = { get: vi.fn(), update: vi.fn() };
     const db = { collection: vi.fn() };
@@ -221,6 +236,7 @@ describe("reopenCaregiverSurveyAssignments", () => {
     );
     expect(transaction.get).toHaveBeenCalledOnce();
     expect(transaction.update).not.toHaveBeenCalled();
+    expect(mockSyncOnAssignmentUpdated).not.toHaveBeenCalled();
   });
 
   it("reopens an open completed caregiver survey", async () => {
@@ -246,9 +262,31 @@ describe("reopenCaregiverSurveyAssignments", () => {
       now
     );
 
-    expect(transaction.update).toHaveBeenCalledWith(
-      assignmentRef,
-      expect.objectContaining({ completed: false })
+    const prevData = openAssignment();
+    const reopened = {
+      completed: false,
+      assessments: [
+        {
+          taskId: "caregiver-survey",
+          startedOn: new Date("2026-09-10T00:00:00.000Z"),
+        },
+      ],
+      progress: { caregiver_survey: "started" },
+    };
+
+    expect(mockSyncOnAssignmentUpdated).toHaveBeenCalledOnce();
+    const [, syncTransaction, caregiverUid, administrationId, prev, curr] =
+      mockSyncOnAssignmentUpdated.mock.calls[0];
+    expect(syncTransaction).toBe(transaction);
+    expect(caregiverUid).toBe("cg1");
+    expect(administrationId).toBe("survey-admin");
+    expect(prev).toEqual(prevData);
+    expect(curr).toEqual({ ...prevData, ...reopened });
+
+    expect(transaction.update).toHaveBeenCalledOnce();
+    expect(transaction.update).toHaveBeenCalledWith(assignmentRef, reopened);
+    expect(transaction.update.mock.calls[0][1].assessments[0]).not.toHaveProperty(
+      "completedOn"
     );
   });
 });
