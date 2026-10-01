@@ -463,4 +463,125 @@ describe("updateUsersInfo (e2e)", () => {
       .get();
     expect(assignment.exists).toBe(false);
   });
+
+  it("isolates per-child resync failures: a failing child is dropped while others persist", async () => {
+    await signInAs(client, "u-admin", {
+      useNewPermissions: true,
+      siteRoles: { [SITE]: ["site_admin"], [OTHER_SITE]: ["site_admin"] },
+    });
+    await seedAdministration("admin-agein", {
+      field: "age",
+      op: "GREATER_THAN_OR_EQUAL",
+      value: 8,
+    });
+    // Child A: district seeded, so its resync succeeds and creates the assignment.
+    await seedChild("u-ok", CURRENT_YEAR - 3);
+    // Child B: on a different site with no district doc, so its resync throws.
+    await seedUser("u-fail", {
+      userType: "student",
+      birthMonth: BIRTH_MONTH,
+      birthYear: CURRENT_YEAR - 3,
+      districts: { current: [OTHER_SITE] },
+    });
+
+    const { data } = await updateUsersInfo({
+      users: [
+        { uid: "u-ok", birthYear: CURRENT_YEAR - 10 },
+        { uid: "u-fail", birthYear: CURRENT_YEAR - 10 },
+      ],
+    });
+
+    // Only the failing child is dropped; request order is preserved.
+    expect(data.users).toEqual([{ uid: "u-ok", birthYear: CURRENT_YEAR - 10 }]);
+
+    // Child A fully applied (field change + assignment) in its own transaction.
+    const ok = await adminDb.doc("users/u-ok").get();
+    expect(ok.get("birthYear")).toBe(CURRENT_YEAR - 10);
+    expect(ok.get("birthDateUpdatedAt")).toBeDefined();
+    const okAssignment = await adminDb
+      .doc("users/u-ok/assignments/admin-agein")
+      .get();
+    expect(okAssignment.exists).toBe(true);
+
+    // Child B fully rolled back; one child's failure cannot affect another's.
+    const fail = await adminDb.doc("users/u-fail").get();
+    expect(fail.get("birthYear")).toBe(CURRENT_YEAR - 3);
+    expect(fail.get("birthDateUpdatedAt")).toBeUndefined();
+  });
+
+  it("commits batched flag-only updates even when a separate child's resync fails", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedAdministration("admin-agein", {
+      field: "age",
+      op: "GREATER_THAN_OR_EQUAL",
+      value: 8,
+    });
+    // Flag-only user: no birth change, so it commits via the batch path.
+    await seedUser("u-flag");
+    // Birth child with no district doc: its resync transaction throws.
+    await seedChild("u-child", CURRENT_YEAR - 3, { seedDistrict: false });
+
+    const { data } = await updateUsersInfo({
+      users: [
+        { uid: "u-flag", archived: true },
+        { uid: "u-child", birthYear: CURRENT_YEAR - 10 },
+      ],
+    });
+
+    // The failed birth child is dropped; the batched user remains.
+    expect(data.users).toEqual([{ uid: "u-flag", archived: true }]);
+
+    // Batched flag change persisted (committed before the resync pass).
+    const flag = await adminDb.doc("users/u-flag").get();
+    expect(flag.get("archived")).toBe(true);
+
+    // Birth child fully rolled back.
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("birthYear")).toBe(CURRENT_YEAR - 3);
+    expect(child.get("birthDateUpdatedAt")).toBeUndefined();
+  });
+
+  it("applies archived/disabled alongside the birth change in the resync transaction", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedAdministration("admin-agein", {
+      field: "age",
+      op: "GREATER_THAN_OR_EQUAL",
+      value: 8,
+    });
+    await seedChild("u-child", CURRENT_YEAR - 3);
+
+    const { data } = await updateUsersInfo({
+      users: [
+        {
+          uid: "u-child",
+          birthYear: CURRENT_YEAR - 10,
+          archived: true,
+          disabled: true,
+        },
+      ],
+    });
+
+    expect(data.users).toEqual([
+      {
+        uid: "u-child",
+        birthYear: CURRENT_YEAR - 10,
+        archived: true,
+        disabled: true,
+      },
+    ]);
+
+    // A birth change routes the whole update through the resync transaction, so
+    // the flags must land together with the birth field (not via the batch).
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("birthYear")).toBe(CURRENT_YEAR - 10);
+    expect(child.get("archived")).toBe(true);
+    expect(child.get("disabled")).toBe(true);
+    expect(child.get("birthDateUpdatedAt")).toBeDefined();
+
+    // The assignment resync ran in that same transaction.
+    const assignment = await adminDb
+      .doc("users/u-child/assignments/admin-agein")
+      .get();
+    expect(assignment.exists).toBe(true);
+  });
 });
