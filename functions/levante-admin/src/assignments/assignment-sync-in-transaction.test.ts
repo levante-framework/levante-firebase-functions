@@ -255,4 +255,66 @@ describe("syncOnAssignmentUpdated", () => {
     );
     expect(transaction.update).not.toHaveBeenCalled();
   });
+
+  it("increments per-task assigned stats when a task is added to a kept assignment", async () => {
+    const { db, transaction, statsBuffer } = setup();
+
+    await syncOnAssignmentUpdated(
+      db,
+      transaction,
+      "user1",
+      "admin1",
+      {
+        assigningOrgs: { districts: ["site1"] },
+        assessments: [{ taskId: "taskA" }],
+      },
+      {
+        assigningOrgs: { districts: ["site1"] },
+        assessments: [{ taskId: "taskA" }, { taskId: "taskB" }],
+      },
+      statsBuffer
+    );
+
+    // Orgs are unchanged, so only the newly-added task's assigned count moves,
+    // and the assignment-level total is left alone (updateAssignmentTotal false).
+    expect(statsBuffer.recordIncrements).toHaveBeenCalledTimes(1);
+    expect(statsBuffer.recordIncrements).toHaveBeenCalledWith(
+      ["site1", "total"],
+      "assigned",
+      ["taskB"],
+      1,
+      false
+    );
+    expect(transaction.update).not.toHaveBeenCalled();
+  });
+
+  it("decrements per-task assigned stats when a task is dropped from a kept assignment", async () => {
+    const { db, transaction, statsBuffer } = setup();
+
+    await syncOnAssignmentUpdated(
+      db,
+      transaction,
+      "user1",
+      "admin1",
+      {
+        assigningOrgs: { districts: ["site1"] },
+        assessments: [{ taskId: "taskA" }, { taskId: "taskB" }],
+      },
+      {
+        assigningOrgs: { districts: ["site1"] },
+        assessments: [{ taskId: "taskA" }],
+      },
+      statsBuffer
+    );
+
+    expect(statsBuffer.recordIncrements).toHaveBeenCalledTimes(1);
+    expect(statsBuffer.recordIncrements).toHaveBeenCalledWith(
+      ["site1", "total"],
+      "assigned",
+      ["taskB"],
+      -1,
+      false
+    );
+    expect(transaction.update).not.toHaveBeenCalled();
+  });
 });

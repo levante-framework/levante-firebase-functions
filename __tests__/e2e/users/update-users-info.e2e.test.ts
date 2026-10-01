@@ -66,11 +66,19 @@ async function seedChild(
   });
 }
 
-// Seeds an open administration assigned to SITE with a single age-gated task,
+type SeedAssessment = {
+  taskId: string;
+  variantId: string;
+  variantName: string;
+  params?: Record<string, unknown>;
+  conditions?: { assigned?: AgeCondition; optional?: AgeCondition };
+};
+
+// Seeds an open administration assigned to SITE with the given assessments,
 // including the assignedOrgs subcollection doc the resync queries to discover it.
-async function seedAdministration(
+async function seedAdministrationWithAssessments(
   adminId: string,
-  assigned: AgeCondition
+  assessments: SeedAssessment[]
 ): Promise<void> {
   await adminDb.doc(`administrations/${adminId}`).set({
     name: adminId,
@@ -88,15 +96,7 @@ async function seedAdministration(
     legal: {},
     sequential: false,
     testData: false,
-    assessments: [
-      {
-        taskId: "task-1",
-        variantId: "variant-1",
-        variantName: "Variant 1",
-        params: {},
-        conditions: { assigned },
-      },
-    ],
+    assessments: assessments.map((a) => ({ params: {}, ...a })),
   });
   await adminDb.doc(`administrations/${adminId}/assignedOrgs/${SITE}`).set({
     administrationId: adminId,
@@ -112,6 +112,21 @@ async function seedAdministration(
     testData: false,
     timestamp: new Date(),
   });
+}
+
+// Seeds an open administration assigned to SITE with a single age-gated task.
+async function seedAdministration(
+  adminId: string,
+  assigned: AgeCondition
+): Promise<void> {
+  await seedAdministrationWithAssessments(adminId, [
+    {
+      taskId: "task-1",
+      variantId: "variant-1",
+      variantName: "Variant 1",
+      conditions: { assigned },
+    },
+  ]);
 }
 
 // Seeds an existing assignment for a child, as prepareNewAssignment would have
@@ -583,5 +598,62 @@ describe("updateUsersInfo (e2e)", () => {
       .doc("users/u-child/assignments/admin-agein")
       .get();
     expect(assignment.exists).toBe(true);
+  });
+
+  it("increments per-task assigned stats when a birth change adds a task to a kept assignment", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    // task-1 is unconditional; task-2 is gated on age >= 8.
+    await seedAdministrationWithAssessments("admin-twotask", [
+      { taskId: "task-1", variantId: "variant-1", variantName: "Variant 1" },
+      {
+        taskId: "task-2",
+        variantId: "variant-2",
+        variantName: "Variant 2",
+        conditions: {
+          assigned: { field: "age", op: "GREATER_THAN_OR_EQUAL", value: 8 },
+        },
+      },
+    ]);
+    // Age 3: only task-1 qualifies, so the assignment already exists with task-1.
+    await seedChild("u-child", CURRENT_YEAR - 3);
+    await seedOpenAssignment("u-child", "admin-twotask");
+    // Baseline stats as they'd stand after that assignment was created.
+    await adminDb.doc(`administrations/admin-twotask/stats/${SITE}`).set({
+      assignment: { assigned: 1 },
+      "task-1": { assigned: 1 },
+    });
+    await adminDb.doc("administrations/admin-twotask/stats/total").set({
+      assignment: { assigned: 1 },
+      "task-1": { assigned: 1 },
+    });
+
+    await updateUsersInfo({
+      users: [{ uid: "u-child", birthYear: CURRENT_YEAR - 10 }],
+    });
+
+    // task-2 was appended to the kept assignment (not a new assignment).
+    const assignment = await adminDb
+      .doc("users/u-child/assignments/admin-twotask")
+      .get();
+    const taskIds = (
+      assignment.get("assessments") as Array<{ taskId: string }>
+    ).map((a) => a.taskId);
+    expect(taskIds).toContain("task-2");
+
+    // The newly-added task's assigned count moved on both the site and total
+    // docs, while the assignment-level total is left unchanged (the assignment
+    // itself still exists, so only per-task counts shift).
+    const siteStats = await adminDb
+      .doc(`administrations/admin-twotask/stats/${SITE}`)
+      .get();
+    expect(siteStats.get("task-2")).toEqual({ assigned: 1 });
+    expect(siteStats.get("task-1")).toEqual({ assigned: 1 });
+    expect(siteStats.get("assignment")).toEqual({ assigned: 1 });
+
+    const totalStats = await adminDb
+      .doc("administrations/admin-twotask/stats/total")
+      .get();
+    expect(totalStats.get("task-2")).toEqual({ assigned: 1 });
+    expect(totalStats.get("assignment")).toEqual({ assigned: 1 });
   });
 });

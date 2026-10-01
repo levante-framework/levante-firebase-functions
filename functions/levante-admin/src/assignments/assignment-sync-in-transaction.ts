@@ -223,6 +223,31 @@ export const syncOnAssignmentUpdated = async (
     }
   }
 
+  // Tasks added to or removed from a kept assignment (e.g. an age condition
+  // newly qualifies/disqualifies a not-yet-started assessment) change per-task
+  // `assigned` counts but not the assignment-level total, since the assignment
+  // itself persists. updateAssignmentTotal is false here for that reason.
+  const addedAssignedTasks = _without(currTaskIds, ...prevTaskIds);
+  if (addedAssignedTasks.length > 0) {
+    statsBuffer.recordIncrements(
+      unchangedOrgs,
+      "assigned",
+      addedAssignedTasks,
+      1,
+      false
+    );
+  }
+  const removedAssignedTasks = _without(prevTaskIds, ...currTaskIds);
+  if (removedAssignedTasks.length > 0) {
+    statsBuffer.recordIncrements(
+      unchangedOrgs,
+      "assigned",
+      removedAssignedTasks,
+      -1,
+      false
+    );
+  }
+
   const addedStartedTasks = _without(currStartedTasks, ...prevStartedTasks);
   if (addedStartedTasks.length > 0) {
     statsBuffer.recordIncrements(
