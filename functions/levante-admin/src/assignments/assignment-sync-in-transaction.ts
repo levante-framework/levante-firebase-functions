@@ -172,7 +172,6 @@ export const syncOnAssignmentUpdated = async (
   const removedOrgs = _without(prevOrgList, ...orgList);
   const addedOrgs = _without(orgList, ...prevOrgList);
   const unchangedOrgs = _without(orgList, ...addedOrgs);
-  unchangedOrgs.push("total");
 
   if (removedOrgs.length > 0) {
     statsBuffer.recordIncrements(
