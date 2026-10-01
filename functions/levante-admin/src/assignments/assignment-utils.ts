@@ -133,7 +133,8 @@ const prepareNewAssignment = async (
   userUid: string,
   administrationId: string,
   administrationData: IAdministration,
-  transaction: Transaction
+  transaction: Transaction,
+  userDataOverride?: Record<string, unknown>
 ) => {
   const db = getFirestore();
   const userRef = db.collection("users").doc(userUid);
@@ -144,6 +145,9 @@ const prepareNewAssignment = async (
   // Now we need to get the intersection of all the assigningOrgs with all of the users orgs.
   const userData = await transaction.get(userRef);
   if (userData.exists) {
+    // Org membership always reflects the stored doc; only condition inputs
+    // (e.g. birthMonth/birthYear) may be overridden by the caller's request.
+    const effectiveUserData = { ...userData.data(), ...userDataOverride };
     const userOrgs = _pick(userData.data(), ORG_NAMES);
 
     const usersAssigningOrgs: IOrgsList = {};
@@ -188,7 +192,7 @@ const prepareNewAssignment = async (
         // assignedAssessments array.
         if (assigned) {
           pushAssessment = evaluateCondition({
-            userData: userData.data()! as IUserData,
+            userData: effectiveUserData as IUserData,
             condition: assigned,
           });
         } else {
@@ -202,7 +206,7 @@ const prepareNewAssignment = async (
         // the assessment to the user's assignedAssessments array.
         if (optional) {
           assignedAssessment.optional = evaluateCondition({
-            userData: userData.data()! as IUserData,
+            userData: effectiveUserData as IUserData,
             condition: optional,
           });
         }
@@ -230,7 +234,7 @@ const prepareNewAssignment = async (
       assessmentUid = null,
       email = null,
       username = null,
-    } = userData.data()!;
+    } = effectiveUserData;
 
     const userDataCopy = {
       ...studentData,
@@ -574,7 +578,8 @@ const readPhaseForUser = async (
   userUid: string,
   administrationId: string,
   administrationData: IAdministration,
-  transaction: Transaction
+  transaction: Transaction,
+  userDataOverride?: Record<string, unknown>
 ): Promise<PendingAssignmentWrite> => {
   const db = getFirestore();
   const userRef = db.collection("users").doc(userUid);
@@ -586,6 +591,9 @@ const readPhaseForUser = async (
     if (!userData.exists) {
       return { action: "skip" };
     }
+    // Org membership always reflects the stored doc; only condition inputs
+    // (e.g. birthMonth/birthYear) may be overridden by the caller's request.
+    const effectiveUserData = { ...userData.data(), ...userDataOverride };
     const userOrgs = _pick(userData.data(), ORG_NAMES);
     const usersAssigningOrgs: IOrgsList = {};
     for (const orgName of ORG_NAMES) {
@@ -634,7 +642,7 @@ const readPhaseForUser = async (
         let isOptional = false;
         if (conditions?.optional) {
           isOptional = evaluateCondition({
-            userData: userData.data()! as IUserData,
+            userData: effectiveUserData as IUserData,
             condition: conditions.optional,
           });
         }
@@ -655,7 +663,7 @@ const readPhaseForUser = async (
           let pushAssessment = false;
           if (assigned) {
             pushAssessment = evaluateCondition({
-              userData: userData.data()! as IUserData,
+              userData: effectiveUserData as IUserData,
               condition: assigned,
             });
           } else {
@@ -663,7 +671,7 @@ const readPhaseForUser = async (
           }
           if (optional) {
             assignedAssessment.optional = evaluateCondition({
-              userData: userData.data()! as IUserData,
+              userData: effectiveUserData as IUserData,
               condition: optional,
             });
           }
@@ -699,7 +707,7 @@ const readPhaseForUser = async (
       assessmentUid = null,
       email = null,
       username = null,
-    } = userData.data()!;
+    } = effectiveUserData;
     const userDataCopy = {
       ...studentData,
       name,
@@ -766,7 +774,8 @@ const readPhaseForUser = async (
       userUid,
       administrationId,
       administrationData,
-      transaction
+      transaction,
+      userDataOverride
     );
     if (newAssignmentRef && newAssignmentData) {
       return {
@@ -921,7 +930,8 @@ export const updateAssignmentsForUserFromAdministrations = async (
     administrationData: IAdministration;
   }>,
   transaction: Transaction,
-  statsRegistry: AdminStatsBufferRegistry
+  statsRegistry: AdminStatsBufferRegistry,
+  userDataOverride?: Record<string, unknown>
 ) => {
   const pendingWrites: PendingAssignmentWrite[] = [];
   for (const { administrationId, administrationData } of administrations) {
@@ -929,7 +939,8 @@ export const updateAssignmentsForUserFromAdministrations = async (
       userUid,
       administrationId,
       administrationData,
-      transaction
+      transaction,
+      userDataOverride
     );
     pendingWrites.push(pending);
   }
