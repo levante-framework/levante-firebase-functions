@@ -3,6 +3,7 @@ import { defineSecret } from "firebase-functions/params";
 import { logger } from "firebase-functions/v2";
 import { onRequest, type HttpsOptions } from "firebase-functions/v2/https";
 import type { Request, Response } from "express";
+import { assertAllowedReferrer } from "./helpers/location-proxy-guards.js";
 
 const cartoBasemapApiKey = defineSecret("CARTO_BASEMAP_API_KEY");
 
@@ -69,6 +70,8 @@ function buildCartoUpstreamUrl(tile: ParsedTilePath, apiKey: string): string {
 export const cartoBasemapTile = onRequest(
   cartoRequestOptions,
   async (req: Request, res: Response) => {
+    if (!assertAllowedReferrer(req, res)) return;
+
     if (req.method !== "GET") {
       res.set("Allow", "GET");
       res.status(405).send("Method Not Allowed");

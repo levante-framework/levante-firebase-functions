@@ -7,7 +7,8 @@ import {
   queryWorldPopForPolygon,
   resolveKonturPopulation,
   resolveShardUrlForCell,
-} from "./population-h3-helpers.js";
+} from "./helpers/population-h3-helpers.js";
+import { requireFirebaseUser } from "./helpers/location-proxy-guards.js";
 
 const populationRequestOptions: HttpsOptions = {
   cors: true,
@@ -36,6 +37,8 @@ export const populationKonturH3 = onRequest(
   populationRequestOptions,
   async (req, res) => {
     if (rejectNonGet(req, res)) return;
+
+    if (!(await requireFirebaseUser(req, res))) return;
 
     try {
       const cellId = String(req.query?.cellId || "").trim();
@@ -91,6 +94,8 @@ export const populationWorldpopH3 = onRequest(
   populationRequestOptions,
   async (req, res) => {
     if (rejectNonGet(req, res)) return;
+
+    if (!(await requireFirebaseUser(req, res))) return;
 
     try {
       const cellId = String(req.query?.cellId || "").trim();
