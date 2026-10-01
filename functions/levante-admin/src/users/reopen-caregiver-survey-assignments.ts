@@ -1,4 +1,9 @@
-import { type Firestore, type Timestamp } from "firebase-admin/firestore";
+import {
+  type Firestore,
+  type QueryDocumentSnapshot,
+  type Timestamp,
+  type Transaction,
+} from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import {
   AdminStatsBufferRegistry,
@@ -71,59 +76,60 @@ export function buildReopenedCaregiverSurveyUpdates(
   };
 }
 
+/**
+ * Reopen completed caregiver surveys on `transaction`.
+ * Reads assignment docs, so call this before any writes in that transaction.
+ */
 export async function reopenCaregiverSurveyAssignments(
   db: Firestore,
-  caregiverUids: string[]
+  transaction: Transaction,
+  caregiverUids: string[],
+  now: Date = new Date()
 ): Promise<void> {
-  const now = new Date();
   const uniqueUids = [...new Set(caregiverUids)];
   if (uniqueUids.length === 0) return;
 
+  const statsRegistry = new AdminStatsBufferRegistry(db);
+  const toReopen: {
+    caregiverUid: string;
+    snap: QueryDocumentSnapshot;
+    updates: Partial<Assignment>;
+  }[] = [];
+
   for (const caregiverUid of uniqueUids) {
-    const assignmentSnaps = await db
-      .collection("users")
-      .doc(caregiverUid)
-      .collection("assignments")
-      .get();
-
+    const assignmentSnaps = await transaction.get(
+      db.collection("users").doc(caregiverUid).collection("assignments")
+    );
     for (const snap of assignmentSnaps.docs) {
-      const preview = buildReopenedCaregiverSurveyUpdates(snap.data(), now);
-      if (!preview) continue;
-
-      await db.runTransaction(async (transaction) => {
-        const fresh = await transaction.get(snap.ref);
-        const prevData = fresh.data();
-        const updates = buildReopenedCaregiverSurveyUpdates(prevData, now);
-        if (!prevData || !updates) return;
-
-        const statsRegistry = new AdminStatsBufferRegistry(db);
-
-        await syncOnAssignmentUpdated(
-          db,
-          transaction,
-          caregiverUid,
-          snap.id,
-          prevData,
-          { ...prevData, ...updates },
-          statsRegistry.forAdministration(snap.id)
-        );
-
-        transaction.update(snap.ref, {
-          completed: updates.completed,
-          assessments: updates.assessments,
-          progress: updates.progress,
-        });
-
-        statsRegistry.flush(transaction);
-
-        logger.info(
-          "Reopened caregiver survey assignment after new child link",
-          {
-            caregiverUid,
-            administrationId: snap.id,
-          }
-        );
-      });
+      const updates = buildReopenedCaregiverSurveyUpdates(snap.data(), now);
+      if (!updates) continue;
+      toReopen.push({ caregiverUid, snap, updates });
     }
   }
+
+  for (const { caregiverUid, snap, updates } of toReopen) {
+    const prevData = snap.data();
+    await syncOnAssignmentUpdated(
+      db,
+      transaction,
+      caregiverUid,
+      snap.id,
+      prevData,
+      { ...prevData, ...updates },
+      statsRegistry.forAdministration(snap.id)
+    );
+
+    transaction.update(snap.ref, {
+      completed: updates.completed,
+      assessments: updates.assessments,
+      progress: updates.progress,
+    });
+
+    logger.info("Reopened caregiver survey assignment after new child link", {
+      caregiverUid,
+      administrationId: snap.id,
+    });
+  }
+
+  statsRegistry.flush(transaction);
 }

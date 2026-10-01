@@ -220,8 +220,6 @@ export const linkUsers = onCall(async (req): Promise<LinkUsersResult> => {
     await batch.commit();
   }
 
-  const newlyLinkedCaregiverUids = new Set<string>();
-
   // Link children to caregivers and teachers
   for (const user of users) {
     if (user.userType !== "child") continue;
@@ -230,7 +228,7 @@ export const linkUsers = onCall(async (req): Promise<LinkUsersResult> => {
     const requestedTeacherUids = user.teacherId.map((id) => idToUid[id]);
 
     try {
-      const newCaregiverUids = await db.runTransaction(async (transaction) => {
+      await db.runTransaction(async (transaction) => {
         // Collect child doc
         const childRef = usersRef.doc(user.uid);
         const childSnap = await transaction.get(childRef);
@@ -294,6 +292,14 @@ export const linkUsers = onCall(async (req): Promise<LinkUsersResult> => {
           )
         );
 
+        // Reads must finish before the link writes below. A failure here
+        // aborts the link, so a retry still sees these caregivers as new.
+        await reopenCaregiverSurveyAssignments(
+          db,
+          transaction,
+          newCaregiverUids
+        );
+
         // Update child document
         const childUpdate: Record<string, unknown> = {};
         if (requestedCaregiverUids.length > 0) {
@@ -327,13 +333,7 @@ export const linkUsers = onCall(async (req): Promise<LinkUsersResult> => {
             childIds: FieldValue.arrayUnion(user.uid),
           });
         }
-
-        return newCaregiverUids;
       });
-
-      for (const caregiverUid of newCaregiverUids) {
-        newlyLinkedCaregiverUids.add(caregiverUid);
-      }
     } catch (error) {
       if (error instanceof HttpsError) throw error;
       logger.error("Linking transaction failed", { uid: user.uid }, error);
@@ -342,21 +342,6 @@ export const linkUsers = onCall(async (req): Promise<LinkUsersResult> => {
         uid: user.uid,
       });
     }
-  }
-
-  try {
-    await reopenCaregiverSurveyAssignments(db, [...newlyLinkedCaregiverUids]);
-  } catch (error) {
-    logger.error(
-      "Failed to reopen caregiver survey assignments after linking",
-      { caregiverUids: [...newlyLinkedCaregiverUids] },
-      error
-    );
-    throw new HttpsError(
-      "internal",
-      "Failed to reopen caregiver survey assignments after linking",
-      { code: "reopen-survey" }
-    );
   }
 
   return {};

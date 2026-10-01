@@ -155,78 +155,100 @@ describe("buildReopenedCaregiverSurveyUpdates", () => {
   });
 });
 
+function firestoreStub() {
+  return {
+    collection: () => ({
+      doc: () => ({
+        collection: () => ({
+          doc: () => ({ path: "administrations/survey-admin/stats/total" }),
+        }),
+      }),
+    }),
+  };
+}
+
 describe("reopenCaregiverSurveyAssignments", () => {
   it("does not load assignments when no caregivers were newly linked", async () => {
+    const transaction = { get: vi.fn(), update: vi.fn() };
     const db = { collection: vi.fn() };
-    await reopenCaregiverSurveyAssignments(db as never, []);
+    await reopenCaregiverSurveyAssignments(
+      db as never,
+      transaction as never,
+      []
+    );
     expect(db.collection).not.toHaveBeenCalled();
+    expect(transaction.get).not.toHaveBeenCalled();
   });
 
   it("does not write when assignments are closed or the survey is incomplete", async () => {
-    const runTransaction = vi.fn();
-    const db = {
-      collection: vi.fn(() => ({
-        doc: () => ({
-          collection: () => ({
-            get: async () => ({
-              docs: [
-                {
-                  id: "closed-admin",
-                  data: () =>
-                    openAssignment({
-                      dateClosed: new Date("2026-09-14T00:00:00.000Z"),
-                    }),
-                  ref: {},
-                },
-                {
-                  id: "incomplete-admin",
-                  data: () =>
-                    openAssignment({
-                      completed: false,
-                      assessments: [
-                        {
-                          taskId: "caregiver-survey",
-                          startedOn: new Date("2026-09-10T00:00:00.000Z"),
-                        },
-                      ],
-                      progress: { caregiver_survey: "started" },
-                    }),
-                  ref: {},
-                },
-              ],
-            }),
-          }),
-        }),
+    const transaction = {
+      get: vi.fn(async () => ({
+        docs: [
+          {
+            id: "closed-admin",
+            data: () =>
+              openAssignment({
+                dateClosed: new Date("2026-09-14T00:00:00.000Z"),
+              }),
+            ref: {},
+          },
+          {
+            id: "incomplete-admin",
+            data: () =>
+              openAssignment({
+                completed: false,
+                assessments: [
+                  {
+                    taskId: "caregiver-survey",
+                    startedOn: new Date("2026-09-10T00:00:00.000Z"),
+                  },
+                ],
+                progress: { caregiver_survey: "started" },
+              }),
+            ref: {},
+          },
+        ],
       })),
-      runTransaction,
+      update: vi.fn(),
+      set: vi.fn(),
     };
 
-    await reopenCaregiverSurveyAssignments(db as never, ["cg1"], now);
-    expect(runTransaction).not.toHaveBeenCalled();
+    await reopenCaregiverSurveyAssignments(
+      firestoreStub() as never,
+      transaction as never,
+      ["cg1"],
+      now
+    );
+    expect(transaction.get).toHaveBeenCalledOnce();
+    expect(transaction.update).not.toHaveBeenCalled();
   });
 
   it("reopens an open completed caregiver survey", async () => {
-    const runTransaction = vi.fn();
-    const db = {
-      collection: vi.fn(() => ({
-        doc: () => ({
-          collection: () => ({
-            get: async () => ({
-              docs: [
-                {
-                  id: "survey-admin",
-                  data: () => openAssignment(),
-                  ref: { path: "users/cg1/assignments/survey-admin" },
-                },
-              ],
-            }),
-          }),
-        }),
+    const assignmentRef = { path: "users/cg1/assignments/survey-admin" };
+    const transaction = {
+      get: vi.fn(async () => ({
+        docs: [
+          {
+            id: "survey-admin",
+            data: () => openAssignment(),
+            ref: assignmentRef,
+          },
+        ],
       })),
-      runTransaction,
+      update: vi.fn(),
+      set: vi.fn(),
     };
 
-    await reopenCaregiverSurveyAssignments(db as never, ["cg1"], now);
-    expect(runTransaction).toHaveBeenCalledOnce();
+    await reopenCaregiverSurveyAssignments(
+      firestoreStub() as never,
+      transaction as never,
+      ["cg1"],
+      now
+    );
+
+    expect(transaction.update).toHaveBeenCalledWith(
+      assignmentRef,
+      expect.objectContaining({ completed: false })
+    );
   });
 });
