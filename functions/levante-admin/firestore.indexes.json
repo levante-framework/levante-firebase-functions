@@ -5,25 +5,6 @@
       "queryScope": "COLLECTION",
       "fields": [
         {
-          "fieldPath": "siteId",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "dateClosed",
-          "order": "ASCENDING"
-        },
-        {
-          "fieldPath": "__name__",
-          "order": "ASCENDING"
-        }
-      ],
-      "density": "SPARSE_ALL"
-    },
-    {
-      "collectionGroup": "administrations",
-      "queryScope": "COLLECTION",
-      "fields": [
-        {
           "fieldPath": "districts",
           "order": "ASCENDING"
         },
@@ -181,6 +162,25 @@
         },
         {
           "fieldPath": "name",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
+      "collectionGroup": "administrations",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "siteId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dateClosed",
           "order": "ASCENDING"
         },
         {
