@@ -75,6 +75,7 @@ export const processRemovedAdministration = async (
       orgs: prevOrgs,
       transaction,
       includeArchived: true, // `includeArchived` is true to remove assignments even from archived users
+      includeDisabled: true, // `includeDisabled` is true to remove assignments even from archived users
     });
 
     if (prevUsers.length <= MAX_TRANSACTIONS) {
@@ -132,6 +133,7 @@ export async function enqueueAddUpdateTasksForAdministration(
       orgs: minimalOrgs,
       transaction,
       includeArchived: false,
+      includeDisabled: false,
     });
   });
 
@@ -266,6 +268,7 @@ export const processModifiedAdministration = async (
         orgs: removedExhaustiveOrgs,
         transaction,
         includeArchived: true,
+        includeDisabled: true,
       });
       return remainingUsersToRemove.length;
     });
@@ -334,6 +337,23 @@ export const processUserAddedOrgs = async (
   });
   const db = getFirestore();
   await db.runTransaction(async (transaction) => {
+    const userDoc = await transaction.get(db.collection("users").doc(roarUid));
+    if (!userDoc.exists) return;
+
+    const userData = userDoc.data() as
+      | { archived?: boolean; disabled?: boolean }
+      | undefined;
+
+    if (userData?.archived === true || userData?.disabled === true) {
+      logger.debug("Skipping assignment sync for inactive user", {
+        userId: roarUid,
+        archived: userData.archived === true,
+        disabled: userData.disabled === true,
+      });
+
+      return;
+    }
+
     const statsRegistry = new AdminStatsBufferRegistry(db);
     const addedExhaustiveOrgs = await getExhaustiveOrgs({
       orgs: addedOrgs,
