@@ -13,7 +13,17 @@ vi.mock(
     const actual = await importOriginal<
       typeof import("../assignments/assignment-sync-in-transaction.js")
     >();
-    return { ...actual, recordAssignmentUpdatedStats: vi.fn() };
+    class AdminStatsBufferRegistry {
+      forAdministration() {
+        return { recordIncrements() {}, flush() {} };
+      }
+      flush() {}
+    }
+    return {
+      ...actual,
+      recordAssignmentUpdatedStats: vi.fn(),
+      AdminStatsBufferRegistry,
+    };
   }
 );
 
