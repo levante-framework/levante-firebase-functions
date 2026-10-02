@@ -97,8 +97,15 @@ function main() {
     process.exit(2);
   }
 
-  const left = canonicalizeIndexSpec(readSpec(leftPath));
-  const right = canonicalizeIndexSpec(readSpec(rightPath));
+  let left;
+  let right;
+  try {
+    left = canonicalizeIndexSpec(readSpec(leftPath));
+    right = canonicalizeIndexSpec(readSpec(rightPath));
+  } catch (error) {
+    console.error(`Failed to read index specs: ${error.message}`);
+    process.exit(2);
+  }
 
   if (JSON.stringify(left) === JSON.stringify(right)) {
     console.log("Index specs match.");
