@@ -314,4 +314,89 @@ describe("loadFormDefinitions (e2e)", () => {
       savedResponses: [],
     });
   });
+
+  it("returns draft answers saved for the current site form version", async () => {
+    await signInAs(client, UID, SITE_ADMIN_CLAIMS);
+    await seedSite();
+    await seedForm(
+      "siteInformation",
+      { currentVersionId: "v1" },
+      { v1: siteVersion }
+    );
+    await adminDb.doc(`districts/${SITE}/siteInformation/v1`).set({
+      sampleApproach: ["other"],
+      siteId: SITE,
+      formVersion: "v1",
+      status: "draft",
+    });
+
+    const { data } = await loadFormDefinitions(validSiteLoad());
+    expect(data.savedResponses).toEqual([
+      {
+        formVersion: "v1",
+        status: "draft",
+        responses: { sampleApproach: ["other"] },
+      },
+    ]);
+  });
+
+  it("returns complete answers saved for the current school form version", async () => {
+    await signInAs(client, UID, SITE_ADMIN_CLAIMS);
+    await seedSchool();
+    await seedForm(
+      "schoolInformation",
+      { currentVersionId: "v1" },
+      {
+        v1: {
+          registered: true,
+          versionNumber: 1,
+          generalPrompt: "",
+          sectionInfo: [],
+          fullFields: schoolFields,
+        },
+      }
+    );
+    await adminDb.doc(`schools/${SCHOOL}/schoolInformation/v1`).set({
+      numTeachers: "10-20",
+      schoolId: SCHOOL,
+      siteId: SITE,
+      siteName: "Site 1",
+      schoolPseudonym: "School 1",
+      formVersion: "v1",
+      status: "complete",
+    });
+
+    const { data } = await loadFormDefinitions({
+      orgType: "school",
+      orgId: SCHOOL,
+    });
+    expect(data.savedResponses).toEqual([
+      {
+        formVersion: "v1",
+        status: "complete",
+        responses: { numTeachers: "10-20" },
+      },
+    ]);
+  });
+
+  it("does not return answers saved for an older form version", async () => {
+    await signInAs(client, UID, SITE_ADMIN_CLAIMS);
+    await seedSite();
+    await seedForm(
+      "siteInformation",
+      { currentVersionId: "v2" },
+      {
+        v1: siteVersion,
+        v2: { ...siteVersion, versionNumber: 2 },
+      }
+    );
+    await adminDb.doc(`districts/${SITE}/siteInformation/v1`).set({
+      sampleApproach: ["other"],
+      status: "draft",
+    });
+
+    const { data } = await loadFormDefinitions(validSiteLoad());
+    expect(data.versionId).toBe("v2");
+    expect(data.savedResponses).toEqual([]);
+  });
 });
