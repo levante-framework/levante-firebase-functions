@@ -143,20 +143,15 @@ jobs:
         run: |
           cd functions/levante-admin
 
-          # Function to normalize JSON for comparison
-          normalize_json() {
-            jq -S '.' "$1" | sed 's/[[:space:]]//g'
-          }
-
-          # Normalize index files for comparison
-          normalize_json "firestore.indexes.json" > local-normalized.json
-          normalize_json "remote-indexes.json" > remote-normalized.json
-
-          # Compare normalized files for index drift
-          if cmp -s local-normalized.json remote-normalized.json; then
+          if node scripts/compare-indexes.js firestore.indexes.json remote-indexes.json; then
             echo "has-changes=false" >> "$GITHUB_OUTPUT"
             echo "No index differences detected between this branch and ${{ steps.resolve-target.outputs.project_id }}."
           else
+            status=$?
+            if [ "$status" -ne 1 ]; then
+              echo "::error::Failed to compare Firestore indexes (exit $status)."
+              exit "$status"
+            fi
             echo "has-changes=true" >> "$GITHUB_OUTPUT"
             echo "Index differences detected — deploy will apply changes."
           fi
@@ -187,5 +182,5 @@ jobs:
         if: always()
         run: |
           rm -f "$RUNNER_TEMP/firebase-sa.json"
-          rm -f functions/levante-admin/remote-indexes.json functions/levante-admin/local-normalized.json functions/levante-admin/remote-normalized.json
+          rm -f functions/levante-admin/remote-indexes.json
         shell: bash

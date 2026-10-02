@@ -3,8 +3,3 @@
 
 # Ignore node modules
 **/node_modules
-
-# CI / validate-indexes.sh comparison outputs (minified JSON; removed after workflow)
-local-normalized.json
-remote-normalized.json
-current-indexes.json
