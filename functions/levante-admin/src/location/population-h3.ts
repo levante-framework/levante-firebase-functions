@@ -58,7 +58,7 @@ export const populationKonturH3 = onRequest(
 
     if (!(await requireFirebaseUser(req, res))) return;
 
-    if (!validateCell) return;
+    if (!validateCell(req, res)) return;
 
     try {
       const cellId = String(req.query?.cellId || "").trim();
@@ -117,7 +117,7 @@ export const populationWorldpopH3 = onRequest(
 
     if (!(await requireFirebaseUser(req, res))) return;
 
-    if (!validateCell) return;
+    if (!validateCell(req, res)) return;
 
     try {
       const cellId = String(req.query?.cellId || "").trim();
