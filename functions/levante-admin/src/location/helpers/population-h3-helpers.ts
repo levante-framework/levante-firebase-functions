@@ -5,15 +5,10 @@ import { gunzipSync } from "node:zlib";
 const WORLDPOP_STATS_URL = "https://api.worldpop.org/v1/services/stats";
 const WORLDPOP_TASK_URL = "https://api.worldpop.org/v1/tasks";
 
-const DEFAULT_SHARD_BASE_URL =
-  "https://storage.googleapis.com/levante-assets-dev/maps/kontur-h3-r5";
-
 const WORLDPOP_POLL_ATTEMPTS = 12;
 const WORLDPOP_POLL_INTERVAL_MS = 5000;
 
-const konturH3CacheUrl = defineString("KONTUR_H3_CACHE_URL", {
-  default: DEFAULT_SHARD_BASE_URL,
-});
+const konturH3CacheUrl = defineString("KONTUR_H3_CACHE_URL");
 
 const konturH3CacheMaxShards = defineString("KONTUR_H3_CACHE_MAX_SHARDS", {
   default: "64",
@@ -90,8 +85,9 @@ function getShardCacheKey(shardCellId: string): string {
 }
 
 function getShardBaseUrl(): string {
-  const raw = String(konturH3CacheUrl.value() || "").trim();
-  return raw || DEFAULT_SHARD_BASE_URL;
+  const raw = String(konturH3CacheUrl.value() || "").trim().replace(/\/+$/, "");
+  if (!raw) throw new Error("KONTUR_H3_CACHE_URL is not configured");
+  return raw;
 }
 
 function resolveShardUrl(shardCellId: string): string {
@@ -149,9 +145,10 @@ function parseWorldPopSum(payload: Record<string, unknown>): number | null {
     resultStats?.sum,
   ];
   for (let i = 0; i < candidates.length; i += 1) {
-    const value = Number(candidates[i]);
-    if (Number.isFinite(value) && value >= 0) return value;
+    const value = (candidates[i] ?? null) === null ? null : Number(candidates[i]);
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value;
   }
+
   return null;
 }
 

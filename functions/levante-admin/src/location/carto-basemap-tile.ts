@@ -23,9 +23,10 @@ type ParsedTilePath = {
 const cartoRequestOptions: HttpsOptions = {
   cors: true,
   invoker: "public",
-  timeoutSeconds: 60,
+  timeoutSeconds: 30,
   memory: "256MiB",
-  secrets: [cartoBasemapApiKey]
+  secrets: [cartoBasemapApiKey], 
+  maxInstances: 20,
 };
 
 function parseTilePath(rawPath: string): ParsedTilePath | null {

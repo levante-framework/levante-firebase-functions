@@ -9,12 +9,15 @@ import {
   resolveShardUrlForCell,
 } from "./helpers/population-h3-helpers.js";
 import { requireFirebaseUser } from "./helpers/location-proxy-guards.js";
+import { getResolution, isValidCell } from "h3-js";
 
 const populationRequestOptions: HttpsOptions = {
   cors: true,
   invoker: "public",
   timeoutSeconds: 90,
   memory: "256MiB",
+  maxInstances: 10,
+  concurrency: 1,
 };
 
 function sendJson(res: Response, statusCode: number, payload: unknown): void {
@@ -33,12 +36,29 @@ function rejectNonGet(req: Request, res: Response): boolean {
   return false;
 }
 
+function validateCell(req: Request, res: Response): boolean {
+  const cellId = String(req.query?.cellId || "").trim();
+  const resolution = parseResolution(req.query?.resolution);
+  if (!cellId || resolution == null || !isValidCell(cellId)) {
+    sendJson(res, 400, { success: false, error: "Missing/invalid cellId or resolution" });
+    return false;
+  }
+  if (getResolution(cellId) !== resolution) {
+    sendJson(res, 400, { success: false, error: "resolution does not match cellId" });
+    return false;
+  }
+
+  return true;
+}
+
 export const populationKonturH3 = onRequest(
   populationRequestOptions,
   async (req, res) => {
     if (rejectNonGet(req, res)) return;
 
     if (!(await requireFirebaseUser(req, res))) return;
+
+    if (!validateCell) return;
 
     try {
       const cellId = String(req.query?.cellId || "").trim();
@@ -96,6 +116,8 @@ export const populationWorldpopH3 = onRequest(
     if (rejectNonGet(req, res)) return;
 
     if (!(await requireFirebaseUser(req, res))) return;
+
+    if (!validateCell) return;
 
     try {
       const cellId = String(req.query?.cellId || "").trim();
