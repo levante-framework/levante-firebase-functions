@@ -63,7 +63,11 @@ export const provisionOfflinePack = onCall(async (request) => {
     );
   }
   const admin = adminSnap.data() ?? {};
-  const sites = (admin.districts ?? []) as string[];
+  const districts = ((admin.districts ?? []) as string[]).filter(
+    (id) => id.length > 0
+  );
+  const siteId = typeof admin.siteId === "string" ? admin.siteId.trim() : "";
+  const sites = districts.length > 0 ? districts : siteId ? [siteId] : [];
   await assertSiteAccess(
     request.auth.uid,
     sites,
