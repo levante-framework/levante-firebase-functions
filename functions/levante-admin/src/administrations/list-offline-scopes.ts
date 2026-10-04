@@ -48,11 +48,7 @@ export const listOfflineScopes = onCall(async (request) => {
     );
   }
   const admin = adminSnap.data() ?? {};
-  const districts = ((admin.districts ?? []) as string[]).filter(
-    (id) => id.length > 0
-  );
-  const siteId = typeof admin.siteId === "string" ? admin.siteId.trim() : "";
-  const sites = districts.length > 0 ? districts : siteId ? [siteId] : [];
+  const sites = typeof admin.siteId === "string" ? [admin.siteId] : [];
   await assertSiteAccess(
     request.auth.uid,
     sites,
