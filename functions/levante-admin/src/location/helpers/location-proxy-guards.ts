@@ -4,7 +4,8 @@ import { defineString } from "firebase-functions/params";
 import { isEmulated } from "../../utils/utils.js";
 
 const allowedOrigins = defineString("ALLOWED_ORIGINS", {
-  default: "https://hs-levante-admin-dev.web.app,https://hs-levante-admin-prod.web.app"
+  default:
+    "https://hs-levante-admin-dev.web.app,https://hs-levante-admin-prod.web.app",
 });
 
 function parseBearerToken(req: Request): string | null {
@@ -55,15 +56,17 @@ export async function requireFirebaseUser(
 }
 
 export function assertAllowedReferrer(req: Request, res: Response): boolean {
-    if (isEmulated()) return true;
+  if (isEmulated()) return true;
 
-    const origin: string | undefined = resolveRequestOrigin(req);
-    const allowedOriginsArray = String(allowedOrigins.value()).split(",").map(origin => origin.trim());
+  const origin: string | undefined = resolveRequestOrigin(req);
+  const allowedOriginsArray = String(allowedOrigins.value())
+    .split(",")
+    .map((origin) => origin.trim());
 
-    if (!origin || !allowedOriginsArray.includes(String(origin))) {
-        res.status(403).send("Forbidden");
-        return false;
-    }
+  if (!origin || !allowedOriginsArray.includes(String(origin))) {
+    res.status(403).send("Forbidden");
+    return false;
+  }
 
-    return true;
+  return true;
 }

@@ -118,14 +118,14 @@ export const cartoBasemapTile = onRequest(
       res.set("Cache-Control", cacheControl);
       res.status(200).send(Buffer.from(upstream.data));
     } catch (error) {
-      logger.error("Carto basemap proxy failed", { 
+      logger.error("Carto basemap proxy failed", {
         message: error instanceof Error ? error.message : String(error),
         code: axios.isAxiosError(error) ? error.code : undefined,
         z: tile.z,
         x: tile.x,
         y: tile.y,
       });
-      
+
       res.status(502).send("Bad Gateway");
     }
   }

@@ -85,7 +85,9 @@ function getShardCacheKey(shardCellId: string): string {
 }
 
 function getShardBaseUrl(): string {
-  const raw = String(konturH3CacheUrl.value() || "").trim().replace(/\/+$/, "");
+  const raw = String(konturH3CacheUrl.value() || "")
+    .trim()
+    .replace(/\/+$/, "");
   if (!raw) throw new Error("KONTUR_H3_CACHE_URL is not configured");
   return raw;
 }
@@ -145,8 +147,10 @@ function parseWorldPopSum(payload: Record<string, unknown>): number | null {
     resultStats?.sum,
   ];
   for (let i = 0; i < candidates.length; i += 1) {
-    const value = (candidates[i] ?? null) === null ? null : Number(candidates[i]);
-    if (typeof value === "number" && Number.isFinite(value) && value >= 0) return value;
+    const value =
+      (candidates[i] ?? null) === null ? null : Number(candidates[i]);
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0)
+      return value;
   }
 
   return null;
@@ -211,8 +215,9 @@ export async function queryWorldPopForPolygon(
     if (status.includes("failed") || status.includes("error")) {
       throw new Error(`WorldPop task ${taskId} failed`);
     }
-  
-    if (attempt < WORLDPOP_POLL_ATTEMPTS - 1) await wait(WORLDPOP_POLL_INTERVAL_MS);
+
+    if (attempt < WORLDPOP_POLL_ATTEMPTS - 1)
+      await wait(WORLDPOP_POLL_INTERVAL_MS);
   }
 
   throw new Error(`WorldPop task ${taskId} timed out`);

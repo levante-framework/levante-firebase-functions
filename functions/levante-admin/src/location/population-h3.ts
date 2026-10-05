@@ -40,11 +40,17 @@ function validateCell(req: Request, res: Response): boolean {
   const cellId = String(req.query?.cellId || "").trim();
   const resolution = parseResolution(req.query?.resolution);
   if (!cellId || resolution == null || !isValidCell(cellId)) {
-    sendJson(res, 400, { success: false, error: "Missing/invalid cellId or resolution" });
+    sendJson(res, 400, {
+      success: false,
+      error: "Missing/invalid cellId or resolution",
+    });
     return false;
   }
   if (getResolution(cellId) !== resolution) {
-    sendJson(res, 400, { success: false, error: "resolution does not match cellId" });
+    sendJson(res, 400, {
+      success: false,
+      error: "resolution does not match cellId",
+    });
     return false;
   }
 
