@@ -3,10 +3,7 @@ import type { Request, Response } from "express";
 import { defineString } from "firebase-functions/params";
 import { isEmulated } from "../../utils/utils.js";
 
-const allowedOrigins = defineString("ALLOWED_ORIGINS", {
-  default:
-    "https://hs-levante-admin-dev.web.app,https://hs-levante-admin-dev--*.web.app",
-});
+const allowedOrigins = defineString("ALLOWED_ORIGINS");
 
 function parseBearerToken(req: Request): string | null {
   const header = req.headers.authorization;
