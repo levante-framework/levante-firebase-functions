@@ -15,6 +15,7 @@
     "serve": "npm run build:watch | firebase emulators:start --only functions",
     "shell": "npm run build && firebase functions:shell",
     "start": "npm run shell",
+    "validate:indexes": "firebase firestore:indexes --project dev > remote-indexes.json && node scripts/compare-indexes.js firestore.indexes.json remote-indexes.json && rm remote-indexes.json",
     "update:indexes": "firebase firestore:indexes --project dev > firestore.indexes.json"
   },
   "engines": {
