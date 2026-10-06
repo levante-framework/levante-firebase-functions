@@ -5,7 +5,7 @@ import { isEmulated } from "../../utils/utils.js";
 
 const allowedOrigins = defineString("ALLOWED_ORIGINS", {
   default:
-    "https://hs-levante-admin-dev.web.app,https://hs-levante-admin-prod.web.app",
+    "https://hs-levante-admin-dev.web.app,https://hs-levante-admin-dev--*.web.app",
 });
 
 function parseBearerToken(req: Request): string | null {
@@ -55,15 +55,30 @@ export async function requireFirebaseUser(
   }
 }
 
+function originMatchesPattern(origin: string, pattern: string): boolean {
+  if (!pattern.includes("*")) return origin === pattern;
+
+  const escaped = pattern.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const regex = new RegExp(`^${escaped.replace(/\\\*/g, "[^.]*")}$`);
+
+  return regex.test(origin);
+}
+
 export function assertAllowedReferrer(req: Request, res: Response): boolean {
   if (isEmulated()) return true;
 
   const origin: string | undefined = resolveRequestOrigin(req);
   const allowedOriginsArray = String(allowedOrigins.value())
     .split(",")
-    .map((origin) => origin.trim());
+    .map((pattern) => pattern.trim())
+    .filter(Boolean);
 
-  if (!origin || !allowedOriginsArray.includes(String(origin))) {
+  if (
+    !origin ||
+    !allowedOriginsArray.some((pattern) =>
+      originMatchesPattern(origin, pattern)
+    )
+  ) {
     res.status(403).send("Forbidden");
     return false;
   }
