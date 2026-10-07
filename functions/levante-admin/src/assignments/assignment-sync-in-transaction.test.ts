@@ -220,6 +220,38 @@ describe("syncOnAssignmentUpdated", () => {
     expect(args[4]).toEqual({ __arrayUnion: "admin1" });
   });
 
+  it("stamps started and completed in a single user-doc write", async () => {
+    const { db, transaction, statsBuffer } = setup();
+
+    await syncOnAssignmentUpdated(
+      db,
+      transaction,
+      "user1",
+      "admin1",
+      {
+        assigningOrgs: { districts: ["site1"] },
+        assessments: [{ taskId: "taskA" }],
+      },
+      {
+        assigningOrgs: { districts: ["site1"] },
+        assessments: [
+          { taskId: "taskA", startedOn: new Date(), completedOn: new Date() },
+        ],
+        started: true,
+        completed: true,
+      },
+      statsBuffer
+    );
+
+    const update = transaction.update as unknown as Mock;
+    expect(update).toHaveBeenCalledTimes(1);
+    const args = update.mock.calls[0];
+    expect(segmentsOf(args[1])).toEqual(["assignmentsStarted", "admin1"]);
+    expect(segmentsOf(args[3])).toEqual(["assignments", "started"]);
+    expect(segmentsOf(args[5])).toEqual(["assignmentsCompleted", "admin1"]);
+    expect(segmentsOf(args[7])).toEqual(["assignments", "completed"]);
+  });
+
   it("moves assigned stats from a removed org to an added org when orgs change", async () => {
     const { db, transaction, statsBuffer } = setup();
 
