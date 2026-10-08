@@ -26,12 +26,16 @@ import {
  * any field omitted from the request is left untouched. `birthMonth`/`birthYear`
  * may only be set on child (student) users.
  *
- * Users with only `archived`/`disabled` changes are committed together via a
- * batch. Children whose birth fields change are handled one transaction each via
- * `syncAssignmentsForUserFieldChange`, which atomically persists the field change
- * and resyncs the child's open-administration assignments against the new birth
- * values. A child whose resync transaction fails is logged and dropped from the
- * returned `users`, leaving the rest of the request unaffected.
+ * Users whose change needs no assignment resync are committed together via a
+ * batch. Users that need a resync are handled one transaction each via
+ * `syncAssignmentsForUserFieldChange`, which atomically persists the field
+ * change and resyncs the user's open-administration assignments. A resync is
+ * required when a child's birth fields change (assignment conditions depend on
+ * them) or when a user is reactivated — previously `archived` or `disabled` and
+ * now both `false` — so they are re-assigned to any open administrations they
+ * were excluded from while inactive. A user whose resync transaction fails is
+ * logged and dropped from the returned `users`, leaving the rest of the request
+ * unaffected.
  */
 export const updateUsersInfo = onCall(
   async (req): Promise<UpdateUsersInfoResult> => {
@@ -129,15 +133,16 @@ export const updateUsersInfo = onCall(
       );
     }
 
-    // Users with only archived/disabled changes commit via a plain batch. Users
-    // whose birth fields change need their assignments resynced atomically with
-    // the field write (see syncAssignmentsForUserFieldChange), so they are
-    // handled one transaction per user.
+    // Updates that need no resync commit via a plain batch. Updates that change
+    // assignment eligibility — a birth-field change or a reactivation — need the
+    // user's assignments resynced atomically with the field write (see
+    // syncAssignmentsForUserFieldChange), so they are handled one transaction
+    // per user.
     const batchUpdates: Array<{
       uid: string;
       update: Record<string, unknown>;
     }> = [];
-    const birthSyncTargets: Array<{
+    const syncTargets: Array<{
       uid: string;
       update: Record<string, unknown>;
       currentOrgs: IOrgsList;
@@ -147,8 +152,10 @@ export const updateUsersInfo = onCall(
     for (const user of users) {
       const existing = dataByUid.get(user.uid);
       const update: Record<string, unknown> = {};
-      if (user.archived !== undefined) update.archived = user.archived;
-      if (user.disabled !== undefined) update.disabled = user.disabled;
+      if (user.archived !== undefined && user.archived !== existing?.archived)
+        update.archived = user.archived;
+      if (user.disabled !== undefined && user.disabled !== existing?.disabled)
+        update.disabled = user.disabled;
       let birthChanged = false;
       if (
         user.birthMonth !== undefined &&
@@ -170,7 +177,19 @@ export const updateUsersInfo = onCall(
       if (Object.keys(update).length === 0) continue;
       update.updatedAt = FieldValue.serverTimestamp();
 
-      if (birthChanged) {
+      // Reactivation: a user who was archived or disabled is now both false, so
+      // they must be re-assigned to the open administrations they were excluded
+      // from while inactive.
+      const wasInactive =
+        existing?.archived === true || existing?.disabled === true;
+      const resultingArchived = user.archived ?? existing?.archived ?? false;
+      const resultingDisabled = user.disabled ?? existing?.disabled ?? false;
+      const reactivated =
+        wasInactive &&
+        resultingArchived === false &&
+        resultingDisabled === false;
+
+      if (birthChanged || reactivated) {
         const orgData = _pick(existing, ORG_NAMES) as Record<
           string,
           { current?: string[] } | undefined
@@ -180,7 +199,7 @@ export const updateUsersInfo = onCall(
           currentOrgs[orgName as keyof IOrgsList] =
             orgData[orgName]?.current ?? [];
         }
-        birthSyncTargets.push({
+        syncTargets.push({
           uid: user.uid,
           update,
           currentOrgs,
@@ -189,6 +208,8 @@ export const updateUsersInfo = onCall(
           userDataOverride: {
             birthMonth: user.birthMonth ?? existing?.birthMonth,
             birthYear: user.birthYear ?? existing?.birthYear,
+            archived: resultingArchived,
+            disabled: resultingDisabled,
           },
         });
       } else {
@@ -205,7 +226,7 @@ export const updateUsersInfo = onCall(
     }
 
     const failedUids = new Set<string>();
-    for (const target of birthSyncTargets) {
+    for (const target of syncTargets) {
       try {
         await syncAssignmentsForUserFieldChange(
           target.uid,
@@ -214,7 +235,7 @@ export const updateUsersInfo = onCall(
           target.userDataOverride
         );
       } catch (err) {
-        logger.error("Failed to resync assignments for birth-date change", {
+        logger.error("Failed to resync assignments after user field change", {
           uid: target.uid,
           error: err instanceof Error ? err.message : String(err),
         });

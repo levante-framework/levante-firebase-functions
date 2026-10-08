@@ -160,6 +160,35 @@ async function seedOpenAssignment(
   });
 }
 
+// Seeds a child who qualifies for an age>=8 administration but may currently be
+// inactive. Mirrors seedChild but lets the caller set archived/disabled (to
+// exercise reactivation) and skip the district doc to force a resync failure.
+async function seedReactivationChild(
+  uid: string,
+  {
+    archived = false,
+    disabled = false,
+    seedDistrict = true,
+  }: { archived?: boolean; disabled?: boolean; seedDistrict?: boolean } = {}
+): Promise<void> {
+  if (seedDistrict) {
+    await adminDb.doc(`districts/${SITE}`).set({ schools: [], subGroups: [] });
+  }
+  await seedUser(uid, {
+    userType: "student",
+    birthMonth: BIRTH_MONTH,
+    birthYear: CURRENT_YEAR - 10,
+    archived,
+    disabled,
+  });
+}
+
+const AGE_8_GATE: AgeCondition = {
+  field: "age",
+  op: "GREATER_THAN_OR_EQUAL",
+  value: 8,
+};
+
 describe("updateUsersInfo (e2e)", () => {
   let client: ReturnType<typeof getClient>;
   let updateUsersInfo: HttpsCallable<
@@ -655,5 +684,112 @@ describe("updateUsersInfo (e2e)", () => {
       .get();
     expect(totalStats.get("task-2")).toEqual({ assigned: 1 });
     expect(totalStats.get("assignment")).toEqual({ assigned: 1 });
+  });
+
+  it("atomically creates missing assignments when a user is reactivated", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedAdministration("admin-agein", AGE_8_GATE);
+    // Inactive (archived + disabled) child who qualifies but was excluded from
+    // assignment sync while inactive, so no assignment exists yet.
+    await seedReactivationChild("u-child", { archived: true, disabled: true });
+
+    const { data } = await updateUsersInfo({
+      users: [{ uid: "u-child", archived: false, disabled: false }],
+    });
+
+    expect(data.users).toEqual([
+      { uid: "u-child", archived: false, disabled: false },
+    ]);
+
+    // Flags persisted.
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("archived")).toBe(false);
+    expect(child.get("disabled")).toBe(false);
+
+    // Assignment created in the reactivation resync transaction.
+    const assignment = await adminDb
+      .doc("users/u-child/assignments/admin-agein")
+      .get();
+    expect(assignment.exists).toBe(true);
+    expect(assignment.get("assessments")).toHaveLength(1);
+    expect(assignment.get("assessments")[0].taskId).toBe("task-1");
+  });
+
+  it("reactivates when clearing the only set flag", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedAdministration("admin-agein", AGE_8_GATE);
+    // Only disabled is set; archived is already false.
+    await seedReactivationChild("u-child", { disabled: true });
+
+    await updateUsersInfo({ users: [{ uid: "u-child", disabled: false }] });
+
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("disabled")).toBe(false);
+
+    const assignment = await adminDb
+      .doc("users/u-child/assignments/admin-agein")
+      .get();
+    expect(assignment.exists).toBe(true);
+  });
+
+  it("does not resync when the user remains inactive after the update", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedAdministration("admin-agein", AGE_8_GATE);
+    // Clearing disabled while archived stays true leaves the user inactive.
+    await seedReactivationChild("u-child", { archived: true, disabled: true });
+
+    await updateUsersInfo({ users: [{ uid: "u-child", disabled: false }] });
+
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("disabled")).toBe(false);
+    expect(child.get("archived")).toBe(true);
+
+    // Still inactive, so no assignment is synced.
+    const assignment = await adminDb
+      .doc("users/u-child/assignments/admin-agein")
+      .get();
+    expect(assignment.exists).toBe(false);
+  });
+
+  it("does not resync an already-active user on a no-op flag write", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedAdministration("admin-agein", AGE_8_GATE);
+    // Already active (both flags false) and qualifying, but with no assignment.
+    await seedReactivationChild("u-child");
+
+    await updateUsersInfo({ users: [{ uid: "u-child", archived: false }] });
+
+    // No inactive->active transition, so the missing assignment is left as is.
+    const assignment = await adminDb
+      .doc("users/u-child/assignments/admin-agein")
+      .get();
+    expect(assignment.exists).toBe(false);
+  });
+
+  it("rolls back the reactivation and drops the user when the resync fails", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedAdministration("admin-agein", AGE_8_GATE);
+    // No district doc: getExhaustiveOrgs throws, so the whole transaction rolls back.
+    await seedReactivationChild("u-child", {
+      archived: true,
+      disabled: true,
+      seedDistrict: false,
+    });
+
+    const { data } = await updateUsersInfo({
+      users: [{ uid: "u-child", archived: false, disabled: false }],
+    });
+
+    // Failed user is dropped from the response.
+    expect(data.users).toEqual([]);
+
+    // Neither the flag change nor any assignment was written.
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("archived")).toBe(true);
+    expect(child.get("disabled")).toBe(true);
+    const assignment = await adminDb
+      .doc("users/u-child/assignments/admin-agein")
+      .get();
+    expect(assignment.exists).toBe(false);
   });
 });

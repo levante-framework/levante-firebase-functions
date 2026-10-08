@@ -77,6 +77,7 @@ node_modules/
 **/.env.*
 !functions/levante-admin/.env.hs-levante-admin-dev
 !functions/levante-admin/.env.hs-levante-admin-prod
+!functions/levante-admin/.env.demo-emulator
 
 # Local service-account credential files
 /creds/
