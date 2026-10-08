@@ -12,6 +12,7 @@ import {
   getAssignmentDocRef,
   shouldCompleteAssignment,
 } from "../utils/assignment.js";
+import { syncAssignmentProgress } from "../assignments/assignment-sync-in-transaction.js";
 
 /**
  * Updates an assigned assessment with the provided updates
@@ -88,6 +89,13 @@ export const completeTask = onCall(async (request) => {
       // Check if assignment should be completed after this task
       const shouldComplete = shouldCompleteAssignment(assignmentDoc, taskId);
 
+      const prevData = assignmentDoc.data() ?? {};
+      const prevAssessments = (prevData.assessments ?? []).map(
+        (assessment: IExtendedAssignedAssessment) => ({ ...assessment })
+      );
+      const completedOn = new Date();
+      const currCompleted = Boolean(prevData.completed) || shouldComplete;
+
       // NOW DO ALL WRITES
       const docRef = getAssignmentDocRef(db, userId, administrationId);
       const progressKey = taskId.replace(/-/g, "_");
@@ -96,7 +104,7 @@ export const completeTask = onCall(async (request) => {
       updateAssignedTaskInTransaction(
         assignmentDoc,
         taskId,
-        { completedOn: new Date() },
+        { completedOn },
         docRef,
         transaction
       );
@@ -112,6 +120,30 @@ export const completeTask = onCall(async (request) => {
       }
 
       transaction.update(docRef, assignmentUpdates);
+
+      await syncAssignmentProgress(
+        db,
+        transaction,
+        userId,
+        administrationId,
+        {
+          assigningOrgs: prevData.assigningOrgs,
+          assessments: prevAssessments,
+          started: prevData.started,
+          completed: prevData.completed,
+        },
+        {
+          assigningOrgs: prevData.assigningOrgs,
+          assessments: prevAssessments.map(
+            (assessment: IExtendedAssignedAssessment) =>
+              assessment.taskId === taskId
+                ? { ...assessment, completedOn }
+                : assessment
+          ),
+          started: true,
+          completed: currCompleted,
+        }
+      );
     });
 
     logger.info(userId, "completed task", {

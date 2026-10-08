@@ -8,7 +8,10 @@ import { getFirestore, FieldValue, FieldPath } from "firebase-admin/firestore";
 import _reduce from "lodash-es/reduce.js";
 import _without from "lodash-es/without.js";
 import type { IOrgsList } from "../interfaces.js";
-import type { AdminStatsBuffer } from "./admin-stats-buffer.js";
+import {
+  AdminStatsBufferRegistry,
+  type AdminStatsBuffer,
+} from "./admin-stats-buffer.js";
 
 interface AssignmentData {
   assigningOrgs?: IOrgsList;
@@ -296,14 +299,16 @@ export const syncOnAssignmentUpdated = async (
     );
   }
 
+  // A finish can flip both flags. Write them together so the user doc is
+  // updated once in this transaction.
+  const userDocUpdates: unknown[] = [];
   for (const status of ["started", "completed"] as const) {
     const prevVal = prevData[status];
     const currVal = currData[status];
     const dateKey = `${status}Date` as const;
     const listKey = `${status}List` as const;
     if (!prevVal && currVal) {
-      transaction.update(
-        userDocRef,
+      userDocUpdates.push(
         assignmentStatusFieldPaths[dateKey],
         new Date(),
         assignmentStatusFieldPaths[listKey],
@@ -311,8 +316,7 @@ export const syncOnAssignmentUpdated = async (
       );
     }
     if (prevVal && !currVal) {
-      transaction.update(
-        userDocRef,
+      userDocUpdates.push(
         assignmentStatusFieldPaths[dateKey],
         FieldValue.delete(),
         assignmentStatusFieldPaths[listKey],
@@ -320,4 +324,43 @@ export const syncOnAssignmentUpdated = async (
       );
     }
   }
+  if (userDocUpdates.length > 0) {
+    const update = transaction.update.bind(transaction) as (
+      ref: typeof userDocRef,
+      field: FieldPath,
+      value: unknown,
+      ...rest: unknown[]
+    ) => ReturnType<Transaction["update"]>;
+    update(
+      userDocRef,
+      userDocUpdates[0] as FieldPath,
+      userDocUpdates[1],
+      ...userDocUpdates.slice(2)
+    );
+  }
+};
+
+/**
+ * Record an assignment progress change on the user doc and administration
+ * stats. Call this inside the same transaction that writes the assignment.
+ */
+export const syncAssignmentProgress = async (
+  db: ReturnType<typeof getFirestore>,
+  transaction: Transaction,
+  roarUid: string,
+  assignmentUid: string,
+  prevData: AssignmentData,
+  currData: AssignmentData
+) => {
+  const statsRegistry = new AdminStatsBufferRegistry(db);
+  await syncOnAssignmentUpdated(
+    db,
+    transaction,
+    roarUid,
+    assignmentUid,
+    prevData,
+    currData,
+    statsRegistry.forAdministration(assignmentUid)
+  );
+  statsRegistry.flush(transaction);
 };
