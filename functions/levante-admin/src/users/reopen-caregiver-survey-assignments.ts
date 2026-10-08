@@ -111,6 +111,11 @@ export async function reopenCaregiverSurveyAssignments(
 
   const completedIds = new Map<string, string[]>();
 
+  // Each reopened survey adds one assignment update here plus the stats writes
+  // flushed below, all onto the caller's transaction. That shares Firestore's
+  // 500-op budget with the link writes, bounded by how many open
+  // administrations each newly linked caregiver has. Realistically a handful;
+  // batch/chunk if a caregiver can accumulate hundreds.
   for (const { caregiverUid, snap, updates } of toReopen) {
     const prevData = snap.data();
     recordAssignmentUpdatedStats(
