@@ -152,8 +152,10 @@ export const updateUsersInfo = onCall(
     for (const user of users) {
       const existing = dataByUid.get(user.uid);
       const update: Record<string, unknown> = {};
-      if (user.archived !== undefined) update.archived = user.archived;
-      if (user.disabled !== undefined) update.disabled = user.disabled;
+      if (user.archived !== undefined && user.archived !== existing?.archived)
+        update.archived = user.archived;
+      if (user.disabled !== undefined && user.disabled !== existing?.disabled)
+        update.disabled = user.disabled;
       let birthChanged = false;
       if (
         user.birthMonth !== undefined &&
