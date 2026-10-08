@@ -78,7 +78,7 @@ vi.mock("../assignments/assignment-utils.js", () => ({
   removeOrgsFromAssignments: vi.fn(),
 }));
 
-vi.mock("../assignments/assignment-sync-in-transaction.js", () => ({
+vi.mock("../assignments/admin-stats-buffer.js", () => ({
   AdminStatsBufferRegistry: class AdminStatsBufferRegistry {},
 }));
 

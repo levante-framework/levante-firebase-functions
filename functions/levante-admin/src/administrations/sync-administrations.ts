@@ -32,7 +32,7 @@ import {
   removeAssignmentFromUsers,
   updateAssignmentsForUserFromAdministrations,
 } from "../assignments/assignment-utils.js";
-import { AdminStatsBufferRegistry } from "../assignments/assignment-sync-in-transaction.js";
+import { AdminStatsBufferRegistry } from "../assignments/admin-stats-buffer.js";
 import {
   getAdministrationsFromOrgs,
   standardizeAdministrationOrgs,
@@ -392,6 +392,80 @@ export const processUserAddedOrgs = async (
       transaction,
       statsRegistry
     );
+    statsRegistry.flush(transaction);
+  });
+};
+
+/**
+ * Atomically resyncs a user's assignments and persists a user-doc field change
+ * in a single transaction.
+ *
+ * Used when a field that assignment conditions depend on (e.g. birthMonth/
+ * birthYear) changes: the assignment evaluation must see the new value, but
+ * Firestore forbids writing then re-reading the same doc in a transaction.
+ * `userDataOverride` sidesteps this by evaluating conditions against the
+ * request's new values instead of the stored doc. Enumerating administrations
+ * from the user's current orgs (not just existing assignment docs) makes the
+ * resync correct in both directions: newly eligible administrations get created
+ * and newly ineligible assignments get reduced or deleted.
+ *
+ * Read-before-write ordering holds: all reads (orgs, administration docs, and
+ * the user-doc reads in the assignment read phase) complete before any write,
+ * including the field-change write appended at the end.
+ *
+ * @param {string} uid - The user to resync.
+ * @param {IOrgsList} currentOrgs - The user's current org membership.
+ * @param {Record<string, unknown>} userDocUpdate - The field change to persist on the user doc.
+ * @param {Record<string, unknown>} userDataOverride - Condition inputs to evaluate against (e.g. new birthMonth/birthYear).
+ */
+export const syncAssignmentsForUserFieldChange = async (
+  uid: string,
+  currentOrgs: IOrgsList,
+  userDocUpdate: Record<string, unknown>,
+  userDataOverride: Record<string, unknown>
+) => {
+  const db = getFirestore();
+  await db.runTransaction(async (transaction) => {
+    const statsRegistry = new AdminStatsBufferRegistry(db);
+    const exhaustiveOrgs = await getExhaustiveOrgs({
+      orgs: currentOrgs,
+      transaction,
+      includeArchived: false,
+    });
+
+    const { administrations } = await getAdministrationsFromOrgs({
+      orgs: exhaustiveOrgs,
+      transaction,
+      restrictToOpenAdministrations: true,
+    });
+
+    const administrationsWithData: Array<{
+      administrationId: string;
+      administrationData: IAdministration;
+    }> = [];
+    for (const administrationId of administrations) {
+      const administrationRef = db
+        .collection("administrations")
+        .doc(administrationId);
+      const administrationDoc = await transaction.get(administrationRef);
+      if (administrationDoc.exists) {
+        const administrationData = administrationDoc.data() as IAdministration;
+        const dateClosed = parseTimestamp(administrationData.dateClosed);
+        if (Number.isNaN(dateClosed.getTime()) || dateClosed <= new Date()) {
+          continue;
+        }
+        administrationsWithData.push({ administrationId, administrationData });
+      }
+    }
+
+    await updateAssignmentsForUserFromAdministrations(
+      uid,
+      administrationsWithData,
+      transaction,
+      statsRegistry,
+      userDataOverride
+    );
+    transaction.update(db.collection("users").doc(uid), userDocUpdate);
     statsRegistry.flush(transaction);
   });
 };

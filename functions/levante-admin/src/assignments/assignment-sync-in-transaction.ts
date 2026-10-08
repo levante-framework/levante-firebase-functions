@@ -3,18 +3,15 @@
  * Replaces event-driven onDocumentCreated/Updated/Deleted triggers with
  * atomic, inline sync that fails with the calling transaction.
  */
-import { logger } from "firebase-functions/v2";
-import type {
-  CollectionReference,
-  Firestore,
-  Transaction,
-} from "firebase-admin/firestore";
+import type { Transaction } from "firebase-admin/firestore";
 import { getFirestore, FieldValue, FieldPath } from "firebase-admin/firestore";
 import _reduce from "lodash-es/reduce.js";
 import _without from "lodash-es/without.js";
 import type { IOrgsList } from "../interfaces.js";
-
-type Status = "assigned" | "started" | "completed";
+import {
+  AdminStatsBufferRegistry,
+  type AdminStatsBuffer,
+} from "./admin-stats-buffer.js";
 
 interface AssignmentData {
   assigningOrgs?: IOrgsList;
@@ -26,166 +23,6 @@ interface AssignmentData {
   dateAssigned?: Date;
   started?: boolean;
   completed?: boolean;
-}
-
-type OrgDelta = {
-  assignment: Partial<Record<Status, number>>;
-  tasks: Map<string, Partial<Record<Status, number>>>;
-};
-
-export type AdminStatsBuffer = {
-  recordIncrements: (
-    orgList: string[],
-    status: Status,
-    taskIds: string[],
-    incrementBy: number,
-    updateAssignmentTotal: boolean
-  ) => void;
-  flush: (transaction: Transaction) => void;
-};
-
-export function createAdminStatsBuffer(
-  completionCollectionRef: CollectionReference
-): AdminStatsBuffer {
-  const byOrg = new Map<string, OrgDelta>();
-
-  const getOrgDelta = (org: string): OrgDelta => {
-    let d = byOrg.get(org);
-    if (!d) {
-      d = { assignment: {}, tasks: new Map() };
-      byOrg.set(org, d);
-    }
-    return d;
-  };
-
-  return {
-    recordIncrements(
-      orgList: string[],
-      status: Status,
-      taskIds: string[],
-      incrementBy: number,
-      updateAssignmentTotal: boolean
-    ) {
-      for (const org of orgList) {
-        const orgDelta = getOrgDelta(org);
-        if (updateAssignmentTotal) {
-          orgDelta.assignment[status] =
-            (orgDelta.assignment[status] ?? 0) + incrementBy;
-        }
-        for (const taskId of taskIds) {
-          let taskDelta = orgDelta.tasks.get(taskId);
-          if (!taskDelta) {
-            taskDelta = {};
-            orgDelta.tasks.set(taskId, taskDelta);
-          }
-          taskDelta[status] = (taskDelta[status] ?? 0) + incrementBy;
-        }
-      }
-    },
-
-    flush(transaction: Transaction) {
-      for (const [org, delta] of byOrg) {
-        const data: Record<string, unknown> = {};
-        let hasIncrement = false;
-
-        const assignmentPayload: Record<string, unknown> = {};
-        for (const s of ["assigned", "started", "completed"] as const) {
-          const n = delta.assignment[s];
-          if (n !== undefined && n !== 0) {
-            assignmentPayload[s] = FieldValue.increment(n);
-            hasIncrement = true;
-          }
-        }
-        if (Object.keys(assignmentPayload).length > 0) {
-          data.assignment = assignmentPayload;
-        }
-
-        for (const [taskId, taskDelta] of delta.tasks) {
-          const taskPayload: Record<string, unknown> = {};
-          for (const s of ["assigned", "started", "completed"] as const) {
-            const n = taskDelta[s];
-            if (n !== undefined && n !== 0) {
-              taskPayload[s] = FieldValue.increment(n);
-              hasIncrement = true;
-            }
-          }
-          if (Object.keys(taskPayload).length > 0) {
-            data[taskId] = taskPayload;
-          }
-        }
-
-        if (!hasIncrement) {
-          continue;
-        }
-
-        data.updatedAt = FieldValue.serverTimestamp();
-        const completionDocRef = completionCollectionRef.doc(org);
-        const topLevelKeys = Object.keys(data);
-        const taskKeyCount = [...delta.tasks.keys()].filter((tid) => {
-          const td = delta.tasks.get(tid);
-          return (
-            td && Object.values(td).some((v) => v !== undefined && v !== 0)
-          );
-        }).length;
-        const estimatedTransforms =
-          1 +
-          Object.keys(assignmentPayload).length +
-          [...delta.tasks.values()].reduce(
-            (acc, td) =>
-              acc +
-              (["assigned", "started", "completed"] as const).filter(
-                (s) => td[s] !== undefined && td[s] !== 0
-              ).length,
-            0
-          );
-        if (org === "total" || taskKeyCount >= 200) {
-          logger.info(
-            "DIAG_STATS_MERGE: transaction.set merge on completion doc",
-            {
-              completionDocPath: completionDocRef.path,
-              org,
-              aggregatedFlush: true,
-              taskKeyCount,
-              topLevelFieldCount: topLevelKeys.length,
-              estimatedFieldTransformsLowerBound: estimatedTransforms,
-              firestoreFieldTransformLimit: 500,
-            }
-          );
-        }
-
-        transaction.set(completionDocRef, data, { merge: true });
-      }
-    },
-  };
-}
-
-export class AdminStatsBufferRegistry {
-  private readonly db: Firestore;
-  private readonly map = new Map<string, AdminStatsBuffer>();
-
-  constructor(db: Firestore) {
-    this.db = db;
-  }
-
-  forAdministration(administrationId: string): AdminStatsBuffer {
-    let b = this.map.get(administrationId);
-    if (!b) {
-      b = createAdminStatsBuffer(
-        this.db
-          .collection("administrations")
-          .doc(administrationId)
-          .collection("stats")
-      );
-      this.map.set(administrationId, b);
-    }
-    return b;
-  }
-
-  flush(transaction: Transaction): void {
-    for (const b of this.map.values()) {
-      b.flush(transaction);
-    }
-  }
 }
 
 const getOrgList = (assigningOrgs: IOrgsList | undefined): string[] => {
@@ -338,7 +175,6 @@ export const syncOnAssignmentUpdated = async (
   const removedOrgs = _without(prevOrgList, ...orgList);
   const addedOrgs = _without(orgList, ...prevOrgList);
   const unchangedOrgs = _without(orgList, ...addedOrgs);
-  unchangedOrgs.push("total");
 
   if (removedOrgs.length > 0) {
     statsBuffer.recordIncrements(
@@ -390,6 +226,31 @@ export const syncOnAssignmentUpdated = async (
     }
   }
 
+  // Tasks added to or removed from a kept assignment (e.g. an age condition
+  // newly qualifies/disqualifies a not-yet-started assessment) change per-task
+  // `assigned` counts but not the assignment-level total, since the assignment
+  // itself persists. updateAssignmentTotal is false here for that reason.
+  const addedAssignedTasks = _without(currTaskIds, ...prevTaskIds);
+  if (addedAssignedTasks.length > 0) {
+    statsBuffer.recordIncrements(
+      unchangedOrgs,
+      "assigned",
+      addedAssignedTasks,
+      1,
+      false
+    );
+  }
+  const removedAssignedTasks = _without(prevTaskIds, ...currTaskIds);
+  if (removedAssignedTasks.length > 0) {
+    statsBuffer.recordIncrements(
+      unchangedOrgs,
+      "assigned",
+      removedAssignedTasks,
+      -1,
+      false
+    );
+  }
+
   const addedStartedTasks = _without(currStartedTasks, ...prevStartedTasks);
   if (addedStartedTasks.length > 0) {
     statsBuffer.recordIncrements(
@@ -438,14 +299,16 @@ export const syncOnAssignmentUpdated = async (
     );
   }
 
+  // A finish can flip both flags. Write them together so the user doc is
+  // updated once in this transaction.
+  const userDocUpdates: unknown[] = [];
   for (const status of ["started", "completed"] as const) {
     const prevVal = prevData[status];
     const currVal = currData[status];
     const dateKey = `${status}Date` as const;
     const listKey = `${status}List` as const;
     if (!prevVal && currVal) {
-      transaction.update(
-        userDocRef,
+      userDocUpdates.push(
         assignmentStatusFieldPaths[dateKey],
         new Date(),
         assignmentStatusFieldPaths[listKey],
@@ -453,8 +316,7 @@ export const syncOnAssignmentUpdated = async (
       );
     }
     if (prevVal && !currVal) {
-      transaction.update(
-        userDocRef,
+      userDocUpdates.push(
         assignmentStatusFieldPaths[dateKey],
         FieldValue.delete(),
         assignmentStatusFieldPaths[listKey],
@@ -462,4 +324,43 @@ export const syncOnAssignmentUpdated = async (
       );
     }
   }
+  if (userDocUpdates.length > 0) {
+    const update = transaction.update.bind(transaction) as (
+      ref: typeof userDocRef,
+      field: FieldPath,
+      value: unknown,
+      ...rest: unknown[]
+    ) => ReturnType<Transaction["update"]>;
+    update(
+      userDocRef,
+      userDocUpdates[0] as FieldPath,
+      userDocUpdates[1],
+      ...userDocUpdates.slice(2)
+    );
+  }
+};
+
+/**
+ * Record an assignment progress change on the user doc and administration
+ * stats. Call this inside the same transaction that writes the assignment.
+ */
+export const syncAssignmentProgress = async (
+  db: ReturnType<typeof getFirestore>,
+  transaction: Transaction,
+  roarUid: string,
+  assignmentUid: string,
+  prevData: AssignmentData,
+  currData: AssignmentData
+) => {
+  const statsRegistry = new AdminStatsBufferRegistry(db);
+  await syncOnAssignmentUpdated(
+    db,
+    transaction,
+    roarUid,
+    assignmentUid,
+    prevData,
+    currData,
+    statsRegistry.forAdministration(assignmentUid)
+  );
+  statsRegistry.flush(transaction);
 };

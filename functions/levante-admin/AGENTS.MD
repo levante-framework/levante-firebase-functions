@@ -88,9 +88,6 @@ npm run lint
 # View function logs
 npm run logs
 
-# Validate Firestore indexes
-npm run validate:indexes
-
 ```
 
 ## Security & Permissions

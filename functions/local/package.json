@@ -37,6 +37,7 @@
     "list-superadmins": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/list-superadmins.ts",
     "rebuild-custom-claims": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/rebuild-custom-claims.ts",
     "set-superadmin": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/set-superadmin.ts",
+    "reset-user-password": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/reset-user-password.ts",
     "identify-detached-administrations": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/identify-detached-administrations.ts",
     "reattach-administrations": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/reattach-administrations.ts",
     "identify-corrupted-survey-progress": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/identify-corrupted-survey-progress.ts",
