@@ -252,6 +252,57 @@ describe("syncOnAssignmentUpdated", () => {
     expect(segmentsOf(args[7])).toEqual(["assignments", "completed"]);
   });
 
+  it("decrements completed stats and clears the user doc when a survey is reopened", async () => {
+    const { db, transaction, statsBuffer } = setup();
+
+    // Mirrors buildReopenedCaregiverSurveyUpdates: the survey keeps startedOn
+    // but loses completedOn, and the assignment flips completed true -> false.
+    await syncOnAssignmentUpdated(
+      db,
+      transaction,
+      "user1",
+      "admin1",
+      {
+        assigningOrgs: { districts: ["site1"] },
+        assessments: [
+          {
+            taskId: "caregiver-survey",
+            startedOn: new Date(),
+            completedOn: new Date(),
+          },
+        ],
+        started: true,
+        completed: true,
+      },
+      {
+        assigningOrgs: { districts: ["site1"] },
+        assessments: [{ taskId: "caregiver-survey", startedOn: new Date() }],
+        started: true,
+        completed: false,
+      },
+      statsBuffer
+    );
+
+    // Only the completed count moves; started is unchanged. The assignment-level
+    // total is decremented because the assignment itself went incomplete.
+    expect(statsBuffer.recordIncrements).toHaveBeenCalledTimes(1);
+    expect(statsBuffer.recordIncrements).toHaveBeenCalledWith(
+      ["site1", "total"],
+      "completed",
+      ["caregiver-survey"],
+      -1,
+      true
+    );
+
+    const update = transaction.update as unknown as Mock;
+    expect(update).toHaveBeenCalledTimes(1);
+    const args = update.mock.calls[0];
+    expect(segmentsOf(args[1])).toEqual(["assignmentsCompleted", "admin1"]);
+    expect(args[2]).toEqual({ __delete: true });
+    expect(segmentsOf(args[3])).toEqual(["assignments", "completed"]);
+    expect(args[4]).toEqual({ __arrayRemove: "admin1" });
+  });
+
   it("moves assigned stats from a removed org to an added org when orgs change", async () => {
     const { db, transaction, statsBuffer } = setup();
 
