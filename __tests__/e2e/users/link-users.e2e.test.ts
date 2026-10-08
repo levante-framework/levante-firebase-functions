@@ -76,6 +76,37 @@ async function seedUser(
   });
 }
 
+const SURVEY_TASK = "caregiver-survey";
+
+// Seeds a caregiver assignment whose caregiver survey is completed, plus the
+// administration stat docs that track it, so a reopen's decrements are
+// observable. `window` controls whether the assignment is open at link time.
+async function seedCompletedSurveyAssignment(
+  caregiverUid: string,
+  administrationId: string,
+  window: { dateOpened: Date; dateClosed: Date }
+) {
+  const startedOn = new Date(window.dateOpened.getTime() + 1_000);
+  const completedOn = new Date(window.dateOpened.getTime() + 2_000);
+  await adminDb
+    .doc(`users/${caregiverUid}/assignments/${administrationId}`)
+    .set({
+      dateOpened: window.dateOpened,
+      dateClosed: window.dateClosed,
+      started: true,
+      completed: true,
+      assigningOrgs: { districts: [SITE] },
+      assessments: [{ taskId: SURVEY_TASK, startedOn, completedOn }],
+      progress: { caregiver_survey: "completed" },
+    });
+  for (const org of [SITE, "total"]) {
+    await adminDb.doc(`administrations/${administrationId}/stats/${org}`).set({
+      assignment: { completed: 1 },
+      [SURVEY_TASK]: { completed: 1 },
+    });
+  }
+}
+
 describe("linkUsers (e2e)", () => {
   let client: ReturnType<typeof getClient>;
   let linkUsers: HttpsCallable<LinkUsersParams, LinkUsersResult>;
@@ -398,7 +429,9 @@ describe("linkUsers (e2e)", () => {
       code: "functions/invalid-argument",
       details: {
         code: "users-usertype-mismatch",
-        users: expect.arrayContaining([{ uid: "ch1-uid", userType: "unknown" }]),
+        users: expect.arrayContaining([
+          { uid: "ch1-uid", userType: "unknown" },
+        ]),
       },
     });
   });
@@ -425,5 +458,113 @@ describe("linkUsers (e2e)", () => {
     const child = await adminDb.doc("users/ch1-uid").get();
     expect(child.get("idHash")).toBe(idHashFor("ch1"));
     expect(child.get("teacherIds")).toContain("t1-uid");
+  });
+
+  it("reopens a completed caregiver survey when a new child is linked", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    const ADMIN_ID = "survey-admin";
+    const dateOpened = new Date(Date.now() - 86_400_000);
+    const dateClosed = new Date(Date.now() + 86_400_000);
+
+    await Promise.all([
+      seedUser("cg1-uid", "cg1", "caregiver", {
+        assignments: { completed: [ADMIN_ID] },
+        assignmentsCompleted: { [ADMIN_ID]: new Date() },
+      }),
+      seedUser("ch1-uid", "ch1", "child"),
+    ]);
+    await seedCompletedSurveyAssignment("cg1-uid", ADMIN_ID, {
+      dateOpened,
+      dateClosed,
+    });
+
+    await linkUsers({
+      siteId: SITE,
+      users: [
+        caregiverRow("cg1", "cg1-uid"),
+        childRow("ch1", "ch1-uid", { caregiverId: ["cg1"] }),
+      ],
+    });
+
+    // The survey is reopened: assignment un-completed, survey progress reset,
+    // and the completedOn stamp cleared while startedOn is kept.
+    const assignment = await adminDb
+      .doc(`users/cg1-uid/assignments/${ADMIN_ID}`)
+      .get();
+    expect(assignment.get("completed")).toBe(false);
+    expect(assignment.get("progress.caregiver_survey")).toBe("started");
+    const assessments = assignment.get("assessments") as Array<
+      Record<string, unknown>
+    >;
+    expect(assessments[0]).not.toHaveProperty("completedOn");
+    expect(assessments[0].startedOn).toBeDefined();
+
+    // The link write and the reopen clears land on the caregiver doc together.
+    const caregiver = await adminDb.doc("users/cg1-uid").get();
+    expect(caregiver.get("childIds")).toContain("ch1-uid");
+    expect(caregiver.get("assignments.completed") ?? []).not.toContain(
+      ADMIN_ID
+    );
+    expect(caregiver.get(`assignmentsCompleted.${ADMIN_ID}`)).toBeUndefined();
+
+    // The completion is decremented from both the site and total stat docs.
+    for (const org of [SITE, "total"]) {
+      const stats = await adminDb
+        .doc(`administrations/${ADMIN_ID}/stats/${org}`)
+        .get();
+      expect(stats.get("assignment.completed")).toBe(0);
+      expect(stats.get(`${SURVEY_TASK}.completed`)).toBe(0);
+    }
+  });
+
+  it("leaves a completed caregiver survey untouched when its window has closed", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    const ADMIN_ID = "closed-admin";
+    const dateOpened = new Date(Date.now() - 2 * 86_400_000);
+    const dateClosed = new Date(Date.now() - 86_400_000);
+
+    await Promise.all([
+      seedUser("cg1-uid", "cg1", "caregiver", {
+        assignments: { completed: [ADMIN_ID] },
+        assignmentsCompleted: { [ADMIN_ID]: new Date() },
+      }),
+      seedUser("ch1-uid", "ch1", "child"),
+    ]);
+    await seedCompletedSurveyAssignment("cg1-uid", ADMIN_ID, {
+      dateOpened,
+      dateClosed,
+    });
+
+    await linkUsers({
+      siteId: SITE,
+      users: [
+        caregiverRow("cg1", "cg1-uid"),
+        childRow("ch1", "ch1-uid", { caregiverId: ["cg1"] }),
+      ],
+    });
+
+    // The link still succeeds, but the closed survey stays completed.
+    const assignment = await adminDb
+      .doc(`users/cg1-uid/assignments/${ADMIN_ID}`)
+      .get();
+    expect(assignment.get("completed")).toBe(true);
+    expect(assignment.get("progress.caregiver_survey")).toBe("completed");
+    const assessments = assignment.get("assessments") as Array<
+      Record<string, unknown>
+    >;
+    expect(assessments[0]).toHaveProperty("completedOn");
+
+    const caregiver = await adminDb.doc("users/cg1-uid").get();
+    expect(caregiver.get("childIds")).toContain("ch1-uid");
+    expect(caregiver.get("assignments.completed")).toContain(ADMIN_ID);
+    expect(caregiver.get(`assignmentsCompleted.${ADMIN_ID}`)).toBeDefined();
+
+    for (const org of [SITE, "total"]) {
+      const stats = await adminDb
+        .doc(`administrations/${ADMIN_ID}/stats/${org}`)
+        .get();
+      expect(stats.get("assignment.completed")).toBe(1);
+      expect(stats.get(`${SURVEY_TASK}.completed`)).toBe(1);
+    }
   });
 });
