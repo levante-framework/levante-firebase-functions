@@ -895,6 +895,25 @@
       "density": "SPARSE_ALL"
     },
     {
+      "collectionGroup": "surveyResponses",
+      "queryScope": "COLLECTION_GROUP",
+      "fields": [
+        {
+          "fieldPath": "taskId",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "timeStarted",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "__name__",
+          "order": "ASCENDING"
+        }
+      ],
+      "density": "SPARSE_ALL"
+    },
+    {
       "collectionGroup": "users",
       "queryScope": "COLLECTION",
       "fields": [
@@ -1159,6 +1178,37 @@
         },
         {
           "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "surveyResponses",
+      "fieldPath": "createdAt",
+      "ttl": false,
+      "indexes": [
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "arrayConfig": "CONTAINS",
+          "queryScope": "COLLECTION"
+        },
+        {
+          "order": "ASCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        },
+        {
+          "order": "DESCENDING",
+          "queryScope": "COLLECTION_GROUP"
+        },
+        {
+          "arrayConfig": "CONTAINS",
           "queryScope": "COLLECTION_GROUP"
         }
       ]

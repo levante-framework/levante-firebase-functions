@@ -402,7 +402,7 @@ export function serializeTaskVariant(
     id: snap.id,
     taskId,
     archived: data.archived === true,
-    createdAt: requireIsoString(data, "createdAt", "updatedAt", "lastUpdated"),
+    createdAt: requireIsoString(data, "createdAt", "lastUpdated"),
     ...(typeof data.createdBy === "string"
       ? { createdBy: data.createdBy }
       : {}),

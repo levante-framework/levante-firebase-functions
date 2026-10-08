@@ -1,3 +1,4 @@
+import type { CoarseLocation } from "@levante-framework/levante-zod";
 import * as admin from "firebase-admin";
 
 // Type alias for Firestore Timestamp
@@ -387,6 +388,7 @@ export interface User {
   groups: OrgAssociationMap;
   idHash?: string;
   lastChildLabelIndex?: number; // only for caregivers; last minted childLabelIndex (omit if none)
+  location?: CoarseLocation;
   parentIds?: string[];
   roles: { siteId: string; role: string; siteName: string }[];
   schools: OrgAssociationMap;

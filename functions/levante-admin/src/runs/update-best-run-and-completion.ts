@@ -6,6 +6,7 @@ import {
   progressKeyFromTaskId,
   rebuildAssignmentProgress,
 } from "../utils/assignment.js";
+import { syncAssignmentProgress } from "../assignments/assignment-sync-in-transaction.js";
 
 export const updateBestRunAndCompletion = async ({
   roarUid,
@@ -213,6 +214,10 @@ export const updateBestRunAndCompletion = async ({
             return;
           }
 
+          const prevAssessments = assessments.map((assessment: object) => ({
+            ...assessment,
+          }));
+
           assessments[assessmentIdx].runId = bestRunId;
           assessments[assessmentIdx].allRunIds = allRunIds;
 
@@ -232,14 +237,34 @@ export const updateBestRunAndCompletion = async ({
           );
           nextProgress[progressKey] = progressValue;
 
+          const nextCompleted = areAssessmentsComplete(
+            assessments,
+            completed ? taskId : undefined
+          );
+          await syncAssignmentProgress(
+            db,
+            transaction,
+            roarUid,
+            assignmentId,
+            {
+              assigningOrgs: data.assigningOrgs,
+              assessments: prevAssessments,
+              started: data.started,
+              completed: data.completed,
+            },
+            {
+              assigningOrgs: data.assigningOrgs,
+              assessments,
+              started: true,
+              completed: nextCompleted,
+            }
+          );
+
           return transaction.update(assignmentDocRef, {
             assessments,
             progress: nextProgress,
             started: true,
-            completed: areAssessmentsComplete(
-              assessments,
-              completed ? taskId : undefined
-            ),
+            completed: nextCompleted,
             cloudSyncTimestamp: new Date().getTime(),
           });
         },

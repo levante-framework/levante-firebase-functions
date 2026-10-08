@@ -7,6 +7,7 @@ import {
   getAssignmentDoc,
   getAssignmentDocRef,
 } from "../utils/assignment.js";
+import { syncAssignmentProgress } from "../assignments/assignment-sync-in-transaction.js";
 import type {
   IUserData,
   IAssignedAssessment,
@@ -208,29 +209,52 @@ export const startTask = onCall(async (request): Promise<StartTaskResult> => {
       const assigningOrgs = assignmentData.assigningOrgs as IOrgsList;
       const readOrgs = assignmentData.readOrgs as IOrgsList;
 
-      // NOW DO ALL WRITES
-      // Update the assessment with startedOn timestamp
-      const assessmentUpdateData = {
-        startedOn: new Date(),
-      };
+      // Snapshot before the assessment write, which mutates the array it reads.
+      const prevAssessments = assignedAssessments.map((assessment) => ({
+        ...assessment,
+      }));
+      const isFirstStart = !prevAssessments.some((assessment) =>
+        Boolean(assessment.startedOn)
+      );
+      const startedOn = new Date();
 
+      // NOW DO ALL WRITES
       await updateAssignedAssessment(
         db,
         uid,
         administrationId,
         taskId,
-        assessmentUpdateData,
+        { startedOn },
         transaction
       );
 
       // If this is the first assessment to be started in this assignment, mark the assignment as started
-      if (
-        !assignedAssessments.some((a: IExtendedAssignedAssessment) =>
-          Boolean(a.startedOn)
-        )
-      ) {
+      if (isFirstStart) {
         await startAssignment(db, administrationId, uid, transaction);
       }
+
+      await syncAssignmentProgress(
+        db,
+        transaction,
+        uid,
+        administrationId,
+        {
+          assigningOrgs,
+          assessments: prevAssessments,
+          started: assignmentData.started,
+          completed: assignmentData.completed,
+        },
+        {
+          assigningOrgs,
+          assessments: prevAssessments.map((assessment) =>
+            assessment.taskId === taskId
+              ? { ...assessment, startedOn }
+              : assessment
+          ),
+          started: Boolean(assignmentData.started) || isFirstStart,
+          completed: assignmentData.completed,
+        }
+      );
 
       // Prepare the task information for firekit using the assessment definition from administration
       const taskInfo = {
