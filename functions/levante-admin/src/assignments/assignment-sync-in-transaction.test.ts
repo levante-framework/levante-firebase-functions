@@ -204,7 +204,7 @@ describe("syncOnAssignmentUpdated", () => {
 
     expect(statsBuffer.recordIncrements).toHaveBeenCalledTimes(1);
     expect(statsBuffer.recordIncrements).toHaveBeenCalledWith(
-      ["site1", "total", "total"],
+      ["site1", "total"],
       "started",
       ["taskA"],
       1,
