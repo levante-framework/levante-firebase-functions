@@ -4,7 +4,7 @@
  * atomic, inline sync that fails with the calling transaction.
  */
 import type { Transaction } from "firebase-admin/firestore";
-import { getFirestore, FieldValue, FieldPath } from "firebase-admin/firestore";
+import { FieldPath, FieldValue, getFirestore } from "firebase-admin/firestore";
 import _reduce from "lodash-es/reduce.js";
 import _without from "lodash-es/without.js";
 import type { IOrgsList } from "../interfaces.js";
@@ -135,26 +135,13 @@ export const syncOnAssignmentDeleted = async (
 };
 
 /**
- * Sync user doc and stats when an assignment is updated.
- * Call this within the same transaction that updates the assignment.
+ * Record admin stats for an assignment update. Does not write the user doc.
  */
-export const syncOnAssignmentUpdated = async (
-  db: ReturnType<typeof getFirestore>,
-  transaction: Transaction,
-  roarUid: string,
-  assignmentUid: string,
+export const recordAssignmentUpdatedStats = (
   prevData: AssignmentData,
   currData: AssignmentData,
   statsBuffer: AdminStatsBuffer
 ) => {
-  const userDocRef = db.collection("users").doc(roarUid);
-  const assignmentStatusFieldPaths = {
-    startedDate: new FieldPath("assignmentsStarted", assignmentUid),
-    completedDate: new FieldPath("assignmentsCompleted", assignmentUid),
-    startedList: new FieldPath("assignments", "started"),
-    completedList: new FieldPath("assignments", "completed"),
-  };
-
   const orgList = getOrgList(currData.assigningOrgs);
   const prevOrgList = getOrgList(prevData.assigningOrgs);
   const prevTaskIds = (prevData.assessments ?? []).map((a) => a.taskId);
@@ -298,6 +285,30 @@ export const syncOnAssignmentUpdated = async (
       !currData.completed && !!prevData.completed
     );
   }
+};
+
+/**
+ * Sync user doc and stats when an assignment is updated.
+ * Call this within the same transaction that updates the assignment.
+ */
+export const syncOnAssignmentUpdated = async (
+  db: ReturnType<typeof getFirestore>,
+  transaction: Transaction,
+  roarUid: string,
+  assignmentUid: string,
+  prevData: AssignmentData,
+  currData: AssignmentData,
+  statsBuffer: AdminStatsBuffer
+) => {
+  const userDocRef = db.collection("users").doc(roarUid);
+  const assignmentStatusFieldPaths = {
+    startedDate: new FieldPath("assignmentsStarted", assignmentUid),
+    completedDate: new FieldPath("assignmentsCompleted", assignmentUid),
+    startedList: new FieldPath("assignments", "started"),
+    completedList: new FieldPath("assignments", "completed"),
+  };
+
+  recordAssignmentUpdatedStats(prevData, currData, statsBuffer);
 
   // A finish can flip both flags. Write them together so the user doc is
   // updated once in this transaction.
