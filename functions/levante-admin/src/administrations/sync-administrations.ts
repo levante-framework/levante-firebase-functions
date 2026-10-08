@@ -75,7 +75,7 @@ export const processRemovedAdministration = async (
       orgs: prevOrgs,
       transaction,
       includeArchived: true, // `includeArchived` is true to remove assignments even from archived users
-      includeDisabled: true, // `includeDisabled` is true to remove assignments even from archived users
+      includeDisabled: true, // `includeDisabled` is true to remove assignments even from disabled users
     });
 
     if (prevUsers.length <= MAX_TRANSACTIONS) {
