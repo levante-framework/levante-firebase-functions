@@ -288,7 +288,7 @@ describe("syncOnAssignmentUpdated", () => {
     expect(transaction.update).not.toHaveBeenCalled();
   });
 
-  it("does not change assigned stats when a task is added and orgs stay the same", async () => {
+  it("increments per-task assigned stats when a task is added to a kept assignment", async () => {
     const { db, transaction, statsBuffer } = setup();
 
     await syncOnAssignmentUpdated(
@@ -307,11 +307,20 @@ describe("syncOnAssignmentUpdated", () => {
       statsBuffer
     );
 
-    expect(statsBuffer.recordIncrements).not.toHaveBeenCalled();
+    // Orgs are unchanged, so only the newly-added task's assigned count moves,
+    // and the assignment-level total is left alone (updateAssignmentTotal false).
+    expect(statsBuffer.recordIncrements).toHaveBeenCalledTimes(1);
+    expect(statsBuffer.recordIncrements).toHaveBeenCalledWith(
+      ["site1", "total"],
+      "assigned",
+      ["taskB"],
+      1,
+      false
+    );
     expect(transaction.update).not.toHaveBeenCalled();
   });
 
-  it("does not change assigned stats when a task is dropped and orgs stay the same", async () => {
+  it("decrements per-task assigned stats when a task is dropped from a kept assignment", async () => {
     const { db, transaction, statsBuffer } = setup();
 
     await syncOnAssignmentUpdated(
@@ -330,7 +339,14 @@ describe("syncOnAssignmentUpdated", () => {
       statsBuffer
     );
 
-    expect(statsBuffer.recordIncrements).not.toHaveBeenCalled();
+    expect(statsBuffer.recordIncrements).toHaveBeenCalledTimes(1);
+    expect(statsBuffer.recordIncrements).toHaveBeenCalledWith(
+      ["site1", "total"],
+      "assigned",
+      ["taskB"],
+      -1,
+      false
+    );
     expect(transaction.update).not.toHaveBeenCalled();
   });
 });
