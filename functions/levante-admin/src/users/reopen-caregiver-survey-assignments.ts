@@ -6,10 +6,8 @@ import {
   type Transaction,
 } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
-import {
-  AdminStatsBufferRegistry,
-  recordAssignmentUpdatedStats,
-} from "../assignments/assignment-sync-in-transaction.js";
+import { AdminStatsBufferRegistry } from "../assignments/admin-stats-buffer.js";
+import { recordAssignmentUpdatedStats } from "../assignments/assignment-sync-in-transaction.js";
 import { findSurveyAssessmentIndex } from "../save-survey-results.js";
 import { progressKeyFromTaskId } from "../utils/assignment.js";
 import { parseTimestamp } from "../utils/utils.js";
