@@ -76,7 +76,10 @@ export const createAdminUser = async ({
   const getUserInfo = async (createPassword = false) => {
     const info: CreateRequest = {
       email,
-      emailVerified: false,
+      // See create-administrator.ts: leaving this false makes the first
+      // email-link sign-in mutate the email, which revokes the refresh token
+      // that sign-in just issued.
+      emailVerified: true,
       disabled: false,
       displayName,
     };
@@ -97,8 +100,12 @@ export const createAdminUser = async ({
         `Updating preexisting admin user with ${email} in admin project`
       );
       preExistingUser = true;
+      // Deliberately omits email. The record was just looked up by this
+      // address, so sending it back can only ever be a no-op write, and
+      // Firebase revokes outstanding refresh tokens for any updateUser payload
+      // carrying an email field. Including it means re-provisioning an existing
+      // administrator silently kills that administrator's live session.
       await auth.updateUser(userRecord.uid, {
-        email: userRecord.email || email,
         emailVerified: userRecord.emailVerified || false,
         disabled: false,
         displayName: userRecord.displayName || displayName,
