@@ -126,9 +126,14 @@ function allSpecificEntriesComplete(
   return specific.every((entry) => entry.isComplete === true);
 }
 
-function teacherHasClasses(userData: Record<string, unknown>): boolean {
+function teacherNeedsClassroomSurvey(userData: Record<string, unknown>): boolean {
   const classes = userData.classes as { current?: string[] } | undefined;
-  return Array.isArray(classes?.current) && classes.current.length > 0;
+  const groups = userData.groups as { current?: string[] } | undefined;
+
+  return (
+    (Array.isArray(classes?.current) && classes.current.length > 0) ||
+    (Array.isArray(groups?.current) && groups.current.length > 0)
+  );
 }
 
 function caregiverHasLinkedChildren(userData: Record<string, unknown>): boolean {
@@ -182,7 +187,7 @@ function surveyResponsesStatusForAdult(
   const generalComplete = data.general?.isComplete === true;
 
   if (userType === "teacher") {
-    if (!teacherHasClasses(userData)) {
+    if (!teacherNeedsClassroomSurvey(userData)) {
       return generalComplete ? "completed" : "started";
     }
     if (generalComplete && allSpecificEntriesComplete(data.specific)) {
