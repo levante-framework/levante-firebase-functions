@@ -1,11 +1,17 @@
-# Compiled JavaScript files
+# Build output
 lib/
 isolate/
-
-# TypeScript v1 declaration files
 typings/
 
-# Node.js dependency directory
+# Dependencies
 node_modules/
-.DS_Store
+
+# Secrets
 credentials/
+.secret.local
+
+# OS
+.DS_Store
+
+# Generated Firestore index export
+remote-indexes.json

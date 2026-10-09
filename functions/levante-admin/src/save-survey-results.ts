@@ -5,10 +5,8 @@ import {
   getAssignmentDocRef,
   getAssignmentDoc,
 } from "./utils/assignment.js";
-import {
-  AdminStatsBufferRegistry,
-  syncOnAssignmentUpdated,
-} from "./assignments/assignment-sync-in-transaction.js";
+import { AdminStatsBufferRegistry } from "./assignments/admin-stats-buffer.js";
+import { syncOnAssignmentUpdated } from "./assignments/assignment-sync-in-transaction.js";
 
 type Response = {
   responseTime: string;

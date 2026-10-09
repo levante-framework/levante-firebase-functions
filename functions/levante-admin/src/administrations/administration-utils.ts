@@ -22,7 +22,7 @@ import _fromPairs from "lodash-es/fromPairs.js";
 import type { IAdministration, IOrgsList } from "../interfaces.js";
 import { ORG_NAMES } from "../interfaces.js";
 import { removeOrgsFromAssignments } from "../assignments/assignment-utils.js";
-import { AdminStatsBufferRegistry } from "../assignments/assignment-sync-in-transaction.js";
+import { AdminStatsBufferRegistry } from "../assignments/admin-stats-buffer.js";
 import {
   chunkOrgs,
   getExhaustiveOrgs,

@@ -15,6 +15,7 @@
     "test": "npm run test:unit && npm run test:e2e",
     "test:unit": "vitest run functions/levante-admin/src --config vitest.unit.config.mts",
     "test:e2e": "npm run build && firebase emulators:exec \"vitest run __tests__/e2e --config vitest.e2e.config.mts\"",
+    "test:scripts": "node --test \"functions/levante-admin/scripts/*.test.js\"",
     "test:rules": "firebase emulators:exec \"npx vitest run __tests__/rules\"",
     "predeploy:levante-admin": "npm run build",
     "predeploy:levante-assessment": "npm run build",
@@ -26,6 +27,7 @@
     "emulator:seed:legacy": "EMULATOR=1 node emulator_scripts/seed-emulator.js",
     "emulator:seed:functions": "EMULATOR=1 node emulator_scripts/seed-emulator-functions.js",
     "emulator:seed:tasks": "EMULATOR=1 node emulator_scripts/seed-tasks-from-project.js",
+    "emulator:seed:forms": "EMULATOR=1 node emulator_scripts/seed-form-definitions.js",
     "emulator:seed:ui": "node emulator_scripts/seed-emulator-ui.js",
     "emulator:start:dashboard": "node emulator_scripts/start-seeded-dashboard.js",
     "emulator:test:admin-login": "node emulator_scripts/test-admin-login.js",
@@ -66,7 +68,7 @@
     "*.{js,css,md}": "prettier --write"
   },
   "dependencies": {
-    "@levante-framework/levante-zod": "^2.2.0",
+    "@levante-framework/levante-zod": "^2.4.0",
     "firebase": "^11.6.1",
     "firebase-admin": "^11.11.1",
     "firebase-tools": "^14.27.0"

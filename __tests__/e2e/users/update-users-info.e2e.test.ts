@@ -36,9 +36,165 @@ async function seedUser(
   });
 }
 
+// birthMonth 0 (January) keeps getAge unambiguous year-round: it only decrements
+// when the current month is before the birth month, which 0 never triggers.
+const BIRTH_MONTH = 0;
+const CURRENT_YEAR = new Date().getFullYear();
+const dateOpened = new Date(Date.now() - 86_400_000);
+const dateClosed = new Date(Date.now() + 365 * 86_400_000);
+
+type AgeCondition = {
+  field: "age";
+  op: "GREATER_THAN_OR_EQUAL" | "LESS_THAN";
+  value: number;
+};
+
+// Seeds the child the resync operates on. The district doc is required because
+// getExhaustiveOrgs reads it; omit it (seedDistrict=false) to force a failure.
+async function seedChild(
+  uid: string,
+  birthYear: number,
+  { seedDistrict = true }: { seedDistrict?: boolean } = {}
+): Promise<void> {
+  if (seedDistrict) {
+    await adminDb.doc(`districts/${SITE}`).set({ schools: [], subGroups: [] });
+  }
+  await seedUser(uid, {
+    userType: "student",
+    birthMonth: BIRTH_MONTH,
+    birthYear,
+  });
+}
+
+type SeedAssessment = {
+  taskId: string;
+  variantId: string;
+  variantName: string;
+  params?: Record<string, unknown>;
+  conditions?: { assigned?: AgeCondition; optional?: AgeCondition };
+};
+
+// Seeds an open administration assigned to SITE with the given assessments,
+// including the assignedOrgs subcollection doc the resync queries to discover it.
+async function seedAdministrationWithAssessments(
+  adminId: string,
+  assessments: SeedAssessment[]
+): Promise<void> {
+  await adminDb.doc(`administrations/${adminId}`).set({
+    name: adminId,
+    publicName: adminId,
+    createdBy: "u-admin",
+    siteId: SITE,
+    dateOpened,
+    dateClosed,
+    dateCreated: dateOpened,
+    districts: [SITE],
+    schools: [],
+    classes: [],
+    groups: [],
+    families: [],
+    legal: {},
+    sequential: false,
+    testData: false,
+    assessments: assessments.map((a) => ({ params: {}, ...a })),
+  });
+  await adminDb.doc(`administrations/${adminId}/assignedOrgs/${SITE}`).set({
+    administrationId: adminId,
+    orgId: SITE,
+    orgType: "districts",
+    dateOpened,
+    dateClosed,
+    dateCreated: dateOpened,
+    createdBy: "u-admin",
+    legal: {},
+    name: adminId,
+    publicName: adminId,
+    testData: false,
+    timestamp: new Date(),
+  });
+}
+
+// Seeds an open administration assigned to SITE with a single age-gated task.
+async function seedAdministration(
+  adminId: string,
+  assigned: AgeCondition
+): Promise<void> {
+  await seedAdministrationWithAssessments(adminId, [
+    {
+      taskId: "task-1",
+      variantId: "variant-1",
+      variantName: "Variant 1",
+      conditions: { assigned },
+    },
+  ]);
+}
+
+// Seeds an existing assignment for a child, as prepareNewAssignment would have
+// created it when the child was still eligible. Pass `startedOn` to mark task-1
+// as in progress (used to exercise the in-progress-retention boundary).
+async function seedOpenAssignment(
+  uid: string,
+  adminId: string,
+  { startedOn }: { startedOn?: Date } = {}
+): Promise<void> {
+  await adminDb.doc(`users/${uid}/assignments/${adminId}`).set({
+    id: adminId,
+    started: startedOn !== undefined,
+    completed: false,
+    assigningOrgs: { districts: [SITE], schools: [], classes: [], groups: [] },
+    readOrgs: { districts: [SITE] },
+    assessments: [
+      {
+        taskId: "task-1",
+        optional: false,
+        params: {},
+        variantId: "variant-1",
+        variantName: "Variant 1",
+        ...(startedOn !== undefined ? { startedOn } : {}),
+      },
+    ],
+    progress: { "task-1": startedOn !== undefined ? "started" : "assigned" },
+    dateOpened,
+    dateClosed,
+    dateCreated: dateOpened,
+  });
+}
+
+// Seeds a child who qualifies for an age>=8 administration but may currently be
+// inactive. Mirrors seedChild but lets the caller set archived/disabled (to
+// exercise reactivation) and skip the district doc to force a resync failure.
+async function seedReactivationChild(
+  uid: string,
+  {
+    archived = false,
+    disabled = false,
+    seedDistrict = true,
+  }: { archived?: boolean; disabled?: boolean; seedDistrict?: boolean } = {}
+): Promise<void> {
+  if (seedDistrict) {
+    await adminDb.doc(`districts/${SITE}`).set({ schools: [], subGroups: [] });
+  }
+  await seedUser(uid, {
+    userType: "student",
+    birthMonth: BIRTH_MONTH,
+    birthYear: CURRENT_YEAR - 10,
+    archived,
+    disabled,
+  });
+}
+
+const AGE_8_GATE: AgeCondition = {
+  field: "age",
+  op: "GREATER_THAN_OR_EQUAL",
+  value: 8,
+};
+
 describe("updateUsersInfo (e2e)", () => {
   let client: ReturnType<typeof getClient>;
-  let updateUsersInfo: HttpsCallable<UpdateUsersInfoParams, UpdateUsersInfoResult>;
+  let updateUsersInfo: HttpsCallable<
+    UpdateUsersInfoParams,
+    UpdateUsersInfoResult
+  >;
 
   beforeEach(async () => {
     await Promise.all([clearFirestore(), clearAuth()]);
@@ -159,5 +315,481 @@ describe("updateUsersInfo (e2e)", () => {
     expect(u1.get("archived")).toBe(true);
     // disabled was not in the payload, so it stays as seeded.
     expect(u1.get("disabled")).toBe(true);
+  });
+
+  it("rejects birthMonth/birthYear for non-child users", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    // Default seeded userType is "teacher", i.e. not a child.
+    await seedUser("u-teacher");
+
+    await expect(
+      updateUsersInfo({
+        users: [{ uid: "u-teacher", birthMonth: 5, birthYear: 2015 }],
+      })
+    ).rejects.toMatchObject({
+      code: "functions/invalid-argument",
+      details: { code: "child-only-fields", uids: ["u-teacher"] },
+    });
+
+    const doc = await adminDb.doc("users/u-teacher").get();
+    expect(doc.get("birthMonth")).toBeUndefined();
+    expect(doc.get("birthYear")).toBeUndefined();
+  });
+
+  it("checks permissions before the child-only birth-field guard", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    // Non-child user on a site the caller cannot update. The caller must not
+    // learn the user's type, so permission-denied takes precedence.
+    await seedUser("u-cross", { districts: { current: [SITE, OTHER_SITE] } });
+
+    await expect(
+      updateUsersInfo({ users: [{ uid: "u-cross", birthMonth: 5 }] })
+    ).rejects.toMatchObject({ code: "functions/permission-denied" });
+  });
+
+  it("updates birthMonth and birthYear for child users", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    // A birth change on a child triggers an assignment resync, which reads the
+    // user's district doc; seed it even though there are no administrations.
+    await adminDb.doc(`districts/${SITE}`).set({ schools: [], subGroups: [] });
+    await seedUser("u-child", { userType: "student" });
+
+    const { data } = await updateUsersInfo({
+      users: [{ uid: "u-child", birthMonth: 5, birthYear: 2015 }],
+    });
+
+    expect(data).toEqual({
+      users: [{ uid: "u-child", birthMonth: 5, birthYear: 2015 }],
+    });
+
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("birthMonth")).toBe(5);
+    expect(child.get("birthYear")).toBe(2015);
+    expect(child.get("birthDateUpdatedAt")).toBeDefined();
+  });
+
+  it("does not stamp birthDateUpdatedAt when birth values are unchanged", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedUser("u-child", {
+      userType: "student",
+      birthMonth: 5,
+      birthYear: 2015,
+    });
+
+    // Resend identical birth values alongside a real flag change.
+    await updateUsersInfo({
+      users: [
+        { uid: "u-child", birthMonth: 5, birthYear: 2015, archived: true },
+      ],
+    });
+
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("archived")).toBe(true);
+    expect(child.get("birthDateUpdatedAt")).toBeUndefined();
+  });
+
+  it("atomically creates an assignment when a birth change makes a child newly eligible", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedAdministration("admin-agein", {
+      field: "age",
+      op: "GREATER_THAN_OR_EQUAL",
+      value: 8,
+    });
+    // Age 3: below the gate, so no assignment exists yet.
+    await seedChild("u-child", CURRENT_YEAR - 3);
+
+    const { data } = await updateUsersInfo({
+      users: [{ uid: "u-child", birthYear: CURRENT_YEAR - 10 }],
+    });
+
+    expect(data.users).toEqual([
+      { uid: "u-child", birthYear: CURRENT_YEAR - 10 },
+    ]);
+
+    // Field change persisted.
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("birthYear")).toBe(CURRENT_YEAR - 10);
+    expect(child.get("birthDateUpdatedAt")).toBeDefined();
+
+    // Assignment created in the same transaction.
+    const assignment = await adminDb
+      .doc("users/u-child/assignments/admin-agein")
+      .get();
+    expect(assignment.exists).toBe(true);
+    expect(assignment.get("assessments")).toHaveLength(1);
+    expect(assignment.get("assessments")[0].taskId).toBe("task-1");
+  });
+
+  it("atomically removes an assignment when a birth change makes a child ineligible", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedAdministration("admin-ageout", {
+      field: "age",
+      op: "LESS_THAN",
+      value: 8,
+    });
+    // Age 3: eligible, so seed the assignment it would already have.
+    await seedChild("u-child", CURRENT_YEAR - 3);
+    await seedOpenAssignment("u-child", "admin-ageout");
+
+    const { data } = await updateUsersInfo({
+      users: [{ uid: "u-child", birthYear: CURRENT_YEAR - 10 }],
+    });
+
+    expect(data.users).toEqual([
+      { uid: "u-child", birthYear: CURRENT_YEAR - 10 },
+    ]);
+
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("birthYear")).toBe(CURRENT_YEAR - 10);
+
+    // Assignment deleted in the same transaction.
+    const assignment = await adminDb
+      .doc("users/u-child/assignments/admin-ageout")
+      .get();
+    expect(assignment.exists).toBe(false);
+  });
+
+  it("retains an in-progress assessment when a birth change makes a child ineligible", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedAdministration("admin-ageout", {
+      field: "age",
+      op: "LESS_THAN",
+      value: 8,
+    });
+    // Age 3: eligible, and task-1 is already in progress.
+    await seedChild("u-child", CURRENT_YEAR - 3);
+    const startedOn = new Date(Date.now() - 3_600_000);
+    await seedOpenAssignment("u-child", "admin-ageout", { startedOn });
+
+    const { data } = await updateUsersInfo({
+      users: [{ uid: "u-child", birthYear: CURRENT_YEAR - 10 }],
+    });
+
+    expect(data.users).toEqual([
+      { uid: "u-child", birthYear: CURRENT_YEAR - 10 },
+    ]);
+
+    // Child is now too old, but the started assessment is kept, so the
+    // assignment survives rather than being deleted.
+    const assignment = await adminDb
+      .doc("users/u-child/assignments/admin-ageout")
+      .get();
+    expect(assignment.exists).toBe(true);
+    const assessments = assignment.get("assessments");
+    expect(assessments).toHaveLength(1);
+    expect(assessments[0].taskId).toBe("task-1");
+    expect(assessments[0].startedOn).toBeDefined();
+  });
+
+  it("drops the child from the response and writes nothing when the resync fails", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedAdministration("admin-agein", {
+      field: "age",
+      op: "GREATER_THAN_OR_EQUAL",
+      value: 8,
+    });
+    // No district doc: getExhaustiveOrgs throws, so the whole transaction rolls back.
+    await seedChild("u-child", CURRENT_YEAR - 3, { seedDistrict: false });
+
+    const { data } = await updateUsersInfo({
+      users: [{ uid: "u-child", birthYear: CURRENT_YEAR - 10 }],
+    });
+
+    // Failed child is dropped from the response.
+    expect(data.users).toEqual([]);
+
+    // Neither the field change nor any assignment was written.
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("birthYear")).toBe(CURRENT_YEAR - 3);
+    expect(child.get("birthDateUpdatedAt")).toBeUndefined();
+    const assignment = await adminDb
+      .doc("users/u-child/assignments/admin-agein")
+      .get();
+    expect(assignment.exists).toBe(false);
+  });
+
+  it("isolates per-child resync failures: a failing child is dropped while others persist", async () => {
+    await signInAs(client, "u-admin", {
+      useNewPermissions: true,
+      siteRoles: { [SITE]: ["site_admin"], [OTHER_SITE]: ["site_admin"] },
+    });
+    await seedAdministration("admin-agein", {
+      field: "age",
+      op: "GREATER_THAN_OR_EQUAL",
+      value: 8,
+    });
+    // Child A: district seeded, so its resync succeeds and creates the assignment.
+    await seedChild("u-ok", CURRENT_YEAR - 3);
+    // Child B: on a different site with no district doc, so its resync throws.
+    await seedUser("u-fail", {
+      userType: "student",
+      birthMonth: BIRTH_MONTH,
+      birthYear: CURRENT_YEAR - 3,
+      districts: { current: [OTHER_SITE] },
+    });
+
+    const { data } = await updateUsersInfo({
+      users: [
+        { uid: "u-ok", birthYear: CURRENT_YEAR - 10 },
+        { uid: "u-fail", birthYear: CURRENT_YEAR - 10 },
+      ],
+    });
+
+    // Only the failing child is dropped; request order is preserved.
+    expect(data.users).toEqual([{ uid: "u-ok", birthYear: CURRENT_YEAR - 10 }]);
+
+    // Child A fully applied (field change + assignment) in its own transaction.
+    const ok = await adminDb.doc("users/u-ok").get();
+    expect(ok.get("birthYear")).toBe(CURRENT_YEAR - 10);
+    expect(ok.get("birthDateUpdatedAt")).toBeDefined();
+    const okAssignment = await adminDb
+      .doc("users/u-ok/assignments/admin-agein")
+      .get();
+    expect(okAssignment.exists).toBe(true);
+
+    // Child B fully rolled back; one child's failure cannot affect another's.
+    const fail = await adminDb.doc("users/u-fail").get();
+    expect(fail.get("birthYear")).toBe(CURRENT_YEAR - 3);
+    expect(fail.get("birthDateUpdatedAt")).toBeUndefined();
+  });
+
+  it("commits batched flag-only updates even when a separate child's resync fails", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedAdministration("admin-agein", {
+      field: "age",
+      op: "GREATER_THAN_OR_EQUAL",
+      value: 8,
+    });
+    // Flag-only user: no birth change, so it commits via the batch path.
+    await seedUser("u-flag");
+    // Birth child with no district doc: its resync transaction throws.
+    await seedChild("u-child", CURRENT_YEAR - 3, { seedDistrict: false });
+
+    const { data } = await updateUsersInfo({
+      users: [
+        { uid: "u-flag", archived: true },
+        { uid: "u-child", birthYear: CURRENT_YEAR - 10 },
+      ],
+    });
+
+    // The failed birth child is dropped; the batched user remains.
+    expect(data.users).toEqual([{ uid: "u-flag", archived: true }]);
+
+    // Batched flag change persisted (committed before the resync pass).
+    const flag = await adminDb.doc("users/u-flag").get();
+    expect(flag.get("archived")).toBe(true);
+
+    // Birth child fully rolled back.
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("birthYear")).toBe(CURRENT_YEAR - 3);
+    expect(child.get("birthDateUpdatedAt")).toBeUndefined();
+  });
+
+  it("applies archived/disabled alongside the birth change in the resync transaction", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedAdministration("admin-agein", {
+      field: "age",
+      op: "GREATER_THAN_OR_EQUAL",
+      value: 8,
+    });
+    await seedChild("u-child", CURRENT_YEAR - 3);
+
+    const { data } = await updateUsersInfo({
+      users: [
+        {
+          uid: "u-child",
+          birthYear: CURRENT_YEAR - 10,
+          archived: true,
+          disabled: true,
+        },
+      ],
+    });
+
+    expect(data.users).toEqual([
+      {
+        uid: "u-child",
+        birthYear: CURRENT_YEAR - 10,
+        archived: true,
+        disabled: true,
+      },
+    ]);
+
+    // A birth change routes the whole update through the resync transaction, so
+    // the flags must land together with the birth field (not via the batch).
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("birthYear")).toBe(CURRENT_YEAR - 10);
+    expect(child.get("archived")).toBe(true);
+    expect(child.get("disabled")).toBe(true);
+    expect(child.get("birthDateUpdatedAt")).toBeDefined();
+
+    // The assignment resync ran in that same transaction.
+    const assignment = await adminDb
+      .doc("users/u-child/assignments/admin-agein")
+      .get();
+    expect(assignment.exists).toBe(true);
+  });
+
+  it("increments per-task assigned stats when a birth change adds a task to a kept assignment", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    // task-1 is unconditional; task-2 is gated on age >= 8.
+    await seedAdministrationWithAssessments("admin-twotask", [
+      { taskId: "task-1", variantId: "variant-1", variantName: "Variant 1" },
+      {
+        taskId: "task-2",
+        variantId: "variant-2",
+        variantName: "Variant 2",
+        conditions: {
+          assigned: { field: "age", op: "GREATER_THAN_OR_EQUAL", value: 8 },
+        },
+      },
+    ]);
+    // Age 3: only task-1 qualifies, so the assignment already exists with task-1.
+    await seedChild("u-child", CURRENT_YEAR - 3);
+    await seedOpenAssignment("u-child", "admin-twotask");
+    // Baseline stats as they'd stand after that assignment was created.
+    await adminDb.doc(`administrations/admin-twotask/stats/${SITE}`).set({
+      assignment: { assigned: 1 },
+      "task-1": { assigned: 1 },
+    });
+    await adminDb.doc("administrations/admin-twotask/stats/total").set({
+      assignment: { assigned: 1 },
+      "task-1": { assigned: 1 },
+    });
+
+    await updateUsersInfo({
+      users: [{ uid: "u-child", birthYear: CURRENT_YEAR - 10 }],
+    });
+
+    // task-2 was appended to the kept assignment (not a new assignment).
+    const assignment = await adminDb
+      .doc("users/u-child/assignments/admin-twotask")
+      .get();
+    const taskIds = (
+      assignment.get("assessments") as Array<{ taskId: string }>
+    ).map((a) => a.taskId);
+    expect(taskIds).toContain("task-2");
+
+    // The newly-added task's assigned count moved on both the site and total
+    // docs, while the assignment-level total is left unchanged (the assignment
+    // itself still exists, so only per-task counts shift).
+    const siteStats = await adminDb
+      .doc(`administrations/admin-twotask/stats/${SITE}`)
+      .get();
+    expect(siteStats.get("task-2")).toEqual({ assigned: 1 });
+    expect(siteStats.get("task-1")).toEqual({ assigned: 1 });
+    expect(siteStats.get("assignment")).toEqual({ assigned: 1 });
+
+    const totalStats = await adminDb
+      .doc("administrations/admin-twotask/stats/total")
+      .get();
+    expect(totalStats.get("task-2")).toEqual({ assigned: 1 });
+    expect(totalStats.get("assignment")).toEqual({ assigned: 1 });
+  });
+
+  it("atomically creates missing assignments when a user is reactivated", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedAdministration("admin-agein", AGE_8_GATE);
+    // Inactive (archived + disabled) child who qualifies but was excluded from
+    // assignment sync while inactive, so no assignment exists yet.
+    await seedReactivationChild("u-child", { archived: true, disabled: true });
+
+    const { data } = await updateUsersInfo({
+      users: [{ uid: "u-child", archived: false, disabled: false }],
+    });
+
+    expect(data.users).toEqual([
+      { uid: "u-child", archived: false, disabled: false },
+    ]);
+
+    // Flags persisted.
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("archived")).toBe(false);
+    expect(child.get("disabled")).toBe(false);
+
+    // Assignment created in the reactivation resync transaction.
+    const assignment = await adminDb
+      .doc("users/u-child/assignments/admin-agein")
+      .get();
+    expect(assignment.exists).toBe(true);
+    expect(assignment.get("assessments")).toHaveLength(1);
+    expect(assignment.get("assessments")[0].taskId).toBe("task-1");
+  });
+
+  it("reactivates when clearing the only set flag", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedAdministration("admin-agein", AGE_8_GATE);
+    // Only disabled is set; archived is already false.
+    await seedReactivationChild("u-child", { disabled: true });
+
+    await updateUsersInfo({ users: [{ uid: "u-child", disabled: false }] });
+
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("disabled")).toBe(false);
+
+    const assignment = await adminDb
+      .doc("users/u-child/assignments/admin-agein")
+      .get();
+    expect(assignment.exists).toBe(true);
+  });
+
+  it("does not resync when the user remains inactive after the update", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedAdministration("admin-agein", AGE_8_GATE);
+    // Clearing disabled while archived stays true leaves the user inactive.
+    await seedReactivationChild("u-child", { archived: true, disabled: true });
+
+    await updateUsersInfo({ users: [{ uid: "u-child", disabled: false }] });
+
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("disabled")).toBe(false);
+    expect(child.get("archived")).toBe(true);
+
+    // Still inactive, so no assignment is synced.
+    const assignment = await adminDb
+      .doc("users/u-child/assignments/admin-agein")
+      .get();
+    expect(assignment.exists).toBe(false);
+  });
+
+  it("does not resync an already-active user on a no-op flag write", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedAdministration("admin-agein", AGE_8_GATE);
+    // Already active (both flags false) and qualifying, but with no assignment.
+    await seedReactivationChild("u-child");
+
+    await updateUsersInfo({ users: [{ uid: "u-child", archived: false }] });
+
+    // No inactive->active transition, so the missing assignment is left as is.
+    const assignment = await adminDb
+      .doc("users/u-child/assignments/admin-agein")
+      .get();
+    expect(assignment.exists).toBe(false);
+  });
+
+  it("rolls back the reactivation and drops the user when the resync fails", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedAdministration("admin-agein", AGE_8_GATE);
+    // No district doc: getExhaustiveOrgs throws, so the whole transaction rolls back.
+    await seedReactivationChild("u-child", {
+      archived: true,
+      disabled: true,
+      seedDistrict: false,
+    });
+
+    const { data } = await updateUsersInfo({
+      users: [{ uid: "u-child", archived: false, disabled: false }],
+    });
+
+    // Failed user is dropped from the response.
+    expect(data.users).toEqual([]);
+
+    // Neither the flag change nor any assignment was written.
+    const child = await adminDb.doc("users/u-child").get();
+    expect(child.get("archived")).toBe(true);
+    expect(child.get("disabled")).toBe(true);
+    const assignment = await adminDb
+      .doc("users/u-child/assignments/admin-agein")
+      .get();
+    expect(assignment.exists).toBe(false);
   });
 });

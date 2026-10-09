@@ -564,7 +564,8 @@ export const getMinimalOrgs = async (
  * @param {IOrgsList} orgs - The input organization lists
  * @param {Transaction} transaction - The transaction with which to read DB documents
  * @param {string[]} userTypes - The user types to get (default: ["student", "parent", "teacher"])
- * @param {boolean} includeArchived - Whether to include archived orgs. Defaults to false.
+ * @param {boolean} includeArchived - Whether to include archived users. Defaults to false.
+ * @param {boolean} includeDisabled - Whether to include disabled users. Defaults to false.
  * @returns {Promise<string[]>} An array of user IDs from the specified orgs
  */
 export const getUsersFromOrgs = async ({
@@ -572,11 +573,13 @@ export const getUsersFromOrgs = async ({
   transaction,
   userTypes = ["student", "parent", "teacher"],
   includeArchived = false,
+  includeDisabled = false,
 }: {
   orgs: IOrgsList;
   transaction: Transaction;
   userTypes?: string[];
   includeArchived?: boolean;
+  includeDisabled?: boolean;
 }) => {
   const db = getFirestore();
   let users: string[] = [];
@@ -603,6 +606,10 @@ export const getUsersFromOrgs = async ({
 
       if (!includeArchived) {
         filterComponents.push(Filter.where("archived", "==", false));
+      }
+
+      if (!includeDisabled) {
+        filterComponents.push(Filter.where("disabled", "==", false));
       }
 
       const andFilter = Filter.and(...filterComponents);

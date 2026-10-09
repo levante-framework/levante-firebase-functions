@@ -171,6 +171,32 @@ describe("getUserOverview (e2e)", () => {
     expect(data).not.toHaveProperty("childLabelIndex");
   });
 
+  it("returns birthMonth and birthYear for child users", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedUser("u-child", { birthMonth: 5, birthYear: 2015 });
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site One" });
+
+    const { data } = await getUserOverview({ uid: "u-child" });
+
+    expect(data).toMatchObject({
+      uid: "u-child",
+      userType: "child",
+      birthMonth: 5,
+      birthYear: 2015,
+    });
+  });
+
+  it("omits birthMonth and birthYear when unset", async () => {
+    await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
+    await seedUser("u-child");
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site One" });
+
+    const { data } = await getUserOverview({ uid: "u-child" });
+
+    expect(data).not.toHaveProperty("birthMonth");
+    expect(data).not.toHaveProperty("birthYear");
+  });
+
   it("returns the user's profile, orgs, and bucketed assignments", async () => {
     await signInAs(client, "u-admin", SITE_ADMIN_CLAIMS);
     const dates = await seedOverviewFixture();

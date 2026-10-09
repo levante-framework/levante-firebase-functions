@@ -18,6 +18,7 @@ import {
   ensurePermissionsLoaded,
   filterSitesByPermission,
 } from "../utils/permission-helpers.js";
+import { reopenCaregiverSurveyAssignments } from "./reopen-caregiver-survey-assignments.js";
 import { ROAR_TO_LEVANTE_USERTYPE, isRoarUserType } from "./user-utils.js";
 
 /**
@@ -291,6 +292,14 @@ export const linkUsers = onCall(async (req): Promise<LinkUsersResult> => {
           )
         );
 
+        // Reads must finish before the link writes below. A failure here
+        // aborts the link, so a retry still sees these caregivers as new.
+        const caregiverUpdates = await reopenCaregiverSurveyAssignments(
+          db,
+          transaction,
+          newCaregiverUids
+        );
+
         // Update child document
         const childUpdate: Record<string, unknown> = {};
         if (requestedCaregiverUids.length > 0) {
@@ -313,6 +322,7 @@ export const linkUsers = onCall(async (req): Promise<LinkUsersResult> => {
         // Bump every caregiver on the child to the minted label
         for (const snap of presentCaregiverSnaps) {
           transaction.update(snap.ref, {
+            ...caregiverUpdates.get(snap.id),
             childIds: FieldValue.arrayUnion(user.uid),
             lastChildLabelIndex: childLabelIndex,
           });

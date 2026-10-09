@@ -8,6 +8,11 @@ import { FieldValue, getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import _chunk from "lodash-es/chunk.js";
+import _pick from "lodash-es/pick.js";
+import type { User } from "../firestore-schema.js";
+import type { IOrgsList } from "../interfaces.js";
+import { ORG_NAMES } from "../interfaces.js";
+import { syncAssignmentsForUserFieldChange } from "../administrations/sync-administrations.js";
 import {
   buildPermissionsUserFromAuthRecord,
   ensurePermissionsLoaded,
@@ -15,9 +20,22 @@ import {
 } from "../utils/permission-helpers.js";
 
 /**
- * Callable that updates the `archived` and `disabled` flags on user docs. The
- * caller must have USERS/UPDATE permission on every site each target user
- * belongs to. Users missing either flag in the request are left untouched.
+ * Callable that updates the `archived`, `disabled`, `birthMonth`, and
+ * `birthYear` fields on user docs. The caller must have USERS/UPDATE permission
+ * on every site each target user belongs to. Each field is optional per user;
+ * any field omitted from the request is left untouched. `birthMonth`/`birthYear`
+ * may only be set on child (student) users.
+ *
+ * Users whose change needs no assignment resync are committed together via a
+ * batch. Users that need a resync are handled one transaction each via
+ * `syncAssignmentsForUserFieldChange`, which atomically persists the field
+ * change and resyncs the user's open-administration assignments. A resync is
+ * required when a child's birth fields change (assignment conditions depend on
+ * them) or when a user is reactivated — previously `archived` or `disabled` and
+ * now both `false` — so they are re-assigned to any open administrations they
+ * were excluded from while inactive. A user whose resync transaction fails is
+ * logged and dropped from the returned `users`, leaving the rest of the request
+ * unaffected.
  */
 export const updateUsersInfo = onCall(
   async (req): Promise<UpdateUsersInfoResult> => {
@@ -94,19 +112,137 @@ export const updateUsersInfo = onCall(
       );
     }
 
-    for (const chunk of _chunk(users, 500)) {
+    const dataByUid = new Map(
+      snaps.map((snap) => [snap.id, snap.data() as Partial<User>])
+    );
+    const nonChildBirthFieldUids = users
+      .filter(
+        (user) =>
+          (user.birthMonth !== undefined || user.birthYear !== undefined) &&
+          dataByUid.get(user.uid)?.userType !== "student"
+      )
+      .map((user) => user.uid);
+    if (nonChildBirthFieldUids.length > 0) {
+      throw new HttpsError(
+        "invalid-argument",
+        "birthMonth and birthYear can only be set for child users",
+        {
+          code: "child-only-fields",
+          uids: nonChildBirthFieldUids,
+        }
+      );
+    }
+
+    // Updates that need no resync commit via a plain batch. Updates that change
+    // assignment eligibility — a birth-field change or a reactivation — need the
+    // user's assignments resynced atomically with the field write (see
+    // syncAssignmentsForUserFieldChange), so they are handled one transaction
+    // per user.
+    const batchUpdates: Array<{
+      uid: string;
+      update: Record<string, unknown>;
+    }> = [];
+    const syncTargets: Array<{
+      uid: string;
+      update: Record<string, unknown>;
+      currentOrgs: IOrgsList;
+      userDataOverride: Record<string, unknown>;
+    }> = [];
+
+    for (const user of users) {
+      const existing = dataByUid.get(user.uid);
+      const update: Record<string, unknown> = {};
+      if (user.archived !== undefined && user.archived !== existing?.archived)
+        update.archived = user.archived;
+      if (user.disabled !== undefined && user.disabled !== existing?.disabled)
+        update.disabled = user.disabled;
+      let birthChanged = false;
+      if (
+        user.birthMonth !== undefined &&
+        user.birthMonth !== existing?.birthMonth
+      ) {
+        update.birthMonth = user.birthMonth;
+        birthChanged = true;
+      }
+      if (
+        user.birthYear !== undefined &&
+        user.birthYear !== existing?.birthYear
+      ) {
+        update.birthYear = user.birthYear;
+        birthChanged = true;
+      }
+      if (birthChanged) {
+        update.birthDateUpdatedAt = FieldValue.serverTimestamp();
+      }
+      if (Object.keys(update).length === 0) continue;
+      update.updatedAt = FieldValue.serverTimestamp();
+
+      // Reactivation: a user who was archived or disabled is now both false, so
+      // they must be re-assigned to the open administrations they were excluded
+      // from while inactive.
+      const wasInactive =
+        existing?.archived === true || existing?.disabled === true;
+      const resultingArchived = user.archived ?? existing?.archived ?? false;
+      const resultingDisabled = user.disabled ?? existing?.disabled ?? false;
+      const reactivated =
+        wasInactive &&
+        resultingArchived === false &&
+        resultingDisabled === false;
+
+      if (birthChanged || reactivated) {
+        const orgData = _pick(existing, ORG_NAMES) as Record<
+          string,
+          { current?: string[] } | undefined
+        >;
+        const currentOrgs: IOrgsList = {};
+        for (const orgName of ORG_NAMES) {
+          currentOrgs[orgName as keyof IOrgsList] =
+            orgData[orgName]?.current ?? [];
+        }
+        syncTargets.push({
+          uid: user.uid,
+          update,
+          currentOrgs,
+          // Derive from request + existing values (not a re-read of the doc) so
+          // transaction retries evaluate conditions deterministically.
+          userDataOverride: {
+            birthMonth: user.birthMonth ?? existing?.birthMonth,
+            birthYear: user.birthYear ?? existing?.birthYear,
+            archived: resultingArchived,
+            disabled: resultingDisabled,
+          },
+        });
+      } else {
+        batchUpdates.push({ uid: user.uid, update });
+      }
+    }
+
+    for (const chunk of _chunk(batchUpdates, 500)) {
       const batch = db.batch();
-      for (const user of chunk) {
-        const update: Record<string, unknown> = {};
-        if (user.archived !== undefined) update.archived = user.archived;
-        if (user.disabled !== undefined) update.disabled = user.disabled;
-        if (Object.keys(update).length === 0) continue;
-        update.updatedAt = FieldValue.serverTimestamp();
-        batch.update(usersRef.doc(user.uid), update);
+      for (const { uid: targetUid, update } of chunk) {
+        batch.update(usersRef.doc(targetUid), update);
       }
       await batch.commit();
     }
 
-    return { users };
+    const failedUids = new Set<string>();
+    for (const target of syncTargets) {
+      try {
+        await syncAssignmentsForUserFieldChange(
+          target.uid,
+          target.currentOrgs,
+          target.update,
+          target.userDataOverride
+        );
+      } catch (err) {
+        logger.error("Failed to resync assignments after user field change", {
+          uid: target.uid,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        failedUids.add(target.uid);
+      }
+    }
+
+    return { users: users.filter((u) => !failedUids.has(u.uid)) };
   }
 );
