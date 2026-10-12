@@ -128,11 +128,11 @@ function allSpecificEntriesComplete(
 
 function teacherNeedsClassroomSurvey(userData: Record<string, unknown>): boolean {
   const classes = userData.classes as { current?: string[] } | undefined;
-  const groups = userData.groups as { current?: string[] } | undefined;
+  const cohorts = userData.groups as { current?: string[] } | undefined;
 
   return (
     (Array.isArray(classes?.current) && classes.current.length > 0) ||
-    (Array.isArray(groups?.current) && groups.current.length > 0)
+    (Array.isArray(cohorts?.current) && cohorts.current.length > 0)
   );
 }
 
