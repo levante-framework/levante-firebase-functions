@@ -23,6 +23,7 @@ const fields: ResponseFieldShape[] = [
       { value: "convenience", label: "Convenience" },
     ],
   },
+  { variableName: "siteLanguages", kind: "language-selection" },
 ];
 
 describe("validateResponseShape", () => {
@@ -146,5 +147,205 @@ describe("validateResponseShape", () => {
         message: "Value is not an allowed option.",
       },
     ]);
+  });
+
+  describe("language-selection", () => {
+    it("accepts ISO codes with a null description", () => {
+      expect(
+        validateResponseShape(
+          { siteLanguages: { codes: ["en", "es"], otherDescription: null } },
+          fields
+        )
+      ).toEqual([]);
+    });
+
+    it("accepts an empty codes array", () => {
+      expect(
+        validateResponseShape(
+          { siteLanguages: { codes: [], otherDescription: null } },
+          fields
+        )
+      ).toEqual([]);
+    });
+
+    it("accepts other with a description", () => {
+      expect(
+        validateResponseShape(
+          {
+            siteLanguages: {
+              codes: ["other"],
+              otherDescription: "Kichwa",
+            },
+          },
+          fields
+        )
+      ).toEqual([]);
+    });
+
+    it("accepts mixed ISO codes and other", () => {
+      expect(
+        validateResponseShape(
+          {
+            siteLanguages: {
+              codes: ["en", "other"],
+              otherDescription: "Kichwa",
+            },
+          },
+          fields
+        )
+      ).toEqual([]);
+    });
+
+    it("accepts null", () => {
+      expect(validateResponseShape({ siteLanguages: null }, fields)).toEqual(
+        []
+      );
+    });
+
+    it("rejects duplicate codes", () => {
+      expect(
+        validateResponseShape(
+          {
+            siteLanguages: { codes: ["en", "en"], otherDescription: null },
+          },
+          fields
+        )
+      ).toEqual([
+        {
+          path: "responses.siteLanguages.codes.0",
+          message: "Must be unique",
+        },
+        {
+          path: "responses.siteLanguages.codes.1",
+          message: "Must be unique",
+        },
+      ]);
+    });
+
+    it("rejects an alpha-3 alias", () => {
+      expect(
+        validateResponseShape(
+          { siteLanguages: { codes: ["eng"], otherDescription: null } },
+          fields
+        )
+      ).toEqual([
+        {
+          path: "responses.siteLanguages.codes.0",
+          message: "Invalid ISO 639-1 alpha-2 code",
+        },
+      ]);
+    });
+
+    it("rejects free text in codes", () => {
+      expect(
+        validateResponseShape(
+          { siteLanguages: { codes: ["English"], otherDescription: null } },
+          fields
+        )
+      ).toEqual([
+        {
+          path: "responses.siteLanguages.codes.0",
+          message: "Invalid ISO 639-1 alpha-2 code",
+        },
+      ]);
+    });
+
+    it("rejects an uppercase code", () => {
+      expect(
+        validateResponseShape(
+          { siteLanguages: { codes: ["EN"], otherDescription: null } },
+          fields
+        )
+      ).toEqual([
+        {
+          path: "responses.siteLanguages.codes.0",
+          message: "Invalid ISO 639-1 alpha-2 code",
+        },
+      ]);
+    });
+
+    it("rejects a string value", () => {
+      expect(
+        validateResponseShape({ siteLanguages: "English" }, fields)
+      ).toEqual([
+        {
+          path: "responses.siteLanguages",
+          message: "Invalid input: expected object, received string",
+        },
+      ]);
+    });
+
+    it("rejects other with a null description", () => {
+      expect(
+        validateResponseShape(
+          {
+            siteLanguages: { codes: ["other"], otherDescription: null },
+          },
+          fields
+        )
+      ).toEqual([
+        {
+          path: "responses.siteLanguages.otherDescription",
+          message: "Required when codes includes other",
+        },
+      ]);
+    });
+
+    it("rejects other with an empty description", () => {
+      expect(
+        validateResponseShape(
+          { siteLanguages: { codes: ["other"], otherDescription: "" } },
+          fields
+        )
+      ).toEqual([
+        {
+          path: "responses.siteLanguages.otherDescription",
+          message: "Required when codes includes other",
+        },
+      ]);
+    });
+
+    it("rejects other with a whitespace-only description", () => {
+      expect(
+        validateResponseShape(
+          {
+            siteLanguages: { codes: ["other"], otherDescription: "   " },
+          },
+          fields
+        )
+      ).toEqual([
+        {
+          path: "responses.siteLanguages.otherDescription",
+          message: "Required when codes includes other",
+        },
+      ]);
+    });
+
+    it("rejects a description when codes does not include other", () => {
+      expect(
+        validateResponseShape(
+          {
+            siteLanguages: { codes: ["en"], otherDescription: "Kichwa" },
+          },
+          fields
+        )
+      ).toEqual([
+        {
+          path: "responses.siteLanguages.otherDescription",
+          message: "Must be null when codes does not include other",
+        },
+      ]);
+    });
+
+    it("rejects a missing otherDescription key", () => {
+      expect(
+        validateResponseShape({ siteLanguages: { codes: ["en"] } }, fields)
+      ).toEqual([
+        {
+          path: "responses.siteLanguages.otherDescription",
+          message: "Invalid input: expected string, received undefined",
+        },
+      ]);
+    });
   });
 });
