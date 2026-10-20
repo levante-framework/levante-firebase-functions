@@ -10,11 +10,16 @@ import { syncAssignmentProgress } from "../assignments/assignment-sync-in-transa
 
 const NORMAL_STOP_REASONS = ["earlyCompletion", "sufficientTrials"];
 
+// A missing reason is not an abnormal ending. Offline ingest and older run
+// docs store completed: true with stopReason null or omitted.
 const isNormallyCompleted = (run: {
   completed?: boolean;
-  stopReason?: string;
-}) =>
-  Boolean(run.completed) && NORMAL_STOP_REASONS.includes(run.stopReason ?? "");
+  stopReason?: string | null;
+}) => {
+  if (!run.completed) return false;
+  if (run.stopReason == null || run.stopReason === "") return true;
+  return NORMAL_STOP_REASONS.includes(run.stopReason);
+};
 
 export const updateBestRunAndCompletion = async ({
   roarUid,
@@ -232,8 +237,6 @@ export const updateBestRunAndCompletion = async ({
 
           if (completedOn) {
             assessments[assessmentIdx].completedOn = completedOn;
-          } else {
-            delete assessments[assessmentIdx].completedOn;
           }
 
           if (startedOn) {
@@ -241,12 +244,13 @@ export const updateBestRunAndCompletion = async ({
           }
 
           const progressKey = progressKeyFromTaskId(taskId);
-          const progressValue = completed ? "completed" : "started";
           const nextProgress = rebuildAssignmentProgress(
             assessments,
             progress as Record<string, unknown>
           );
-          nextProgress[progressKey] = progressValue;
+          if (completed) {
+            nextProgress[progressKey] = "completed";
+          }
 
           const nextCompleted = areAssessmentsComplete(
             assessments,
