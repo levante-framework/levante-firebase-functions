@@ -43,6 +43,7 @@ const finishedRun = {
   ref: { path: "users/user1/runs/run1" },
   data: () => ({
     completed: true,
+    stopReason: "earlyCompletion",
     timeStarted: new Date("2026-01-01T00:00:00Z"),
     timeFinished: new Date("2026-01-01T00:10:00Z"),
   }),
@@ -92,6 +93,43 @@ describe("updateBestRunAndCompletion", () => {
         "administrations/admin1/stats/total",
       ])
     );
+  });
+
+  it("does not stamp completedOn for a run that ended with errorOut", async () => {
+    const errorOutRun = {
+      ...finishedRun,
+      data: () => ({ ...finishedRun.data(), stopReason: "errorOut" }),
+    };
+    transaction.get.mockImplementation(
+      async (ref: { path: string; kind?: string }) => {
+        if (ref.kind === "query") {
+          return { empty: false, docs: [errorOutRun] };
+        }
+        if (ref.path === "users/user1/assignments/admin1") {
+          return snap({
+            assessments: [{ taskId: "egma-math" }],
+            assigningOrgs: { districts: ["site1"] },
+            progress: {},
+            started: false,
+            completed: false,
+          });
+        }
+        throw new Error(`unexpected read ${ref.path}`);
+      }
+    );
+
+    await updateBestRunAndCompletion({
+      roarUid: "user1",
+      assignmentId: "admin1",
+      taskId: "egma-math",
+    });
+
+    const assignmentUpdate = transaction.update.mock.calls.find(
+      (call) => call[0].path === "users/user1/assignments/admin1"
+    );
+    expect(assignmentUpdate[1].assessments[0].completedOn).toBeUndefined();
+    expect(assignmentUpdate[1].progress.egma_math).toBe("started");
+    expect(assignmentUpdate[1].completed).toBe(false);
   });
 
   it("does not rewrite user progress fields when they are already recorded", async () => {
