@@ -519,16 +519,18 @@ export interface SystemPermissions {
  */
 export interface TaskDoc {
   archived?: boolean;
-  createdAt?: Timestamp | string;
+  createdAt?: Timestamp;
   createdBy?: string;
   description?: string;
   image?: string; // URL
-  lastUpdated?: Timestamp;
   name?: string;
   registered?: boolean;
-  taskURL?: string; // Optional
-  updatedAt?: Timestamp | string;
+  updatedAt?: Timestamp;
   updatedBy?: string;
+  /** @deprecated Use `updatedAt` instead. */
+  lastUpdated?: Timestamp;
+  /** @deprecated Was only used by MEFS. */
+  taskURL?: string;
 }
 
 /**
