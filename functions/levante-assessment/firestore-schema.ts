@@ -149,16 +149,12 @@ interface School {
  * Document ID: Task identifier (e.g., `matrix-reasoning`).
  */
 export interface TaskDoc {
-  archived: boolean;
-  registered:boolean;
-  validUserTypes: string[];
-  createdAt: string;
-  createdBy?: string;
-  description: string;
-  image: string;
-  name: string;
-  updatedAt: string;
-  updatedBy?: string;
+  description?: string;
+  image?: string; // URL
+  lastUpdated?: Timestamp;
+  name?: string;
+  registered?: boolean;
+  taskURL?: string; // Optional
 }
 
 /**
