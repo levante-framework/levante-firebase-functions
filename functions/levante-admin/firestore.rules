@@ -295,7 +295,7 @@ service cloud.firestore {
       }
 
       function canUpdateTaskWithPermission() {
-        return true;
+        return canUpdateTask() && hasPermission('tasks', 'update');
       }
 
       allow read:   if isAuthed();
