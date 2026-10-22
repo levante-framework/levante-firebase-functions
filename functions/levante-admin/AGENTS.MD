@@ -39,7 +39,6 @@ Districts
 - `createUsers`: Bulk create users with organization assignments
 - `editUsers`: Update user information and organization memberships
 - `linkUsers`: Connect related users (e.g., students to parents)
-- `createAdministratorAccount`: Create admin users with specific permissions
 - `setUidClaims`: Set custom authentication claims for users
 - `appendToAdminClaims`/`removeFromAdminClaims`: Manage admin organization permissions
 

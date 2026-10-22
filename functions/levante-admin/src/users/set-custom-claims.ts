@@ -10,20 +10,14 @@ import type {
 } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
-import _concat from "lodash-es/concat.js";
 import _isEmpty from "lodash-es/isEmpty.js";
 import _set from "lodash-es/set.js";
 import _toPairs from "lodash-es/toPairs.js";
-import _uniq from "lodash-es/uniq.js";
-import _without from "lodash-es/without.js";
 import {
   getIdentityProviderDocRef,
   IdentityProviderType,
 } from "./identity-providers.js";
-import {
-  mergeRoleClaimsIntoClaims,
-  type RoleDefinition,
-} from "../utils/role-helpers.js";
+import { mergeRoleClaimsIntoClaims } from "../utils/role-helpers.js";
 
 /**
  * Retrieve the ROAR UID of a user.
@@ -333,181 +327,6 @@ interface IValidateAdminInput {
   /** The admin Firestore instance */
   db?: Firestore;
 }
-
-interface IAdminClaimsInput extends IValidateAdminInput {
-  /** The auth UID of the target user */
-  targetUid: string;
-  /** Whether to append or remove the org */
-  action: "append" | "remove";
-}
-
-/**
- * Append or remove organization IDs to the custom admin claims of a ROAR user.
- *
- * This function returns a Promise which resolves to an http status code. It returns
- * - StatusCode.SuccessOK if successful,
- * - StatusCode.ClientErrorForbidden if the requesting user is not authorized,
- * - StatusCode.ClientErrorNotFound if any of the organization IDs do not exist in Firestore, or
- * - StatusCode.ServerErrorNotImplemented if the organization type is not yet implemented.
- * - StatusCode.ServerErrorInsuffientStorage if new custom claims exceed the maximum storage size.
- *
- * @param {object} params - an object containing the custom admin claims
- * @param {string} params.requesterUid - The assessment Firebase auth UID of the requesting user
- * @param {string} params.targetUid - The assessment Firebase auth UID of the target user
- * @param {string} params.districts - The district IDs to be appended to the custom admin claims
- * @param {string} params.schools - The school IDs to be appended to the custom admin claims
- * @param {string} params.classes - The class IDs to be appended to the custom admin claims
- * @param {string} params.families - The family IDs to be appended to the custom admin claims
- * @param {string} params.groups - The group IDs to be appended to the custom admin claims
- * @param {string} params.action - Whether to append or remove the org
- * @param {Auth} params.auth - The Firebase Auth instance to use
- * @param {Firestore} params.db - The Firestore instance to use
- * @return {Promise<StatusCode>}
- */
-export const appendOrRemoveAdminOrgs = async ({
-  requesterUid,
-  targetUid,
-  districts,
-  schools,
-  classes,
-  families,
-  groups,
-  action,
-  auth,
-  db,
-}: IAdminClaimsInput) => {
-  const _auth = auth ?? getAuth();
-  const _db = db ?? getFirestore();
-
-  const response = await validateAdminStatus({
-    requesterUid,
-    districts,
-    schools,
-    classes,
-    families,
-    groups,
-    auth: _auth,
-    db: _db,
-  });
-
-  if (response.status !== "ok") {
-    return response;
-  }
-
-  const userClaimsRef = _db.collection("userClaims").doc(targetUid);
-  const userClaims = await userClaimsRef.get().then((docSnap) => {
-    if (!docSnap.exists) {
-      return null;
-    }
-
-    return docSnap.data()!.claims;
-  });
-
-  const emptyOrgList = {
-    districts: [],
-    schools: [],
-    classes: [],
-    families: [],
-    groups: [],
-  };
-
-  // Get the target user's current custom claims.
-  const { adminOrgs = emptyOrgList, ...otherClaimsRaw } = userClaims || {};
-
-  const merged = mergeRoleClaimsIntoClaims(
-    (otherClaimsRaw as Record<string, unknown>) ?? {}
-  );
-
-  const otherClaims = merged.claims as Record<string, unknown> & {
-    useNewPermissions?: boolean;
-    roles?: RoleDefinition[];
-  };
-
-  if (typeof otherClaims.useNewPermissions !== "boolean") {
-    otherClaims.useNewPermissions =
-      Array.isArray(otherClaims.roles) && otherClaims.roles.length > 0;
-  }
-
-  logger.debug(`Editing admin orgs for ${targetUid}`, {
-    previousOrgs: adminOrgs,
-    action,
-    districts,
-    schools,
-    classes,
-    families,
-    groups,
-  });
-
-  if (action === "append") {
-    adminOrgs.districts = _uniq(
-      _without(_concat(adminOrgs.districts, districts), undefined)
-    );
-    adminOrgs.schools = _uniq(
-      _without(_concat(adminOrgs.schools, schools), undefined)
-    );
-    adminOrgs.classes = _uniq(
-      _without(_concat(adminOrgs.classes, classes), undefined)
-    );
-    adminOrgs.families = _uniq(
-      _without(_concat(adminOrgs.families, families), undefined)
-    );
-    adminOrgs.groups = _uniq(
-      _without(_concat(adminOrgs.groups, groups), undefined)
-    );
-  } else if (action === "remove") {
-    adminOrgs.districts = _uniq(
-      _without(adminOrgs.districts, districts, undefined)
-    );
-    adminOrgs.schools = _uniq(_without(adminOrgs.schools, schools, undefined));
-    adminOrgs.classes = _uniq(_without(adminOrgs.classes, classes, undefined));
-    adminOrgs.families = _uniq(
-      _without(adminOrgs.families, families, undefined)
-    );
-    adminOrgs.groups = _uniq(_without(adminOrgs.groups, groups, undefined));
-  }
-
-  logger.debug(`Finished editing admin orgs for ${targetUid}`, {
-    currentOrgs: adminOrgs,
-  });
-
-  const stringifiedClaims = JSON.stringify(otherClaims);
-  if (stringifiedClaims.length > 1000) {
-    logger.error(
-      "New custom claims object string > 1000 characters",
-      stringifiedClaims
-    );
-    throw new HttpsError(
-      "resource-exhausted",
-      "The users custom claims exceed the maximum storage size."
-    );
-  }
-
-  return _auth
-    .setCustomUserClaims(targetUid, otherClaims)
-    .then(() => {
-      return _db
-        .collection("userClaims")
-        .doc(targetUid)
-        .set(
-          {
-            claims: {
-              adminOrgs,
-              ...otherClaims,
-            },
-          },
-          { merge: true }
-        );
-    })
-    .then(() => {
-      return {
-        status: "ok",
-        userClaims: {
-          adminOrgs,
-          ...otherClaims,
-        },
-      };
-    });
-};
 
 /**
  * Validate admin status. Check that a requesting user is authorized to edit a target user.
