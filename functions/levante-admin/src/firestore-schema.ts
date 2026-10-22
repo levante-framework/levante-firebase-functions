@@ -527,6 +527,7 @@ export interface TaskDoc {
   registered?: boolean;
   updatedAt?: Timestamp;
   updatedBy?: string;
+  validUserTypes: ("parent" | "student" | "teacher")[];
   /** @deprecated Use `updatedAt` instead. */
   lastUpdated?: Timestamp;
   /** @deprecated Was only used by MEFS. */
