@@ -8,6 +8,19 @@ import {
 } from "../utils/assignment.js";
 import { syncAssignmentProgress } from "../assignments/assignment-sync-in-transaction.js";
 
+const NORMAL_STOP_REASONS = ["earlyCompletion", "sufficientTrials"];
+
+// A missing reason is not an abnormal ending. Offline ingest and older run
+// docs store completed: true with stopReason null or omitted.
+const isNormallyCompleted = (run: {
+  completed?: boolean;
+  stopReason?: string | null;
+}) => {
+  if (!run.completed) return false;
+  if (run.stopReason == null || run.stopReason === "") return true;
+  return NORMAL_STOP_REASONS.includes(run.stopReason);
+};
+
 export const updateBestRunAndCompletion = async ({
   roarUid,
   assignmentId,
@@ -74,11 +87,12 @@ export const updateBestRunAndCompletion = async ({
             bestRun: true,
             cloudSyncTimestamp: new Date().getTime(),
           });
+          const completed = isNormallyCompleted(runs[0].data);
           return {
             bestRunId: runs[0].id,
-            completed: runs[0].data.completed,
+            completed,
             allRunIds: [runs[0].id],
-            completedOn: runs[0].data.timeFinished,
+            completedOn: completed ? runs[0].data.timeFinished : null,
             startedOn: runs[0].data.timeStarted,
             runSummary,
           };
@@ -98,7 +112,7 @@ export const updateBestRunAndCompletion = async ({
         const allRunIds: string[] = [];
 
         for (const run of runs) {
-          if (run.data.completed) {
+          if (isNormallyCompleted(run.data)) {
             // Select the earliest completed run.
             foundCompletedRun = true;
             if (
@@ -158,7 +172,7 @@ export const updateBestRunAndCompletion = async ({
           bestRunId: bestRun,
           completed: foundCompletedRun,
           allRunIds: allRunIds,
-          completedOn: timeFinished,
+          completedOn: foundCompletedRun ? timeFinished : null,
           startedOn: timeStarted,
           runSummary,
         };
@@ -230,12 +244,13 @@ export const updateBestRunAndCompletion = async ({
           }
 
           const progressKey = progressKeyFromTaskId(taskId);
-          const progressValue = completed ? "completed" : "started";
           const nextProgress = rebuildAssignmentProgress(
             assessments,
             progress as Record<string, unknown>
           );
-          nextProgress[progressKey] = progressValue;
+          if (completed) {
+            nextProgress[progressKey] = "completed";
+          }
 
           const nextCompleted = areAssessmentsComplete(
             assessments,
