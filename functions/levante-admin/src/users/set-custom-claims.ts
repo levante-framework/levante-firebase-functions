@@ -11,7 +11,6 @@ import type {
 import { HttpsError } from "firebase-functions/v2/https";
 import { logger } from "firebase-functions/v2";
 import _isEmpty from "lodash-es/isEmpty.js";
-import _set from "lodash-es/set.js";
 import _toPairs from "lodash-es/toPairs.js";
 import {
   getIdentityProviderDocRef,
