@@ -20,7 +20,6 @@ import {
   setUidClaimsInBothProjects,
   getRoarUid,
 } from "./users/set-custom-claims.js";
-import { updateUserRecordHandler } from "./users/edit-users.js";
 import { _createAdministratorWithRoles } from "./users/create-administrator.js";
 import {
   loadAdministratorContext,
@@ -77,18 +76,6 @@ export const setUidClaims = onCall(async (request) => {
   return await setUidClaimsInBothProjects({
     roarUid,
     adminUid,
-  });
-});
-
-// Not using this. Can be refactored or removed
-const updateUserRecord = onCall(async (request) => {
-  const adminUid = request.data.uid;
-  const userRecord = request.data.userRecord;
-  const { password: newPassword, email: newEmail } = userRecord;
-  return await updateUserRecordHandler({
-    adminUid,
-    newPassword,
-    newEmail,
   });
 });
 
