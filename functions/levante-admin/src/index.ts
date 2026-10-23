@@ -20,7 +20,6 @@ import {
   setUidClaimsInBothProjects,
   getRoarUid,
 } from "./users/set-custom-claims.js";
-import { createAdminUser } from "./users/admin-user.js";
 import { _createAdministratorWithRoles } from "./users/create-administrator.js";
 import {
   loadAdministratorContext,
@@ -77,75 +76,6 @@ export const setUidClaims = onCall(async (request) => {
   return await setUidClaimsInBothProjects({
     roarUid,
     adminUid,
-  });
-});
-
-export const createAdministratorAccount = onCall(async (request) => {
-  let adminOrgs = request.data.adminOrgs;
-  const requesterAdminUid = request.auth!.uid;
-
-  // Check permissions if using new permission system
-  const auth = getAuth();
-  const userRecord = await auth.getUser(requesterAdminUid);
-  const customClaims = (userRecord.customClaims as any) || {};
-  const useNewPermissions = customClaims.useNewPermissions === true;
-
-  if (useNewPermissions) {
-    await ensurePermissionsLoaded();
-
-    const user = buildPermissionsUserFromAuthRecord(userRecord);
-
-    // Validate districts array exists
-    const requestedDistricts = adminOrgs?.districts ?? [];
-    if (!Array.isArray(requestedDistricts) || requestedDistricts.length === 0) {
-      logger.error("No districts provided for admin creation", {
-        requesterAdminUid,
-      });
-      throw new HttpsError(
-        "invalid-argument",
-        "At least one district is required for admin creation"
-      );
-    }
-
-    // Filter to only districts where caller can create admins
-    const allowedDistricts = filterSitesByPermission(user, requestedDistricts, {
-      resource: RESOURCES.ADMINS,
-      action: ACTIONS.CREATE,
-      subResource: "admin",
-    });
-
-    if (allowedDistricts.length === 0) {
-      logger.error(
-        "Permission denied: user cannot create admins in requested districts",
-        {
-          requesterAdminUid,
-          requestedDistricts,
-        }
-      );
-      throw new HttpsError(
-        "permission-denied",
-        "You do not have permission to create administrator accounts in the specified districts"
-      );
-    }
-
-    // Keep only allowed districts
-    adminOrgs.districts = allowedDistricts;
-  }
-
-  const email = request.data.email;
-  const name = request.data.name;
-  const orgs = request.data.orgs;
-  const isTestData = request.data.isTestData ?? false;
-
-  return await createAdminUser({
-    email,
-    name,
-    orgs,
-    adminOrgs,
-    requesterAdminUid,
-    isTestData,
-    // Necessary for the LEVANTE admins (to write the ``admin`` property)
-    addUserClaimsAdminProperty: true,
   });
 });
 
