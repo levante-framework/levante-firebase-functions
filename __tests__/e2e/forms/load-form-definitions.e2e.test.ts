@@ -1,6 +1,8 @@
 import type {
   LoadFormDefinitionsParams,
   LoadFormDefinitionsResult,
+  SaveOrgInformationParams,
+  SaveOrgInformationResult,
 } from "@levante-framework/levante-zod";
 import type { HttpsCallable } from "firebase/functions";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -94,6 +96,10 @@ describe("loadFormDefinitions (e2e)", () => {
     LoadFormDefinitionsParams,
     LoadFormDefinitionsResult
   >;
+  let saveOrgInformation: HttpsCallable<
+    SaveOrgInformationParams,
+    SaveOrgInformationResult
+  >;
 
   beforeEach(async () => {
     await Promise.all([clearFirestore(), clearAuth()]);
@@ -103,6 +109,10 @@ describe("loadFormDefinitions (e2e)", () => {
       LoadFormDefinitionsParams,
       LoadFormDefinitionsResult
     >("loadFormDefinitions");
+    saveOrgInformation = client.call<
+      SaveOrgInformationParams,
+      SaveOrgInformationResult
+    >("saveOrgInformation");
   });
 
   afterEach(() => client.cleanup());
@@ -398,5 +408,63 @@ describe("loadFormDefinitions (e2e)", () => {
     const { data } = await loadFormDefinitions(validSiteLoad());
     expect(data.versionId).toBe("v2");
     expect(data.savedResponses).toEqual([]);
+  });
+
+  it("omits Other text from savedResponses after saveOrgInformation deletes it", async () => {
+    await signInAs(client, UID, SITE_ADMIN_CLAIMS);
+    await seedSite();
+    const fields = [
+      {
+        ...siteFields[0],
+        options: [
+          { value: "other", label: "Other" },
+          { value: "convenience", label: "Convenience" },
+        ],
+      },
+      {
+        itemId: "site_01b",
+        variableName: "sampleApproachOther",
+        kind: "text" as const,
+        required: true,
+        sectionId: "sampleRecruit",
+        questionText: "Please specify",
+        displayLogic: { field: "sampleApproach", includes: "other" },
+      },
+    ];
+    await seedForm(
+      "siteInformation",
+      { currentVersionId: "v1" },
+      { v1: { ...siteVersion, fullFields: fields } }
+    );
+
+    await saveOrgInformation({
+      orgType: "site",
+      orgId: SITE,
+      formVersion: "v1",
+      responses: {
+        sampleApproach: ["other"],
+        sampleApproachOther: "word of mouth",
+      },
+      status: "draft",
+    });
+    await saveOrgInformation({
+      orgType: "site",
+      orgId: SITE,
+      formVersion: "v1",
+      responses: {
+        sampleApproach: ["convenience"],
+        sampleApproachOther: null,
+      },
+      status: "draft",
+    });
+
+    const { data } = await loadFormDefinitions(validSiteLoad());
+    expect(data.savedResponses).toEqual([
+      {
+        formVersion: "v1",
+        status: "draft",
+        responses: { sampleApproach: ["convenience"] },
+      },
+    ]);
   });
 });
