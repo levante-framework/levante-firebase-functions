@@ -78,3 +78,11 @@ This section describes each of the npm scripts available to you.
   # Note the space separating the -- from the ROAR_UID argument
   npm run toggle-super-admin -- ROAR_UID
   ```
+
+- `npm run backfill-userdoc-assignment-progress` fills user-doc `assignmentsStarted` / `assignmentsCompleted` (and the `assignments.started` / `assignments.completed` lists) when the assignment document is already started or completed. That copy stopped updating for `startTask`, `completeTask`, and run completion before the inline sync landed. Existing timestamps are left as they are. When both the date and the list entry are missing, it also increments the administration started/completed stats once, skipping survey tasks because survey saves already counted those. Dry-run by default; add `-- --apply` to write.
+
+  ```bash
+  npm run backfill-userdoc-assignment-progress
+  npm run backfill-userdoc-assignment-progress -- -e prod --uid USER_ID
+  npm run backfill-userdoc-assignment-progress -- -e prod --apply
+  ```

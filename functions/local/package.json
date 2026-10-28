@@ -42,7 +42,8 @@
     "reattach-administrations": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/reattach-administrations.ts",
     "identify-corrupted-survey-progress": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/identify-corrupted-survey-progress.ts",
     "repair-survey-progress": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/repair-survey-progress.ts",
-    "repair-birth-dates": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/repair-birth-dates.ts"
+    "repair-birth-dates": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/repair-birth-dates.ts",
+    "backfill-userdoc-assignment-progress": "NODE_OPTIONS=\"--no-warnings\" npx tsx src/backfill-userdoc-assignment-progress.ts"
   },
   "author": "Adam Richie-Halford <richiehalford@gmail.com> (https://richiehalford.org/)",
   "engines": {
