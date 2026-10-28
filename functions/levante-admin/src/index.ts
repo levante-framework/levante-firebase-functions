@@ -334,25 +334,28 @@ export const softDeleteUserAssignment = createSoftDeleteCloudFunction([
   "assignments",
 ]);
 
-export const saveSurveyResponses = onCall({ minInstances: 1 }, async (request) => {
-  const requestingUid = request.auth!.uid;
+export const saveSurveyResponses = onCall(
+  { minInstances: 1 },
+  async (request) => {
+    const requestingUid = request.auth!.uid;
 
-  try {
-    const result = await writeSurveyResponses(requestingUid, request.data);
-    return result;
-    // eslint-disable @typescript-eslint/no-explicit-any
-  } catch (error: any) {
-    logger.error("Error writing survey responses", {
-      error,
-      requestingUid,
-    });
-    throw new HttpsError(
-      "internal",
-      error.message ||
-        "An unknown error occurred while writing survey responses"
-    );
+    try {
+      const result = await writeSurveyResponses(requestingUid, request.data);
+      return result;
+      // eslint-disable @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+      logger.error("Error writing survey responses", {
+        error,
+        requestingUid,
+      });
+      throw new HttpsError(
+        "internal",
+        error.message ||
+          "An unknown error occurred while writing survey responses"
+      );
+    }
   }
-});
+);
 
 export const getAdministrations = onCall(async (request) => {
   const adminUid = request.auth!.uid;
