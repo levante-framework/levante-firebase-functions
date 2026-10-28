@@ -20,6 +20,7 @@ import {
   filterSitesByPermission,
 } from "../utils/permission-helpers.js";
 import { ORG_TYPE_TO_FORM_ID } from "./org-paths.js";
+import { savedResponsesFromData } from "./saved-responses.js";
 
 /**
  * Reads a form definition and its registered (live) version from Firestore.
@@ -121,11 +122,9 @@ export const loadFormDefinitions = onCall(
       );
     }
 
+    const db = getFirestore();
     const orgCollection = ORG_TYPE_TO_COLLECTION[orgType];
-    const orgSnap = await getFirestore()
-      .collection(orgCollection)
-      .doc(orgId)
-      .get();
+    const orgSnap = await db.collection(orgCollection).doc(orgId).get();
 
     if (!orgSnap.exists) {
       throw new HttpsError("not-found", "Org not found", {
@@ -169,12 +168,22 @@ export const loadFormDefinitions = onCall(
     }
 
     const definition = await loadFormDefinition(orgType);
+    const savedSnap = await db
+      .collection(orgCollection)
+      .doc(orgId)
+      .collection(definition.formId)
+      .doc(definition.versionId)
+      .get();
 
     return {
       ...definition,
       orgType,
       orgId,
-      savedResponses: [],
+      savedResponses: savedResponsesFromData(
+        savedSnap.data(),
+        definition.versionId,
+        definition.fullFields
+      ),
     };
   }
 );
