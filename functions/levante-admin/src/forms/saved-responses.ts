@@ -1,12 +1,10 @@
+import type { SavedFormResponse } from "@levante-framework/levante-zod";
+
 export function savedResponsesFromData(
   data: Record<string, unknown> | undefined,
   formVersion: string,
   fields: { variableName: string }[]
-): {
-  formVersion: string;
-  status: "draft" | "complete";
-  responses: Record<string, unknown>;
-}[] {
+): SavedFormResponse[] {
   if (data === undefined) return [];
 
   const responses: Record<string, unknown> = {};
