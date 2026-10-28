@@ -28,6 +28,40 @@ export interface Assignment {
   [key: string]: unknown;
 }
 
+export interface ChildSpecificSurvey {
+  childId?: unknown;
+  isComplete?: unknown;
+}
+
+/** Linked child ids, de-duplicated, ignoring blanks and non-strings. */
+export function linkedChildIds(childIds: unknown): string[] {
+  if (!Array.isArray(childIds)) return [];
+  const ids = childIds.filter(
+    (id): id is string => typeof id === "string" && id.trim().length > 0
+  );
+  return [...new Set(ids)];
+}
+
+/**
+ * Linked children who do not have a completed child-specific survey entry.
+ * Completed entries for children no longer in `childIds` are ignored.
+ */
+export function unfinishedLinkedChildIds(
+  specific: ChildSpecificSurvey[] | null | undefined,
+  childIds: unknown
+): string[] {
+  const completed = new Set<string>();
+  if (Array.isArray(specific)) {
+    for (const entry of specific) {
+      if (!entry || entry.isComplete !== true) continue;
+      if (typeof entry.childId !== "string") continue;
+      const childId = entry.childId.trim();
+      if (childId) completed.add(childId);
+    }
+  }
+  return linkedChildIds(childIds).filter((id) => !completed.has(id));
+}
+
 export function isAssignmentOpen(data: Assignment, now: Date): boolean {
   const opened = parseTimestamp(data.dateOpened ?? null);
   const closed = parseTimestamp(data.dateClosed ?? null);
@@ -73,6 +107,18 @@ export function buildReopenedCaregiverSurveyUpdates(
       [progressKey]: "started",
     },
   };
+}
+
+/**
+ * Open assignment whose caregiver survey is done and the assignment itself
+ * is marked complete. These are the ones a later child link cannot re-enter.
+ */
+export function isCompleteOpenCaregiverSurvey(
+  data: Assignment | undefined,
+  now: Date
+): boolean {
+  if (!data || data.completed !== true) return false;
+  return buildReopenedCaregiverSurveyUpdates(data, now) !== undefined;
 }
 
 /**
