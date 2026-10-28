@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
+import "./set-global-options.js";
 import * as admin from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
-import { logger, setGlobalOptions } from "firebase-functions/v2";
+import { logger } from "firebase-functions/v2";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import {
   ACTIONS,
@@ -58,8 +59,6 @@ admin.initializeApp({
 ensurePermissionsLoaded().catch((error) =>
   logger.error("Error initializing permissions at module load", { error })
 );
-
-setGlobalOptions({ timeoutSeconds: 540 });
 
 // TODO: Remove this function and wrapper in firekit
 export const setUidClaims = onCall(async (request) => {
