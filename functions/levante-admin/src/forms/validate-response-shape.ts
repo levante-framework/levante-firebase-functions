@@ -1,13 +1,6 @@
-import { LanguageSelectionSchema } from "@levante-framework/levante-zod";
-
 export type ResponseFieldShape = {
   variableName: string;
-  kind:
-    | "text"
-    | "number"
-    | "single-select"
-    | "multi-select"
-    | "language-selection";
+  kind: "text" | "number" | "single-select" | "multi-select";
   options?: { value: string; label: string }[];
 };
 
@@ -53,19 +46,6 @@ export function validateResponseShape(
     if (field.kind === "number") {
       if (typeof value !== "number") {
         issues.push({ path, message: "Expected a number." });
-      }
-      continue;
-    }
-
-    if (field.kind === "language-selection") {
-      const parsed = LanguageSelectionSchema.safeParse(value);
-      if (!parsed.success) {
-        for (const issue of parsed.error.issues) {
-          issues.push({
-            path: ["responses", key, ...issue.path].join("."),
-            message: issue.message,
-          });
-        }
       }
       continue;
     }

@@ -288,7 +288,7 @@
         {
           "itemId": "site_15",
           "variableName": "siteLanguages",
-          "kind": "language-selection",
+          "kind": "text",
           "required": true,
           "sectionId": "languageEducationInfo",
           "questionText": "What are most commonly spoken languages in this population? Please include any languages spoken by >5% of the population in your targeted geographic area."

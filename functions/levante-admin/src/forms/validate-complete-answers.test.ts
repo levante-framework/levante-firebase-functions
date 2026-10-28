@@ -15,14 +15,6 @@ const fields: CompleteFieldShape[] = [
   { variableName: "optionalNote", required: false },
 ];
 
-const languageFields: CompleteFieldShape[] = [
-  {
-    variableName: "siteLanguages",
-    required: true,
-    kind: "language-selection",
-  },
-];
-
 describe("findMissingRequiredFields", () => {
   it("returns no names when required answers are present", () => {
     expect(
@@ -142,87 +134,5 @@ describe("findMissingRequiredFields", () => {
         fields
       )
     ).toEqual([]);
-  });
-
-  describe("language-selection", () => {
-    it("treats an omitted key as missing", () => {
-      expect(findMissingRequiredFields({}, languageFields)).toEqual([
-        "siteLanguages",
-      ]);
-    });
-
-    it("treats null as missing", () => {
-      expect(
-        findMissingRequiredFields({ siteLanguages: null }, languageFields)
-      ).toEqual(["siteLanguages"]);
-    });
-
-    it("treats empty codes as missing", () => {
-      expect(
-        findMissingRequiredFields(
-          { siteLanguages: { codes: [], otherDescription: null } },
-          languageFields
-        )
-      ).toEqual(["siteLanguages"]);
-    });
-
-    it("treats other without a description as missing", () => {
-      expect(
-        findMissingRequiredFields(
-          {
-            siteLanguages: { codes: ["other"], otherDescription: null },
-          },
-          languageFields
-        )
-      ).toEqual(["siteLanguages"]);
-    });
-
-    it("treats other with a whitespace-only description as missing", () => {
-      expect(
-        findMissingRequiredFields(
-          {
-            siteLanguages: { codes: ["other"], otherDescription: "   " },
-          },
-          languageFields
-        )
-      ).toEqual(["siteLanguages"]);
-    });
-
-    it("accepts ISO codes with a null description", () => {
-      expect(
-        findMissingRequiredFields(
-          { siteLanguages: { codes: ["en"], otherDescription: null } },
-          languageFields
-        )
-      ).toEqual([]);
-    });
-
-    it("accepts other with a description", () => {
-      expect(
-        findMissingRequiredFields(
-          {
-            siteLanguages: {
-              codes: ["other"],
-              otherDescription: "Kichwa",
-            },
-          },
-          languageFields
-        )
-      ).toEqual([]);
-    });
-
-    it("accepts mixed ISO codes and other", () => {
-      expect(
-        findMissingRequiredFields(
-          {
-            siteLanguages: {
-              codes: ["en", "other"],
-              otherDescription: "Kichwa",
-            },
-          },
-          languageFields
-        )
-      ).toEqual([]);
-    });
   });
 });

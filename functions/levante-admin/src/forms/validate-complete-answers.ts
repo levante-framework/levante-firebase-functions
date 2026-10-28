@@ -1,14 +1,6 @@
-import { LANGUAGE_OTHER } from "@levante-framework/levante-zod";
-
 export type CompleteFieldShape = {
   variableName: string;
   required: boolean;
-  kind?:
-    | "text"
-    | "number"
-    | "single-select"
-    | "multi-select"
-    | "language-selection";
   displayLogic?: { field: string; includes: string };
 };
 
@@ -18,20 +10,6 @@ function isMissingValue(value: unknown): boolean {
   if (typeof value === "string" && value.trim().length === 0) return true;
   if (Array.isArray(value) && value.length === 0) return true;
   return false;
-}
-
-function isMissingLanguageSelection(value: unknown): boolean {
-  if (value === undefined || value === null) return true;
-  if (typeof value !== "object" || Array.isArray(value)) return true;
-
-  const { codes, otherDescription } = value as {
-    codes?: unknown;
-    otherDescription?: unknown;
-  };
-  if (!Array.isArray(codes) || codes.length === 0) return true;
-  if (!codes.includes(LANGUAGE_OTHER)) return false;
-  if (typeof otherDescription !== "string") return true;
-  return otherDescription.trim().length === 0;
 }
 
 function isDisplayLogicMet(
@@ -55,11 +33,7 @@ export function findMissingRequiredFields(
     if (field.displayLogic && !isDisplayLogicMet(answers, field.displayLogic)) {
       continue;
     }
-    const missingThisField =
-      field.kind === "language-selection"
-        ? isMissingLanguageSelection(answers[field.variableName])
-        : isMissingValue(answers[field.variableName]);
-    if (missingThisField) {
+    if (isMissingValue(answers[field.variableName])) {
       missing.push(field.variableName);
     }
   }
