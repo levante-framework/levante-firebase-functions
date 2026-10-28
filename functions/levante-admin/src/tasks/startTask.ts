@@ -114,7 +114,7 @@ interface StartTaskResult {
  * Cloud Function to start a task in an assignment
  * This function prepares the task for starting and returns the necessary data for firekit (client)
  */
-export const startTask = onCall(async (request): Promise<StartTaskResult> => {
+export const startTask = onCall({ minInstances: 1 }, async (request): Promise<StartTaskResult> => {
   const db = getFirestore();
   try {
     // Validate authentication

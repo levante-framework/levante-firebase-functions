@@ -61,7 +61,7 @@ ensurePermissionsLoaded().catch((error) =>
 );
 
 // TODO: Remove this function and wrapper in firekit
-export const setUidClaims = onCall(async (request) => {
+export const setUidClaims = onCall({ minInstances: 1 }, async (request) => {
   const adminUid = request.auth!.uid;
 
   const roarUid = await getRoarUid({
@@ -334,7 +334,7 @@ export const softDeleteUserAssignment = createSoftDeleteCloudFunction([
   "assignments",
 ]);
 
-export const saveSurveyResponses = onCall(async (request) => {
+export const saveSurveyResponses = onCall({ minInstances: 1 }, async (request) => {
   const requestingUid = request.auth!.uid;
 
   try {
