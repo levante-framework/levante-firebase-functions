@@ -4,7 +4,10 @@ import { recordAssignmentUpdatedStats } from "../assignments/assignment-sync-in-
 import {
   buildReopenedCaregiverSurveyUpdates,
   isAssignmentOpen,
+  isCompleteOpenCaregiverSurvey,
+  linkedChildIds,
   reopenCaregiverSurveyAssignments,
+  unfinishedLinkedChildIds,
 } from "./reopen-caregiver-survey-assignments.js";
 
 vi.mock(
@@ -87,6 +90,41 @@ describe("isAssignmentOpen", () => {
 
   it("is false when dates are missing", () => {
     expect(isAssignmentOpen({}, now)).toBe(false);
+  });
+});
+
+describe("unfinishedLinkedChildIds", () => {
+  it("returns linked children without a completed specific survey", () => {
+    expect(linkedChildIds(["child-a", "child-a", "  ", 1])).toEqual([
+      "child-a",
+    ]);
+    expect(
+      unfinishedLinkedChildIds(
+        [
+          { childId: "child-a", isComplete: true },
+          { childId: "child-b", isComplete: false },
+          { childId: "former-child", isComplete: true },
+        ],
+        ["child-a", "child-b", "child-c"]
+      )
+    ).toEqual(["child-b", "child-c"]);
+  });
+
+  it("is empty when every linked child has a completed specific survey", () => {
+    expect(
+      unfinishedLinkedChildIds(
+        [{ childId: "child-a", isComplete: true }],
+        ["child-a"]
+      )
+    ).toEqual([]);
+  });
+
+  it("treats a missing specific list as no completed surveys", () => {
+    expect(unfinishedLinkedChildIds(undefined, ["child-a"])).toEqual([
+      "child-a",
+    ]);
+    expect(unfinishedLinkedChildIds(undefined, [])).toEqual([]);
+    expect(unfinishedLinkedChildIds(undefined, undefined)).toEqual([]);
   });
 });
 
@@ -178,6 +216,23 @@ describe("buildReopenedCaregiverSurveyUpdates", () => {
 
   it("is a no-op for missing assignment data", () => {
     expect(buildReopenedCaregiverSurveyUpdates(undefined, now)).toBeUndefined();
+  });
+});
+
+describe("isCompleteOpenCaregiverSurvey", () => {
+  it("is true only when the assignment is marked complete and the survey can be reopened", () => {
+    expect(isCompleteOpenCaregiverSurvey(openAssignment(), now)).toBe(true);
+    expect(
+      isCompleteOpenCaregiverSurvey(openAssignment({ completed: false }), now)
+    ).toBe(false);
+    expect(
+      isCompleteOpenCaregiverSurvey(
+        openAssignment({
+          dateClosed: new Date("2026-09-14T00:00:00.000Z"),
+        }),
+        now
+      )
+    ).toBe(false);
   });
 });
 
