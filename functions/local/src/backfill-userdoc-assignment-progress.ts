@@ -14,11 +14,10 @@
  * - a missing `assignments.started` / `assignments.completed` entry is added
  * - existing dates are not overwritten
  *
- * Administration stats are incremented only when both the date and the list
- * entry were missing (the flag flip never landed). Per-task stats are
- * replayed for non-survey tasks. Survey task stats stay put, because
- * `saveSurveyResponses` already counted them. The assignment-level total is
- * still incremented once for that missing flip.
+ * Administration stats get one assignment-level started or completed
+ * increment when both the date and the list entry were missing. Per-task
+ * counters are left alone: a later startTask after #160 already counted
+ * those tasks without writing this user-doc copy.
  *
  * Dry run by default.
  *
@@ -41,7 +40,6 @@ import type {
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
 import { AdminStatsBufferRegistry } from "../../levante-admin/src/assignments/admin-stats-buffer.js";
-import { recordAssignmentUpdatedStats } from "../../levante-admin/src/assignments/assignment-sync-in-transaction.js";
 import { initAdmin } from "./utils/init-admin.js";
 
 const USER_PAGE_SIZE = 300;
@@ -101,10 +99,6 @@ interface Gap {
 interface ResultRow extends Gap {
   status: RowStatus;
   message: string;
-}
-
-function isSurveyTask(taskId: string | undefined): boolean {
-  return !!taskId && taskId.toLowerCase().includes("survey");
 }
 
 function toDate(value: unknown): Date | null {
@@ -425,78 +419,18 @@ async function findGaps(
   return { gaps, usersScanned };
 }
 
-function hideTaskProgress(
-  assessments: AssessmentRow[],
-  hide: { started: boolean; completed: boolean }
-): AssessmentRow[] {
-  return assessments.map((assessment) => {
-    if (isSurveyTask(assessment.taskId)) return assessment;
-    const next = { ...assessment };
-    if (hide.started) delete next.startedOn;
-    if (hide.completed) delete next.completedOn;
-    return next;
-  });
-}
-
-function nonSurveyTasks(
-  assessments: AssessmentRow[],
-  field: "startedOn" | "completedOn"
-): AssessmentRow[] {
-  return assessments.filter(
-    (assessment) =>
-      !isSurveyTask(assessment.taskId) && Boolean(assessment[field])
-  );
-}
-
 /**
- * Replays the missed flag flip onto administration stats. Survey tasks are
- * left on the previous snapshot so their counts are not added again.
+ * Counts the missed assignment-level flag flip once. Per-task counters are
+ * not touched: tasks started after #160 were already counted, and the missing
+ * user-doc copy does not say which tasks those were.
  */
 function recordMissedStats(registry: AdminStatsBufferRegistry, gap: Gap): void {
   if (!gap.statsStarted && !gap.statsCompleted) return;
 
-  const currAssessments = gap.assignment.assessments.map((assessment) => ({
-    taskId: assessment.taskId ?? "",
-    startedOn: assessment.startedOn,
-    completedOn: assessment.completedOn,
-  }));
-  const prevAssessments = hideTaskProgress(gap.assignment.assessments, {
-    started: gap.statsStarted,
-    completed: gap.statsCompleted,
-  }).map((assessment) => ({
-    taskId: assessment.taskId ?? "",
-    startedOn: assessment.startedOn,
-    completedOn: assessment.completedOn,
-  }));
-
   const buffer = registry.forAdministration(gap.administrationId);
-  recordAssignmentUpdatedStats(
-    {
-      assigningOrgs: gap.assignment.assigningOrgs as never,
-      assessments: prevAssessments,
-      started: gap.statsStarted ? false : gap.assignment.started,
-      completed: gap.statsCompleted ? false : gap.assignment.completed,
-    },
-    {
-      assigningOrgs: gap.assignment.assigningOrgs as never,
-      assessments: currAssessments,
-      started: gap.assignment.started,
-      completed: gap.assignment.completed,
-    },
-    buffer
-  );
-
   const orgs = orgIds(gap.assignment.assigningOrgs);
-  if (
-    gap.statsStarted &&
-    nonSurveyTasks(gap.assignment.assessments, "startedOn").length === 0
-  ) {
-    buffer.recordIncrements(orgs, "started", [], 1, true);
-  }
-  if (
-    gap.statsCompleted &&
-    nonSurveyTasks(gap.assignment.assessments, "completedOn").length === 0
-  ) {
+  if (gap.statsStarted) buffer.recordIncrements(orgs, "started", [], 1, true);
+  if (gap.statsCompleted) {
     buffer.recordIncrements(orgs, "completed", [], 1, true);
   }
 }
