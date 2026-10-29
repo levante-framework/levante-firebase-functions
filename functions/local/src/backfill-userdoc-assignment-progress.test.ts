@@ -41,7 +41,6 @@ describe("gapsForAssignment", () => {
     assert.equal(gap.addCompleted, true);
     assert.equal(gap.statsStarted, true);
     assert.equal(gap.statsCompleted, true);
-    assert.equal(gap.siteId, "site-a");
   });
 
   it("leaves an assignment alone when the user doc already has both copies", () => {

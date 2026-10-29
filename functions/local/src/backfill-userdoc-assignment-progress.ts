@@ -25,7 +25,7 @@
  * Usage (from functions/local):
  *   npm run backfill-userdoc-assignment-progress
  *   npm run backfill-userdoc-assignment-progress -- -e prod --uid USER_ID
- *   npm run backfill-userdoc-assignment-progress -- -e prod -s SITE_ID --apply
+ *   npm run backfill-userdoc-assignment-progress -- -e prod --apply
  */
 
 import { createRequire } from "node:module";
@@ -51,7 +51,6 @@ const APPLY_CHUNK = 20;
 const CSV_COLUMNS = [
   "uid",
   "administrationId",
-  "siteId",
   "setStartedAt",
   "setCompletedAt",
   "addStarted",
@@ -90,7 +89,6 @@ interface UserProgressMaps {
 interface Gap {
   uid: string;
   administrationId: string;
-  siteId: string;
   setStartedAt: string;
   setCompletedAt: string;
   addStarted: boolean;
@@ -188,19 +186,6 @@ function orgIds(assigningOrgs: unknown): string[] {
   return ids;
 }
 
-function siteIdOf(assigningOrgs: unknown): string {
-  const districts = stringIds(asRecord(assigningOrgs).districts);
-  return districts[0] ?? "";
-}
-
-function assignmentInSite(
-  assigningOrgs: unknown,
-  siteId: string | undefined
-): boolean {
-  if (!siteId) return true;
-  return stringIds(asRecord(assigningOrgs).districts).includes(siteId);
-}
-
 function assignmentProgress(
   id: string,
   data: Record<string, unknown> | undefined
@@ -273,7 +258,6 @@ export function gapsForAssignment(
   return {
     uid,
     administrationId: id,
-    siteId: siteIdOf(assignment.assigningOrgs),
     setStartedAt: startedAt ? startedAt.toISOString() : "",
     setCompletedAt: completedAt ? completedAt.toISOString() : "",
     addStarted,
@@ -377,8 +361,7 @@ function userMightHaveAssignments(
 async function gapsForUser(
   db: Firestore,
   uid: string,
-  userData: Record<string, unknown> | undefined,
-  siteId: string | undefined
+  userData: Record<string, unknown> | undefined
 ): Promise<Gap[]> {
   const snap = await db
     .collection("users")
@@ -391,7 +374,6 @@ async function gapsForUser(
     const assignment = assignmentProgress(doc.id, doc.data());
     if (!assignment) continue;
     if (!assignment.started && !assignment.completed) continue;
-    if (!assignmentInSite(assignment.assigningOrgs, siteId)) continue;
     const gap = gapsForAssignment(uid, assignment, maps);
     if (gap) gaps.push(gap);
   }
@@ -400,13 +382,11 @@ async function gapsForUser(
 
 async function findGaps(
   db: Firestore,
-  options: { uid?: string; siteId?: string }
+  uid?: string
 ): Promise<{ gaps: Gap[]; usersScanned: number }> {
-  if (options.uid) {
-    const snap = await db.collection("users").doc(options.uid).get();
-    const gaps = snap.exists
-      ? await gapsForUser(db, snap.id, snap.data(), options.siteId)
-      : [];
+  if (uid) {
+    const snap = await db.collection("users").doc(uid).get();
+    const gaps = snap.exists ? await gapsForUser(db, snap.id, snap.data()) : [];
     return { gaps, usersScanned: snap.exists ? 1 : 0 };
   }
 
@@ -430,7 +410,7 @@ async function findGaps(
     const pageGaps = await mapPool(
       withAssignments,
       ASSIGNMENT_READ_CONCURRENCY,
-      (doc) => gapsForUser(db, doc.id, doc.data(), options.siteId)
+      (doc) => gapsForUser(db, doc.id, doc.data())
     );
     for (const userGaps of pageGaps) gaps.push(...userGaps);
 
@@ -653,12 +633,6 @@ if (isDirectRun) {
         description: "Only repair this user",
         type: "string",
       },
-      siteId: {
-        alias: "s",
-        description:
-          "Only assignments whose assigningOrgs.districts include this site",
-        type: "string",
-      },
       apply: {
         alias: "a",
         description: "Write the backfill (omit for a dry run)",
@@ -683,14 +657,12 @@ if (isDirectRun) {
 
   async function main(): Promise<void> {
     const uid = argv.uid?.trim() || undefined;
-    const siteId = argv.siteId?.trim() || undefined;
     console.log(
       `backfill-userdoc-assignment-progress (${argv.env}, ${
         argv.apply ? "APPLY" : "DRY RUN"
       })`
     );
     if (uid) console.log(`User filter: ${uid}`);
-    if (siteId) console.log(`Site filter: ${siteId}`);
 
     const { db } = await initAdmin({
       environment: argv.env,
@@ -699,7 +671,7 @@ if (isDirectRun) {
       alsoInitializeDefaultApp: argv.apply,
     });
 
-    const { gaps, usersScanned } = await findGaps(db, { uid, siteId });
+    const { gaps, usersScanned } = await findGaps(db, uid);
     const rows: ResultRow[] = gaps.map((gap) => csvRow(gap, "dry-run", ""));
     if (argv.apply && rows.length > 0) writeCsv(rows, argv.outputFile);
 
