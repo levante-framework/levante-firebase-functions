@@ -86,3 +86,11 @@ This section describes each of the npm scripts available to you.
   npm run backfill-userdoc-assignment-progress -- -e prod --uid USER_ID
   npm run backfill-userdoc-assignment-progress -- -e prod --apply
   ```
+
+- `npm run reopen-locked-caregiver-surveys` finds caregiver assignments that are still inside their open window but were marked complete before every linked child had a completed child-specific survey (issue #155). It writes the same assignment, user-doc, and administration-stats updates as linking a new child. Dry-run by default; add `-- --apply` to write. Credentials come from `initAdmin` (`LEVANTE_ADMIN_{DEV,PROD}_FIREBASE_CREDENTIALS`).
+
+  ```bash
+  npm run reopen-locked-caregiver-surveys
+  npm run reopen-locked-caregiver-surveys -- -e prod
+  npm run reopen-locked-caregiver-surveys -- -e prod -s SITE_ID --apply
+  ```
