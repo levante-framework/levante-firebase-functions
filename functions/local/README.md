@@ -78,3 +78,10 @@ This section describes each of the npm scripts available to you.
   # Note the space separating the -- from the ROAR_UID argument
   npm run toggle-super-admin -- ROAR_UID
   ```
+
+- `npm run reopen-cohort-teacher-classroom-surveys` reopens open teacher-survey assignments that locked after the general section alone for cohort-only teachers (before the generic classroom survey part). Dry run by default; add `-- --apply` to write. Writes `reopen-cohort-teacher-classroom-surveys.csv`.
+
+  ```bash
+  npm run reopen-cohort-teacher-classroom-surveys -- -e prod
+  npm run reopen-cohort-teacher-classroom-surveys -- -e prod --apply
+  ```
