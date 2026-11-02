@@ -70,6 +70,9 @@ node_modules/
 *.csv
 **/*.csv
 
+# Local shell scripts
+*.sh
+
 # dotenv environment variables file
 .env
 .env.*
