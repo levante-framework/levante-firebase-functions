@@ -14,11 +14,6 @@
  * - a missing `assignments.started` / `assignments.completed` entry is added
  * - existing dates are not overwritten
  *
- * Administration stats get one assignment-level started or completed
- * increment when both the date and the list entry were missing. Per-task
- * counters are left alone: a later startTask after #160 already counted
- * those tasks without writing this user-doc copy.
- *
  * Dry run by default.
  *
  * Usage (from functions/local):
@@ -39,7 +34,6 @@ import type {
 } from "firebase-admin/firestore";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
-import { AdminStatsBufferRegistry } from "../../levante-admin/src/assignments/admin-stats-buffer.js";
 import { initAdmin } from "./utils/init-admin.js";
 
 const USER_PAGE_SIZE = 300;
@@ -53,8 +47,6 @@ const CSV_COLUMNS = [
   "setCompletedAt",
   "addStarted",
   "addCompleted",
-  "statsStarted",
-  "statsCompleted",
   "status",
   "message",
 ] as const;
@@ -72,7 +64,6 @@ interface AssignmentProgress {
   started: boolean;
   completed: boolean;
   assessments: AssessmentRow[];
-  assigningOrgs?: unknown;
   dateAssigned?: unknown;
   dateOpened?: unknown;
 }
@@ -91,9 +82,6 @@ interface Gap {
   setCompletedAt: string;
   addStarted: boolean;
   addCompleted: boolean;
-  statsStarted: boolean;
-  statsCompleted: boolean;
-  assignment: AssignmentProgress;
 }
 
 interface ResultRow extends Gap {
@@ -169,17 +157,6 @@ function userProgressMaps(
   };
 }
 
-function orgIds(assigningOrgs: unknown): string[] {
-  if (!assigningOrgs || typeof assigningOrgs !== "object") return [];
-  const source = assigningOrgs as Record<string, unknown>;
-  const ids: string[] = [];
-  for (const key of ["districts", "schools", "classes", "groups"]) {
-    ids.push(...stringIds(source[key]));
-  }
-  ids.push("total");
-  return ids;
-}
-
 function assignmentProgress(
   id: string,
   data: Record<string, unknown> | undefined
@@ -193,7 +170,6 @@ function assignmentProgress(
     started: data.started === true,
     completed: data.completed === true,
     assessments,
-    assigningOrgs: data.assigningOrgs,
     dateAssigned: data.dateAssigned,
     dateOpened: data.dateOpened,
   };
@@ -211,11 +187,7 @@ function timestampFor(
   return pickDate(dates, which) ?? firstDate(fallbacks);
 }
 
-/**
- * Differences between one assignment's flags and the user-doc copy.
- * `statsStarted` / `statsCompleted` are true only when both the date and the
- * list entry are absent.
- */
+/** Differences between one assignment's flags and the user-doc copy. */
 export function gapsForAssignment(
   uid: string,
   assignment: AssignmentProgress,
@@ -256,9 +228,6 @@ export function gapsForAssignment(
     setCompletedAt: completedAt ? completedAt.toISOString() : "",
     addStarted,
     addCompleted,
-    statsStarted: assignment.started && !hasStartedAt && !startedOnList,
-    statsCompleted: assignment.completed && !hasCompletedAt && !completedOnList,
-    assignment,
   };
 }
 
@@ -419,22 +388,6 @@ async function findGaps(
   return { gaps, usersScanned };
 }
 
-/**
- * Counts the missed assignment-level flag flip once. Per-task counters are
- * not touched: tasks started after #160 were already counted, and the missing
- * user-doc copy does not say which tasks those were.
- */
-function recordMissedStats(registry: AdminStatsBufferRegistry, gap: Gap): void {
-  if (!gap.statsStarted && !gap.statsCompleted) return;
-
-  const buffer = registry.forAdministration(gap.administrationId);
-  const orgs = orgIds(gap.assignment.assigningOrgs);
-  if (gap.statsStarted) buffer.recordIncrements(orgs, "started", [], 1, true);
-  if (gap.statsCompleted) {
-    buffer.recordIncrements(orgs, "completed", [], 1, true);
-  }
-}
-
 async function repairUser(
   db: Firestore,
   uid: string,
@@ -513,9 +466,6 @@ async function repairUser(
           update(userRef, updateArgs[0], updateArgs[1], ...updateArgs.slice(2));
         }
 
-        const registry = new AdminStatsBufferRegistry(db);
-        for (const gap of fresh) recordMissedStats(registry, gap);
-        registry.flush(transaction);
         return fresh;
       });
 
