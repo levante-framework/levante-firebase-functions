@@ -738,7 +738,7 @@ export const syncCreatedUsersTask =
       rateLimits: {
         maxConcurrentDispatches: 10,
       },
-      memory: "256MiB",
+      memory: "512MiB",
       timeoutSeconds: 60,
     },
     async (request) => {
