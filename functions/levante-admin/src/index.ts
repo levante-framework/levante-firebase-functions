@@ -906,5 +906,6 @@ export {
   populationWorldpopH3,
 } from "./location/population-h3.js";
 export { updateUsersInfo } from "./users/update-users-info.js";
+export { getOrgInformationStatus } from "./forms/get-org-information-status.js";
 export { loadFormDefinitions } from "./forms/load-form-definitions.js";
 export { saveOrgInformation } from "./forms/save-org-information.js";
