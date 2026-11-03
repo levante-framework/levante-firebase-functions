@@ -18,8 +18,9 @@
  *
  * Apply clears the assignment completion and the survey assessment
  * `completedOn`, sets progress back to `started`, and removes the user-doc
- * completed stamp. General survey answers are left alone. Administration
- * stats are not updated.
+ * completed stamp. General survey answers are left alone. The same
+ * transaction decrements administration stats through
+ * `recordAssignmentUpdatedStats`, matching the caregiver reopener.
  *
  * Dry run by default.
  *
@@ -43,6 +44,8 @@ import {
 } from "firebase-admin/firestore";
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
+import { AdminStatsBufferRegistry } from "../../levante-admin/src/assignments/admin-stats-buffer.js";
+import { recordAssignmentUpdatedStats } from "../../levante-admin/src/assignments/assignment-sync-in-transaction.js";
 import { initAdmin } from "./utils/init-admin.js";
 
 export const GENERIC_TEACHER_CLASSROOM_ID = "generic";
@@ -409,22 +412,31 @@ async function repairTeacher(
           reads.push({ gap, assignmentSnap, surveySnap });
         }
 
+        const statsRegistry = new AdminStatsBufferRegistry(db);
         const completedIds: string[] = [];
         for (const { gap, assignmentSnap, surveySnap } of reads) {
           if (!assignmentSnap.exists) continue;
 
+          const prevData = assignmentSnap.data() as DocumentData;
           const fresh = gapForTeacherAssignment({
             uid,
             assignmentId: gap.administrationId,
-            assignmentData: assignmentSnap.data() as DocumentData,
+            assignmentData: prevData,
             surveyResponseSnap: surveySnap,
           });
           if (!fresh) continue;
 
-          const updates = buildReopenedTeacherSurveyUpdates(
-            assignmentSnap.data() as DocumentData
-          );
+          const updates = buildReopenedTeacherSurveyUpdates(prevData);
           if (!updates) continue;
+
+          recordAssignmentUpdatedStats(
+            prevData as Parameters<typeof recordAssignmentUpdatedStats>[0],
+            {
+              ...prevData,
+              ...updates,
+            } as Parameters<typeof recordAssignmentUpdatedStats>[1],
+            statsRegistry.forAdministration(gap.administrationId)
+          );
 
           transaction.update(assignmentSnap.ref, {
             completed: updates.completed,
@@ -444,6 +456,7 @@ async function repairTeacher(
           transaction.update(userRef, userUpdate);
         }
 
+        statsRegistry.flush(transaction);
         return completedIds;
       });
 
