@@ -397,6 +397,13 @@ export interface SurveyCustomisationVersion {
   customFields: FullInformationFormField[];
 }
 
+// TODO: These types duplicate `SurveyResponseScalar` / `SurveyResponseValue`
+// (and the language selection shape) already exported from levante-zod's
+// `save-survey-responses` schema. Replace them with an import from
+// `@levante-framework/levante-zod` once a version exporting them is published
+// and installed here; kept local for now so this package still typechecks
+// against the currently installed levante-zod.
+
 /**
  * Stored answer for one survey question.
  *

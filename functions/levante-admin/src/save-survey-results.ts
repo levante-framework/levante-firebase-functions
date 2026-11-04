@@ -8,6 +8,13 @@ import {
 import { AdminStatsBufferRegistry } from "./assignments/admin-stats-buffer.js";
 import { syncOnAssignmentUpdated } from "./assignments/assignment-sync-in-transaction.js";
 
+// NB: These local types are narrower than `SaveSurveyResponsesParamsSchema` in
+// levante-zod (e.g. `responseValue` is widened there to lists, matrix objects,
+// and language selections; `pageNo`/`isEntireSurveyCompleted` are optional;
+// `specificId` is `string | number`). They are intentionally not reconciled
+// yet: the zod schema is being formalized to document incoming changes, not
+// wired into this callable. If that schema is ever wired up, these types
+// should be replaced with the inferred `SaveSurveyResponsesParams` type.
 type Response = {
   responseTime: string;
   responseValue: string;
