@@ -262,6 +262,14 @@ export type InformationFieldKey =
   | keyof SiteInformation
   | keyof SchoolInformation;
 
+/** How a form definition field is rendered and stored. */
+export type FormFieldKind =
+  | "text"
+  | "number"
+  | "single-select"
+  | "multi-select"
+  | "display-only";
+
 /** Section metadata within a form definition version. */
 export interface FormSectionInfo {
   sectionId: string;
@@ -270,18 +278,29 @@ export interface FormSectionInfo {
 }
 
 /**
- * Single field within an org-information form version. Describes how to render and
- * validate one question. `variableName` matches a `SiteInformation` or
- * `SchoolInformation` response property for that form.
+ * Single field within a form definition version. Describes how to render and
+ * validate one item. `variableName` is the stored response key: an org-form
+ * property, or a participant-survey response key. `display-only` items are
+ * shown and are not stored as responses.
  */
 export interface FullInformationFormField {
   /** Stable spreadsheet id, e.g. `"site_02"`. */
   itemId: string;
-  variableName: InformationFieldKey;
-  kind: "text" | "number" | "single-select" | "multi-select";
+  variableName: string;
+  kind: FormFieldKind;
   required: boolean;
   sectionId: string;
   questionText: string;
+  /**
+   * Groups items that belong to one question. Matrix rows share the matrix
+   * question's id.
+   */
+  questionId?: string;
+  /**
+   * Set when a single-select should render as part of a matrix rather than as
+   * its own control.
+   */
+  renderAs?: string;
   /** Value/label pairs for select fields; omitted for text/number fields. */
   options?: { value: string; label: string }[];
   /**
@@ -289,25 +308,43 @@ export interface FullInformationFormField {
    * value satisfies the rule (e.g. show `sampleApproachOther` when
    * `sampleApproach` includes `"other"`).
    */
-  displayLogic?: { field: InformationFieldKey; includes: string };
+  displayLogic?: { field: string; includes: string };
   infoExample?: string;
   notes?: string;
+  /**
+   * Determines whether this question appears even if the site has not yet
+   * customised the form.
+   */
+  surveyCore?: boolean;
+}
+
+interface FormDefinitionBase {
+  currentVersionId: string;
+  formDescription: string;
+  /**
+   * Per-response-field descriptions. Keys are org-form property names
+   * (`SiteInformation` or `SchoolInformation`) or participant-survey response keys.
+   */
+  fieldsDescription: Record<string, string>;
+}
+
+export interface OrgInformationFormDefinition extends FormDefinitionBase {
+  formType: "orgInformation";
+}
+
+export interface ParticipantSurveyFormDefinition extends FormDefinitionBase {
+  formType: "participantSurvey";
 }
 
 /**
  * Document in the top-level `formDefinitions` collection.
- * Document ID is the form identifier (e.g. `"siteInformation"`, `"schoolInformation"`).
+ * Document ID is the form identifier (e.g. `"siteInformation"`, `"caregiver-general"`).
  * Form-specific field definitions live in the `versions` subcollection.
+ * `fieldsDescription` is required for both org forms and participant surveys.
  */
-export interface FormDefinition {
-  currentVersionId: string;
-  formDescription: string;
-  /**
-   * Per-response-field descriptions; keys are `SiteInformation` or `SchoolInformation`
-   * property names for this form.
-   */
-  fieldsDescription: Record<string, string>;
-}
+export type FormDefinition =
+  | OrgInformationFormDefinition
+  | ParticipantSurveyFormDefinition;
 
 /**
  * Document in the `versions` subcollection of `formDefinitions`.

@@ -1,6 +1,9 @@
+import type { FormFieldKind } from "../firestore-schema.js";
+
 export type CompleteFieldShape = {
   variableName: string;
   required: boolean;
+  kind?: FormFieldKind;
   displayLogic?: { field: string; includes: string };
 };
 
@@ -29,7 +32,7 @@ export function findMissingRequiredFields(
   const missing: string[] = [];
 
   for (const field of fields) {
-    if (!field.required) continue;
+    if (!field.required || field.kind === "display-only") continue;
     if (field.displayLogic && !isDisplayLogicMet(answers, field.displayLogic)) {
       continue;
     }
