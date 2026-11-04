@@ -321,6 +321,10 @@ export interface FullInformationFormField {
 interface FormDefinitionBase {
   currentVersionId: string;
   formDescription: string;
+  /** Absent on documents written before these timestamps were stored. */
+  createdAt?: Timestamp;
+  /** Absent on documents written before these timestamps were stored. */
+  updatedAt?: Timestamp;
   /**
    * Per-response-field descriptions. Keys are org-form property names
    * (`SiteInformation` or `SchoolInformation`) or participant-survey response keys.
@@ -366,17 +370,63 @@ export interface FormDefinitionVersion {
 }
 
 /**
+ * Document in `districts/{districtId}/surveyCustomisations/{formId}`.
+ * Document ID is the survey slug. Absent when the district has not customised
+ * that survey. Override lists live in the `versions` subcollection.
+ */
+export interface SurveyCustomisation {
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+/**
+ * Document in
+ * `districts/{districtId}/surveyCustomisations/{formId}/versions/{customisationId}`.
+ *
+ * Several documents may target the same form-definition version. Load the one
+ * with `registered: true`. `customFields` replaces fields on
+ * `formDefinitions/{formId}/versions/{formVersionId}` with the same `itemId`.
+ * A base field with no entry here is unchanged.
+ */
+export interface SurveyCustomisationVersion {
+  registered: boolean;
+  /** Form-definition version these overrides apply to. */
+  formVersionId: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  customFields: FullInformationFormField[];
+}
+
+/**
  * Stored answer for one survey question.
- * A matrix is not a value: each row is its own response key and stores the
- * selected option as a scalar. A list is a multi-select. Unanswered questions
- * are `null` on the responses map. `null` here is a cleared answer that still
- * has a response time. Boolean is allowed; current items do not use it.
+ *
+ * The new player stores a scalar, a multi-select list of those scalars, or
+ * `null` for a cleared answer that still has a response time, and gives each
+ * matrix row its own key. SurveyJS still stores a matrix or multi-text
+ * question as one key whose value is an object of scalars. A language
+ * selector stores `{ codes, otherDescription }` (`LanguageSelection` in
+ * levante-zod). Older answers stay a scalar, a list of scalars, or that
+ * matrix object. Unanswered questions are `null` on the responses map.
+ * `null` here is a cleared answer that still has a response time.
  */
 export type SurveyResponseScalar = string | number | boolean;
+
+/**
+ * Answer stored by the org-information language selector. `codes` are
+ * lowercase ISO 639-1 alpha-2 codes and may include `"other"`.
+ * `otherDescription` is a trimmed non-empty string when `"other"` is
+ * selected, and `null` otherwise.
+ */
+export interface LanguageSelectionValue {
+  codes: string[];
+  otherDescription: string | null;
+}
 
 export type SurveyResponseValue =
   | SurveyResponseScalar
   | SurveyResponseScalar[]
+  | Record<string, SurveyResponseScalar>
+  | LanguageSelectionValue
   | null;
 
 export interface SurveyItemResponse {
@@ -416,6 +466,26 @@ export interface TeacherSpecificSurveyResponse extends SurveyResponsePart {
 }
 
 /**
+ * One caregiver profile on a caregiver survey document. The respondent
+ * answers `demo_08`–`demo_14b` once per caregiver. `childIds` is every child
+ * that caregiver applies to. With one child, that selection is not asked.
+ */
+export interface CaregiverProfileSurveyResponse {
+  isComplete: boolean;
+  childIds: string[];
+  responses: Record<string, SurveyItemResponse | null>;
+}
+
+/**
+ * Caregiver profiles for one adult document. `isComplete` covers the whole
+ * list. Each profile has its own `isComplete`. Teacher documents omit this.
+ */
+export interface CaregiverProfiles {
+  isComplete: boolean;
+  profiles: CaregiverProfileSurveyResponse[];
+}
+
+/**
  * Adult document in `users/{uid}/surveyResponses/{surveyResponseId}`.
  * One document per user per administration. `pageNo`, when present, is the
  * last saved page, not a per-part field. A caregiver document uses the
@@ -431,6 +501,8 @@ export interface SurveyResponses {
   specific?: Array<
     CaregiverSpecificSurveyResponse | TeacherSpecificSurveyResponse
   >;
+  /** Absent on teacher documents and on caregiver documents written before profiles. */
+  caregiverProfiles?: CaregiverProfiles;
 }
 
 // Structure for Claims within UserClaims
