@@ -11,6 +11,8 @@ import { syncOnAssignmentUpdated } from "./assignments/assignment-sync-in-transa
 type Response = {
   responseTime: string;
   responseValue: string;
+  responseText?: string;
+  questionPrompt?: string;
 };
 
 interface SurveyData {
@@ -21,6 +23,8 @@ interface SurveyData {
   specificId: string;
   responses: Record<string, Response>;
   userType: string;
+  /** Present only when the client knows the form definition version. */
+  versionId?: string;
 }
 
 interface SurveyResponsesInput {
@@ -88,6 +92,7 @@ export async function writeSurveyResponses(
       specificId,
       responses,
       userType,
+      versionId,
     } = surveyData as SurveyData;
 
     // format responses time from ISO string to date object
@@ -148,9 +153,15 @@ export async function writeSurveyResponses(
         updateData.createdAt = FieldValue.serverTimestamp();
       }
 
+      const storedVersionId =
+        typeof versionId === "string" && versionId.trim().length > 0
+          ? versionId.trim()
+          : undefined;
+
       // Update general data
       if (isGeneral) {
         updateData.general = {
+          ...existingData.general,
           isComplete: isComplete,
           responses: isComplete
             ? responsesWithTimestamps // Overwrite all responses if the survey is complete
@@ -158,6 +169,7 @@ export async function writeSurveyResponses(
                 ...existingData.general?.responses,
                 ...responsesWithTimestamps,
               }, // Merge new responses with existing ones
+          ...(storedVersionId ? { versionId: storedVersionId } : {}),
         };
       }
 
@@ -170,24 +182,23 @@ export async function writeSurveyResponses(
         const specificIndex = specificData.findIndex(
           (item) => item[idKey] === specificId
         );
-        if (specificIndex !== -1) {
-          specificData[specificIndex] = {
-            ...specificData[specificIndex],
-            [idKey]: specificId,
-            isComplete,
-            responses: isComplete
-              ? responsesWithTimestamps // Overwrite all responses if the survey is complete
-              : {
+        const nextSpecific = {
+          ...(specificIndex === -1 ? {} : specificData[specificIndex]),
+          [idKey]: specificId,
+          isComplete,
+          responses:
+            specificIndex !== -1 && !isComplete
+              ? {
                   ...specificData[specificIndex].responses,
                   ...responsesWithTimestamps,
-                }, // Merge new responses with existing ones
-          };
+                }
+              : responsesWithTimestamps,
+          ...(storedVersionId ? { versionId: storedVersionId } : {}),
+        };
+        if (specificIndex !== -1) {
+          specificData[specificIndex] = nextSpecific;
         } else {
-          specificData.push({
-            [idKey]: specificId,
-            isComplete,
-            responses: responsesWithTimestamps,
-          });
+          specificData.push(nextSpecific);
         }
 
         updateData.specific = specificData;

@@ -365,6 +365,74 @@ export interface FormDefinitionVersion {
   fullFields: FullInformationFormField[];
 }
 
+/**
+ * Stored answer for one survey question.
+ * A matrix is not a value: each row is its own response key and stores the
+ * selected option as a scalar. A list is a multi-select. Unanswered questions
+ * are `null` on the responses map. `null` here is a cleared answer that still
+ * has a response time. Boolean is allowed; current items do not use it.
+ */
+export type SurveyResponseScalar = string | number | boolean;
+
+export type SurveyResponseValue =
+  | SurveyResponseScalar
+  | SurveyResponseScalar[]
+  | null;
+
+export interface SurveyItemResponse {
+  responseValue: SurveyResponseValue;
+  responseTime: Timestamp;
+  /** Text stored with this answer. Absent on existing documents. */
+  responseText?: string;
+  /** Prompt shown for this question. Absent on existing documents. */
+  questionPrompt?: string;
+}
+
+/**
+ * Answers for one survey part. `versionId` is the form definition version for
+ * this part only (`formDefinitions/{formId}/versions/{versionId}`). Absent on
+ * parts written before versioned survey definitions.
+ */
+export interface SurveyResponsePart {
+  isComplete: boolean;
+  responses: Record<string, SurveyItemResponse | null>;
+  versionId?: string;
+}
+
+/** Caregiver general part (`caregiver-general`). */
+export interface CaregiverGeneralSurveyResponse extends SurveyResponsePart {}
+
+/** Teacher general part (`teacher-general`). */
+export interface TeacherGeneralSurveyResponse extends SurveyResponsePart {}
+
+/** One child-specific caregiver part (`caregiver-specific`). */
+export interface CaregiverSpecificSurveyResponse extends SurveyResponsePart {
+  childId: string;
+}
+
+/** One class-specific teacher part (`teacher-specific`). */
+export interface TeacherSpecificSurveyResponse extends SurveyResponsePart {
+  classId: string;
+}
+
+/**
+ * Adult document in `users/{uid}/surveyResponses/{surveyResponseId}`.
+ * One document per user per administration. `pageNo`, when present, is the
+ * last saved page, not a per-part field. A caregiver document uses the
+ * caregiver parts; a teacher document uses the teacher parts.
+ */
+export interface SurveyResponses {
+  administrationId: string;
+  /** Last saved page. Absent when a save does not send one. */
+  pageNo?: number;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  general?: CaregiverGeneralSurveyResponse | TeacherGeneralSurveyResponse;
+  specific?: Array<
+    CaregiverSpecificSurveyResponse | TeacherSpecificSurveyResponse
+  >;
+}
+
 // Structure for Claims within UserClaims
 // Manages custom claims for users, facilitating access control based on administrative roles or organizational (Group) affiliations.
 export interface Claims {
