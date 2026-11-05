@@ -76,14 +76,14 @@ describe("getOrgInformationStatus (e2e)", () => {
 
   it("rejects unauthenticated callers", async () => {
     await expect(
-      getOrgInformationStatus({ orgType: "site", orgId: SITE })
+      getOrgInformationStatus({ orgType: "site", orgIds: [SITE] })
     ).rejects.toMatchObject({ code: "functions/unauthenticated" });
   });
 
   it("rejects invalid input with a per-field details payload", async () => {
     await signInAs(client, UID, SITE_ADMIN_CLAIMS);
     await expect(
-      // @ts-expect-error intentionally missing orgId
+      // @ts-expect-error intentionally missing orgIds
       getOrgInformationStatus({ orgType: "site" })
     ).rejects.toMatchObject({
       code: "functions/invalid-argument",
@@ -91,7 +91,25 @@ describe("getOrgInformationStatus (e2e)", () => {
         code: "schema",
         issues: expect.arrayContaining([
           expect.objectContaining({
-            path: "orgId",
+            path: "orgIds",
+            message: expect.any(String),
+          }),
+        ]),
+      },
+    });
+  });
+
+  it("rejects an empty orgIds array", async () => {
+    await signInAs(client, UID, SITE_ADMIN_CLAIMS);
+    await expect(
+      getOrgInformationStatus({ orgType: "site", orgIds: [] })
+    ).rejects.toMatchObject({
+      code: "functions/invalid-argument",
+      details: {
+        code: "schema",
+        issues: expect.arrayContaining([
+          expect.objectContaining({
+            path: "orgIds",
             message: expect.any(String),
           }),
         ]),
@@ -105,7 +123,7 @@ describe("getOrgInformationStatus (e2e)", () => {
     });
     await seedSite();
     await expect(
-      getOrgInformationStatus({ orgType: "site", orgId: SITE })
+      getOrgInformationStatus({ orgType: "site", orgIds: [SITE] })
     ).rejects.toMatchObject({ code: "functions/permission-denied" });
   });
 
@@ -118,54 +136,154 @@ describe("getOrgInformationStatus (e2e)", () => {
     await seedForm(
       "siteInformation",
       { currentVersionId: "v1" },
-      { v1: siteVersion }
+      {
+        v1: siteVersion,
+      }
     );
     await seedForm(
       "schoolInformation",
       { currentVersionId: "v1" },
-      { v1: siteVersion }
+      {
+        v1: siteVersion,
+      }
     );
 
     await expect(
-      getOrgInformationStatus({ orgType: "site", orgId: SITE })
+      getOrgInformationStatus({ orgType: "site", orgIds: [SITE] })
     ).rejects.toMatchObject({ code: "functions/permission-denied" });
     await expect(
-      getOrgInformationStatus({ orgType: "school", orgId: SCHOOL })
+      getOrgInformationStatus({ orgType: "school", orgIds: [SCHOOL] })
     ).rejects.toMatchObject({ code: "functions/permission-denied" });
   });
 
-  it("rejects when the org document does not exist", async () => {
+  it("rejects the whole call when any requested site is not allowed", async () => {
     await signInAs(client, UID, SITE_ADMIN_CLAIMS);
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await adminDb.doc(`districts/${OTHER_SITE}`).set({ name: "Site 2" });
+    await seedForm(
+      "siteInformation",
+      { currentVersionId: "v1" },
+      {
+        v1: siteVersion,
+      }
+    );
 
     await expect(
-      getOrgInformationStatus({ orgType: "site", orgId: SITE })
-    ).rejects.toMatchObject({
-      code: "functions/not-found",
-      details: { code: "org", type: "site", id: SITE },
+      getOrgInformationStatus({
+        orgType: "site",
+        orgIds: [SITE, OTHER_SITE],
+      })
+    ).rejects.toMatchObject({ code: "functions/permission-denied" });
+  });
+
+  it("rejects the whole call when any requested school is on a site that is not allowed", async () => {
+    await signInAs(client, UID, SITE_ADMIN_CLAIMS);
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await adminDb.doc(`districts/${OTHER_SITE}`).set({ name: "Site 2" });
+    await adminDb
+      .doc("schools/school-allowed")
+      .set({ name: "Allowed", districtId: SITE });
+    await adminDb
+      .doc("schools/school-other")
+      .set({ name: "Other", districtId: OTHER_SITE });
+    await seedForm(
+      "schoolInformation",
+      { currentVersionId: "v1" },
+      {
+        v1: siteVersion,
+      }
+    );
+
+    await expect(
+      getOrgInformationStatus({
+        orgType: "school",
+        orgIds: ["school-allowed", "school-other"],
+      })
+    ).rejects.toMatchObject({ code: "functions/permission-denied" });
+  });
+
+  it("returns an org error when the org document does not exist", async () => {
+    await signInAs(client, UID, SITE_ADMIN_CLAIMS);
+    await seedForm(
+      "siteInformation",
+      { currentVersionId: "v1" },
+      {
+        v1: siteVersion,
+      }
+    );
+
+    const { data } = await getOrgInformationStatus({
+      orgType: "site",
+      orgIds: [SITE],
+    });
+    expect(data).toEqual({
+      orgType: "site",
+      results: [{ orgId: SITE, error: { code: "org" } }],
     });
   });
 
-  it("rejects a school id passed as a site", async () => {
+  it("returns an org error for a missing org before checking permission", async () => {
+    await signInAs(client, "u-other", {
+      useNewPermissions: true,
+      siteRoles: { [OTHER_SITE]: ["site_admin"] },
+    });
+    await seedForm(
+      "siteInformation",
+      { currentVersionId: "v1" },
+      {
+        v1: siteVersion,
+      }
+    );
+
+    const { data } = await getOrgInformationStatus({
+      orgType: "site",
+      orgIds: [SITE],
+    });
+    expect(data).toEqual({
+      orgType: "site",
+      results: [{ orgId: SITE, error: { code: "org" } }],
+    });
+  });
+
+  it("returns an org error when a school id is passed as a site", async () => {
     await signInAs(client, UID, SITE_ADMIN_CLAIMS);
     await seedSchool();
+    await seedForm(
+      "siteInformation",
+      { currentVersionId: "v1" },
+      {
+        v1: siteVersion,
+      }
+    );
 
-    await expect(
-      getOrgInformationStatus({ orgType: "site", orgId: SCHOOL })
-    ).rejects.toMatchObject({
-      code: "functions/not-found",
-      details: { code: "org", type: "site", id: SCHOOL },
+    const { data } = await getOrgInformationStatus({
+      orgType: "site",
+      orgIds: [SCHOOL],
+    });
+    expect(data).toEqual({
+      orgType: "site",
+      results: [{ orgId: SCHOOL, error: { code: "org" } }],
     });
   });
 
-  it("rejects when the school document has no districtId", async () => {
+  it("returns an org-incomplete error when the school has no districtId", async () => {
     await signInAs(client, UID, SITE_ADMIN_CLAIMS);
     await adminDb.doc(`schools/${SCHOOL}`).set({ name: "School 1" });
+    await seedForm(
+      "schoolInformation",
+      { currentVersionId: "v1" },
+      {
+        v1: siteVersion,
+      }
+    );
 
-    await expect(
-      getOrgInformationStatus({ orgType: "school", orgId: SCHOOL })
-    ).rejects.toMatchObject({
-      code: "functions/internal",
-      details: { code: "org-incomplete", type: "school", id: SCHOOL },
+    const { data } = await getOrgInformationStatus({
+      orgType: "school",
+      orgIds: [SCHOOL],
+    });
+    expect(data).toEqual({
+      orgType: "school",
+      results: [{ orgId: SCHOOL, error: { code: "org-incomplete" } }],
     });
   });
 
@@ -174,7 +292,18 @@ describe("getOrgInformationStatus (e2e)", () => {
     await seedSite();
 
     await expect(
-      getOrgInformationStatus({ orgType: "site", orgId: SITE })
+      getOrgInformationStatus({ orgType: "site", orgIds: [SITE] })
+    ).rejects.toMatchObject({
+      code: "functions/failed-precondition",
+      details: { code: "no-current-version", id: "siteInformation" },
+    });
+  });
+
+  it("rejects with no-current-version when every org is missing and the form does not exist", async () => {
+    await signInAs(client, UID, SITE_ADMIN_CLAIMS);
+
+    await expect(
+      getOrgInformationStatus({ orgType: "site", orgIds: [SITE] })
     ).rejects.toMatchObject({
       code: "functions/failed-precondition",
       details: { code: "no-current-version", id: "siteInformation" },
@@ -187,11 +316,13 @@ describe("getOrgInformationStatus (e2e)", () => {
     await seedForm(
       "schoolInformation",
       {},
-      { draft: { ...siteVersion, registered: false } }
+      {
+        draft: { ...siteVersion, registered: false },
+      }
     );
 
     await expect(
-      getOrgInformationStatus({ orgType: "school", orgId: SCHOOL })
+      getOrgInformationStatus({ orgType: "school", orgIds: [SCHOOL] })
     ).rejects.toMatchObject({
       code: "functions/failed-precondition",
       details: { code: "no-current-version", id: "schoolInformation" },
@@ -204,17 +335,18 @@ describe("getOrgInformationStatus (e2e)", () => {
     await seedForm(
       "siteInformation",
       { currentVersionId: "v1" },
-      { v1: siteVersion }
+      {
+        v1: siteVersion,
+      }
     );
 
     const { data } = await getOrgInformationStatus({
       orgType: "site",
-      orgId: SITE,
+      orgIds: [SITE],
     });
     expect(data).toEqual({
-      orgId: SITE,
       orgType: "site",
-      progress: "not-started",
+      results: [{ orgId: SITE, progress: "not-started" }],
     });
   });
 
@@ -224,7 +356,9 @@ describe("getOrgInformationStatus (e2e)", () => {
     await seedForm(
       "siteInformation",
       { currentVersionId: "v1" },
-      { v1: siteVersion }
+      {
+        v1: siteVersion,
+      }
     );
     await adminDb.doc(`districts/${SITE}/siteInformation/v1`).set({
       status: "draft",
@@ -232,12 +366,11 @@ describe("getOrgInformationStatus (e2e)", () => {
 
     const { data } = await getOrgInformationStatus({
       orgType: "site",
-      orgId: SITE,
+      orgIds: [SITE],
     });
     expect(data).toEqual({
-      orgId: SITE,
       orgType: "site",
-      progress: "incomplete",
+      results: [{ orgId: SITE, progress: "incomplete" }],
     });
   });
 
@@ -247,7 +380,9 @@ describe("getOrgInformationStatus (e2e)", () => {
     await seedForm(
       "siteInformation",
       { currentVersionId: "v1" },
-      { v1: siteVersion }
+      {
+        v1: siteVersion,
+      }
     );
     await adminDb.doc(`districts/${SITE}/siteInformation/v1`).set({
       status: "complete",
@@ -255,12 +390,11 @@ describe("getOrgInformationStatus (e2e)", () => {
 
     const { data } = await getOrgInformationStatus({
       orgType: "site",
-      orgId: SITE,
+      orgIds: [SITE],
     });
     expect(data).toEqual({
-      orgId: SITE,
       orgType: "site",
-      progress: "complete",
+      results: [{ orgId: SITE, progress: "complete" }],
     });
   });
 
@@ -270,17 +404,18 @@ describe("getOrgInformationStatus (e2e)", () => {
     await seedForm(
       "schoolInformation",
       { currentVersionId: "v1" },
-      { v1: siteVersion }
+      {
+        v1: siteVersion,
+      }
     );
 
     const { data } = await getOrgInformationStatus({
       orgType: "school",
-      orgId: SCHOOL,
+      orgIds: [SCHOOL],
     });
     expect(data).toEqual({
-      orgId: SCHOOL,
       orgType: "school",
-      progress: "not-started",
+      results: [{ orgId: SCHOOL, progress: "not-started" }],
     });
   });
 
@@ -290,7 +425,9 @@ describe("getOrgInformationStatus (e2e)", () => {
     await seedForm(
       "schoolInformation",
       { currentVersionId: "v1" },
-      { v1: siteVersion }
+      {
+        v1: siteVersion,
+      }
     );
     await adminDb.doc(`schools/${SCHOOL}/schoolInformation/v1`).set({
       status: "draft",
@@ -298,12 +435,11 @@ describe("getOrgInformationStatus (e2e)", () => {
 
     const { data } = await getOrgInformationStatus({
       orgType: "school",
-      orgId: SCHOOL,
+      orgIds: [SCHOOL],
     });
     expect(data).toEqual({
-      orgId: SCHOOL,
       orgType: "school",
-      progress: "incomplete",
+      results: [{ orgId: SCHOOL, progress: "incomplete" }],
     });
   });
 
@@ -313,7 +449,9 @@ describe("getOrgInformationStatus (e2e)", () => {
     await seedForm(
       "schoolInformation",
       { currentVersionId: "v1" },
-      { v1: siteVersion }
+      {
+        v1: siteVersion,
+      }
     );
     await adminDb.doc(`schools/${SCHOOL}/schoolInformation/v1`).set({
       status: "complete",
@@ -321,12 +459,81 @@ describe("getOrgInformationStatus (e2e)", () => {
 
     const { data } = await getOrgInformationStatus({
       orgType: "school",
-      orgId: SCHOOL,
+      orgIds: [SCHOOL],
     });
     expect(data).toEqual({
-      orgId: SCHOOL,
       orgType: "school",
-      progress: "complete",
+      results: [{ orgId: SCHOOL, progress: "complete" }],
+    });
+  });
+
+  it("returns one result per school in orgIds order", async () => {
+    const completeId = "school-complete";
+    const draftId = "school-draft";
+    const noneId = "school-none";
+    const missingId = "school-missing";
+
+    await signInAs(client, UID, SITE_ADMIN_CLAIMS);
+    await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+    await adminDb
+      .doc(`schools/${completeId}`)
+      .set({ name: "Complete", districtId: SITE });
+    await adminDb
+      .doc(`schools/${draftId}`)
+      .set({ name: "Draft", districtId: SITE });
+    await adminDb
+      .doc(`schools/${noneId}`)
+      .set({ name: "None", districtId: SITE });
+    await seedForm(
+      "schoolInformation",
+      { currentVersionId: "v1" },
+      {
+        v1: siteVersion,
+      }
+    );
+    await adminDb.doc(`schools/${completeId}/schoolInformation/v1`).set({
+      status: "complete",
+    });
+    await adminDb.doc(`schools/${draftId}/schoolInformation/v1`).set({
+      status: "draft",
+    });
+
+    const { data } = await getOrgInformationStatus({
+      orgType: "school",
+      orgIds: [completeId, draftId, noneId, missingId],
+    });
+    expect(data).toEqual({
+      orgType: "school",
+      results: [
+        { orgId: completeId, progress: "complete" },
+        { orgId: draftId, progress: "incomplete" },
+        { orgId: noneId, progress: "not-started" },
+        { orgId: missingId, error: { code: "org" } },
+      ],
+    });
+  });
+
+  it("returns a result for each duplicate org id", async () => {
+    await signInAs(client, UID, SITE_ADMIN_CLAIMS);
+    await seedSite();
+    await seedForm(
+      "siteInformation",
+      { currentVersionId: "v1" },
+      {
+        v1: siteVersion,
+      }
+    );
+
+    const { data } = await getOrgInformationStatus({
+      orgType: "site",
+      orgIds: [SITE, SITE],
+    });
+    expect(data).toEqual({
+      orgType: "site",
+      results: [
+        { orgId: SITE, progress: "not-started" },
+        { orgId: SITE, progress: "not-started" },
+      ],
     });
   });
 
@@ -347,12 +554,11 @@ describe("getOrgInformationStatus (e2e)", () => {
 
     const { data } = await getOrgInformationStatus({
       orgType: "site",
-      orgId: SITE,
+      orgIds: [SITE],
     });
     expect(data).toEqual({
-      orgId: SITE,
       orgType: "site",
-      progress: "not-started",
+      results: [{ orgId: SITE, progress: "not-started" }],
     });
   });
 
@@ -376,12 +582,11 @@ describe("getOrgInformationStatus (e2e)", () => {
 
     const { data } = await getOrgInformationStatus({
       orgType: "site",
-      orgId: SITE,
+      orgIds: [SITE],
     });
     expect(data).toEqual({
-      orgId: SITE,
       orgType: "site",
-      progress: "incomplete",
+      results: [{ orgId: SITE, progress: "incomplete" }],
     });
   });
 
@@ -405,52 +610,66 @@ describe("getOrgInformationStatus (e2e)", () => {
 
     const { data } = await getOrgInformationStatus({
       orgType: "site",
-      orgId: SITE,
+      orgIds: [SITE],
     });
     expect(data).toEqual({
-      orgId: SITE,
       orgType: "site",
-      progress: "incomplete",
+      results: [{ orgId: SITE, progress: "incomplete" }],
     });
   });
 
-  it("rejects an answer whose status is neither draft nor complete", async () => {
+  it("returns an unexpected-status error when the answer status is neither draft nor complete", async () => {
     await signInAs(client, UID, SITE_ADMIN_CLAIMS);
     await seedSite();
     await seedForm(
       "siteInformation",
       { currentVersionId: "v1" },
-      { v1: siteVersion }
+      {
+        v1: siteVersion,
+      }
     );
     await adminDb.doc(`districts/${SITE}/siteInformation/v1`).set({
       status: "archived",
     });
 
-    await expect(
-      getOrgInformationStatus({ orgType: "site", orgId: SITE })
-    ).rejects.toMatchObject({
-      code: "functions/internal",
-      details: { code: "unexpected-status", id: SITE, status: "archived" },
+    const { data } = await getOrgInformationStatus({
+      orgType: "site",
+      orgIds: [SITE],
+    });
+    expect(data).toEqual({
+      orgType: "site",
+      results: [
+        {
+          orgId: SITE,
+          error: { code: "unexpected-status", status: "archived" },
+        },
+      ],
     });
   });
 
-  it("rejects a non-string status with the value stringified", async () => {
+  it("returns an unexpected-status error when the status is not a string", async () => {
     await signInAs(client, UID, SITE_ADMIN_CLAIMS);
     await seedSite();
     await seedForm(
       "siteInformation",
       { currentVersionId: "v1" },
-      { v1: siteVersion }
+      {
+        v1: siteVersion,
+      }
     );
     await adminDb.doc(`districts/${SITE}/siteInformation/v1`).set({
       status: 1,
     });
 
-    await expect(
-      getOrgInformationStatus({ orgType: "site", orgId: SITE })
-    ).rejects.toMatchObject({
-      code: "functions/internal",
-      details: { code: "unexpected-status", id: SITE, status: "1" },
+    const { data } = await getOrgInformationStatus({
+      orgType: "site",
+      orgIds: [SITE],
+    });
+    expect(data).toEqual({
+      orgType: "site",
+      results: [
+        { orgId: SITE, error: { code: "unexpected-status", status: "1" } },
+      ],
     });
   });
 });

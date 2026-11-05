@@ -19,6 +19,8 @@ import {
 } from "../utils/permission-helpers.js";
 import { ORG_TYPE_TO_FORM_ID } from "./org-paths.js";
 
+type OrgStatusResult = GetOrgInformationStatusResult["results"][number];
+
 /**
  * Registered version for an org-information form.
  *
@@ -71,17 +73,16 @@ async function resolveRegisteredVersionId(
   return versionSnap.id;
 }
 
-function progressFromAnswer(
-  status: unknown,
-  orgId: string
-): "incomplete" | "complete" {
-  if (status === "draft") return "incomplete";
-  if (status === "complete") return "complete";
-  throw new HttpsError("internal", "Unexpected org information status", {
-    code: "unexpected-status",
-    id: orgId,
-    status: typeof status === "string" ? status : String(status),
-  });
+function resultFromAnswer(orgId: string, status: unknown): OrgStatusResult {
+  if (status === "draft") return { orgId, progress: "incomplete" };
+  if (status === "complete") return { orgId, progress: "complete" };
+  return {
+    orgId,
+    error: {
+      code: "unexpected-status",
+      status: typeof status === "string" ? status : String(status),
+    },
+  };
 }
 
 export const getOrgInformationStatus = onCall(
@@ -100,7 +101,7 @@ export const getOrgInformationStatus = onCall(
         })),
       });
     }
-    const { orgType, orgId } = parsed.data;
+    const { orgType, orgIds } = parsed.data;
 
     const userRecord = await getAuth().getUser(request.auth.uid);
     // Legacy permissions
@@ -114,66 +115,102 @@ export const getOrgInformationStatus = onCall(
 
     const db = getFirestore();
     const orgCollection = ORG_TYPE_TO_COLLECTION[orgType];
-    const orgSnap = await db.collection(orgCollection).doc(orgId).get();
+    const uniqueOrgIds = [...new Set(orgIds)];
+    const orgSnaps = await db.getAll(
+      ...uniqueOrgIds.map((orgId) => db.collection(orgCollection).doc(orgId))
+    );
+    const orgSnapById = new Map(orgSnaps.map((snap) => [snap.id, snap]));
 
-    if (!orgSnap.exists) {
-      throw new HttpsError("not-found", "Org not found", {
-        code: "org",
-        type: orgType,
-        id: orgId,
-      });
+    const siteIdByOrgId = new Map<string, string>();
+    const errorByOrgId = new Map<string, OrgStatusResult>();
+    for (const orgId of uniqueOrgIds) {
+      const orgSnap = orgSnapById.get(orgId);
+      if (!orgSnap?.exists) {
+        errorByOrgId.set(orgId, { orgId, error: { code: "org" } });
+        continue;
+      }
+
+      if (orgType === "site") {
+        siteIdByOrgId.set(orgId, orgId);
+        continue;
+      }
+
+      const siteId = orgSnap.get("districtId");
+      if (typeof siteId !== "string") {
+        errorByOrgId.set(orgId, {
+          orgId,
+          error: { code: "org-incomplete" },
+        });
+        continue;
+      }
+      siteIdByOrgId.set(orgId, siteId);
     }
 
-    const siteId = orgType === "site" ? orgId : orgSnap.get("districtId");
-    if (typeof siteId !== "string") {
-      throw new HttpsError("internal", "School has no site", {
-        code: "org-incomplete",
-        type: "school",
-        id: orgId,
-      });
-    }
-
-    await ensurePermissionsLoaded();
-    const user = buildPermissionsUserFromAuthRecord(userRecord);
-    const allowed =
-      filterSitesByPermission(user, [siteId], {
+    const siteIds = [...new Set(siteIdByOrgId.values())];
+    if (siteIds.length > 0) {
+      await ensurePermissionsLoaded();
+      const user = buildPermissionsUserFromAuthRecord(userRecord);
+      const allowed = filterSitesByPermission(user, siteIds, {
         resource: RESOURCES.GROUPS,
         action: ACTIONS.READ,
         subResource:
           orgType === "site"
             ? GROUP_SUB_RESOURCES.SITES
             : GROUP_SUB_RESOURCES.SCHOOLS,
-      }).length > 0;
-    if (!allowed) {
-      logger.warn("Permission denied for getting org information status", {
-        requestingUid: request.auth.uid,
-        orgType,
-        orgId,
-        siteId,
       });
-      throw new HttpsError(
-        "permission-denied",
-        `You do not have permission to get org information status for ${orgType} ${orgId}`
-      );
+      if (allowed.length !== siteIds.length) {
+        logger.warn("Permission denied for getting org information status", {
+          requestingUid: request.auth.uid,
+          orgType,
+          siteIds: siteIds.filter((siteId) => !allowed.includes(siteId)),
+        });
+        throw new HttpsError(
+          "permission-denied",
+          `You do not have permission to get org information status for ${orgType}`
+        );
+      }
     }
 
     const versionId = await resolveRegisteredVersionId(orgType);
     const formId = ORG_TYPE_TO_FORM_ID[orgType];
-    const savedSnap = await db
-      .collection(orgCollection)
-      .doc(orgId)
-      .collection(formId)
-      .doc(versionId)
-      .get();
+    const readableOrgIds = uniqueOrgIds.filter((orgId) =>
+      siteIdByOrgId.has(orgId)
+    );
+    const answerSnaps =
+      readableOrgIds.length === 0
+        ? []
+        : await db.getAll(
+            ...readableOrgIds.map((orgId) =>
+              db
+                .collection(orgCollection)
+                .doc(orgId)
+                .collection(formId)
+                .doc(versionId)
+            )
+          );
+    const answerSnapByOrgId = new Map(
+      readableOrgIds.map((orgId, index) => [orgId, answerSnaps[index]])
+    );
 
-    if (!savedSnap.exists) {
-      return { orgId, orgType, progress: "not-started" };
+    const results = orgIds.map((orgId): OrgStatusResult => {
+      const error = errorByOrgId.get(orgId);
+      if (error) return error;
+
+      const savedSnap = answerSnapByOrgId.get(orgId);
+      if (!savedSnap?.exists) return { orgId, progress: "not-started" };
+      return resultFromAnswer(orgId, savedSnap.get("status"));
+    });
+
+    const failed = results.flatMap((result) =>
+      "error" in result ? [result] : []
+    );
+    if (failed.length > 0) {
+      logger.warn("Org information status item errors", {
+        orgType,
+        results: failed,
+      });
     }
 
-    return {
-      orgId,
-      orgType,
-      progress: progressFromAnswer(savedSnap.get("status"), orgId),
-    };
+    return { orgType, results };
   }
 );
