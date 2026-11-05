@@ -89,6 +89,15 @@ const getAge = (birthMonth: number, birthYear: number): number => {
   return age;
 };
 
+// birthMonth uses the same 0-based index as Date.getMonth() (January = 0).
+// The birth month counts as reached, matching getAge, and the day of the month is ignored.
+const getAgeInMonths = (birthMonth: number, birthYear: number): number => {
+  const today = new Date();
+  return (
+    (today.getFullYear() - birthYear) * 12 + (today.getMonth() - birthMonth)
+  );
+};
+
 /**
  * Function that evaluates a Condition based on the provided user data.
  *
@@ -110,12 +119,16 @@ export const evaluateCondition = ({
 
     let referenceValue = (condition as FieldCondition).value;
 
-    if ((condition as FieldCondition).field === "age") {
+    const field = (condition as FieldCondition).field;
+    if (field === "age" || field === "ageMonths") {
       // We never use age conditions for non-student users.
       if (userData.userType !== "student") {
         return false;
       }
-      fieldValue = getAge(userData.birthMonth, userData.birthYear);
+      fieldValue =
+        field === "age"
+          ? getAge(userData.birthMonth, userData.birthYear)
+          : getAgeInMonths(userData.birthMonth, userData.birthYear);
     }
 
     const evaluationResult = evaluateFieldCondition({
