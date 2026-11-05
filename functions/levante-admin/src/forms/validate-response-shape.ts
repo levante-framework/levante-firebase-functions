@@ -1,3 +1,4 @@
+import { LanguageSelectionSchema } from "@levante-framework/levante-zod";
 import type { FormFieldKind } from "../firestore-schema.js";
 
 export type ResponseFieldShape = {
@@ -56,6 +57,19 @@ export function validateResponseShape(
     if (field.kind === "number") {
       if (typeof value !== "number") {
         issues.push({ path, message: "Expected a number." });
+      }
+      continue;
+    }
+
+    if (field.kind === "language-selection") {
+      const parsed = LanguageSelectionSchema.safeParse(value);
+      if (!parsed.success) {
+        for (const issue of parsed.error.issues) {
+          issues.push({
+            path: ["responses", key, ...issue.path].join("."),
+            message: issue.message,
+          });
+        }
       }
       continue;
     }

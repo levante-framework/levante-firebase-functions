@@ -114,187 +114,196 @@ interface StartTaskResult {
  * Cloud Function to start a task in an assignment
  * This function prepares the task for starting and returns the necessary data for firekit (client)
  */
-export const startTask = onCall(async (request): Promise<StartTaskResult> => {
-  const db = getFirestore();
-  try {
-    // Validate authentication
-    if (!request.auth) {
-      throw new HttpsError("unauthenticated", "User must be authenticated");
-    }
+export const startTask = onCall(
+  { minInstances: 1 },
+  async (request): Promise<StartTaskResult> => {
+    const db = getFirestore();
+    try {
+      // Validate authentication
+      if (!request.auth) {
+        throw new HttpsError("unauthenticated", "User must be authenticated");
+      }
 
-    const { administrationId, taskId, targetUid } = request.data;
+      const { administrationId, taskId, targetUid } = request.data;
 
-    if (!administrationId || !taskId) {
-      throw new HttpsError(
-        "invalid-argument",
-        "administrationId and taskId are required"
-      );
-    }
-
-    // Use the authenticated user's UID, or the provided targetUid if specified
-    const uid = targetUid || request.auth.uid;
-
-    if (!uid) {
-      throw new HttpsError("invalid-argument", "Could not determine user ID");
-    }
-
-    // Run everything in a transaction to ensure consistency
-    const result = await db.runTransaction(async (transaction) => {
-      // DO ALL READS FIRST
-      // Get the assignment document to check if it exists and get assessment info
-      const assignmentDocSnap = await getAssignmentDoc(
-        db,
-        uid,
-        administrationId,
-        transaction
-      );
-
-      if (!assignmentDocSnap.exists) {
+      if (!administrationId || !taskId) {
         throw new HttpsError(
-          "not-found",
-          `Could not find assignment for user ${uid} with administration id ${administrationId}`
+          "invalid-argument",
+          "administrationId and taskId are required"
         );
       }
 
-      const assignmentData = assignmentDocSnap.data()!;
+      // Use the authenticated user's UID, or the provided targetUid if specified
+      const uid = targetUid || request.auth.uid;
 
-      // Get the assessments from the assignment document
-      const assignedAssessments =
-        assignmentData.assessments as IExtendedAssignedAssessment[];
-
-      // Find the specific assessment (task) we're trying to start
-      const thisAssignedAssessment = assignedAssessments.find(
-        (a) => a.taskId === taskId
-      );
-
-      if (!thisAssignedAssessment) {
-        throw new HttpsError(
-          "not-found",
-          `Could not find assessment with taskId ${taskId} in user assignment ${administrationId} for user ${uid}`
-        );
+      if (!uid) {
+        throw new HttpsError("invalid-argument", "Could not determine user ID");
       }
 
-      // Get the administration document to access the assessment metadata
-      const administrationDocRef = db
-        .collection("administrations")
-        .doc(administrationId);
-      const administrationDocSnap = await transaction.get(administrationDocRef);
-
-      if (!administrationDocSnap.exists) {
-        throw new HttpsError(
-          "not-found",
-          `Could not find administration with id ${administrationId}`
+      // Run everything in a transaction to ensure consistency
+      const result = await db.runTransaction(async (transaction) => {
+        // DO ALL READS FIRST
+        // Get the assignment document to check if it exists and get assessment info
+        const assignmentDocSnap = await getAssignmentDoc(
+          db,
+          uid,
+          administrationId,
+          transaction
         );
-      }
 
-      const administrationData =
-        administrationDocSnap.data() as IAdministration;
+        if (!assignmentDocSnap.exists) {
+          throw new HttpsError(
+            "not-found",
+            `Could not find assignment for user ${uid} with administration id ${administrationId}`
+          );
+        }
 
-      // Find the assessment definition in the administration to get metadata
-      const assessmentDefinition = administrationData.assessments.find(
-        (a: IAssessment) => a.taskId === taskId
-      );
+        const assignmentData = assignmentDocSnap.data()!;
 
-      if (!assessmentDefinition) {
-        throw new HttpsError(
-          "not-found",
-          `Could not find assessment definition with taskId ${taskId} in administration ${administrationId}`
+        // Get the assessments from the assignment document
+        const assignedAssessments =
+          assignmentData.assessments as IExtendedAssignedAssessment[];
+
+        // Find the specific assessment (task) we're trying to start
+        const thisAssignedAssessment = assignedAssessments.find(
+          (a) => a.taskId === taskId
         );
-      }
 
-      // Get user data
-      const { userData, assessmentPid } = await getMyData(db, uid, transaction);
+        if (!thisAssignedAssessment) {
+          throw new HttpsError(
+            "not-found",
+            `Could not find assessment with taskId ${taskId} in user assignment ${administrationId} for user ${uid}`
+          );
+        }
 
-      // Get assignment metadata
-      const assigningOrgs = assignmentData.assigningOrgs as IOrgsList;
-      const readOrgs = assignmentData.readOrgs as IOrgsList;
+        // Get the administration document to access the assessment metadata
+        const administrationDocRef = db
+          .collection("administrations")
+          .doc(administrationId);
+        const administrationDocSnap = await transaction.get(
+          administrationDocRef
+        );
 
-      // Snapshot before the assessment write, which mutates the array it reads.
-      const prevAssessments = assignedAssessments.map((assessment) => ({
-        ...assessment,
-      }));
-      const isFirstStart = !prevAssessments.some((assessment) =>
-        Boolean(assessment.startedOn)
-      );
-      const startedOn = new Date();
+        if (!administrationDocSnap.exists) {
+          throw new HttpsError(
+            "not-found",
+            `Could not find administration with id ${administrationId}`
+          );
+        }
 
-      // NOW DO ALL WRITES
-      await updateAssignedAssessment(
-        db,
-        uid,
+        const administrationData =
+          administrationDocSnap.data() as IAdministration;
+
+        // Find the assessment definition in the administration to get metadata
+        const assessmentDefinition = administrationData.assessments.find(
+          (a: IAssessment) => a.taskId === taskId
+        );
+
+        if (!assessmentDefinition) {
+          throw new HttpsError(
+            "not-found",
+            `Could not find assessment definition with taskId ${taskId} in administration ${administrationId}`
+          );
+        }
+
+        // Get user data
+        const { userData, assessmentPid } = await getMyData(
+          db,
+          uid,
+          transaction
+        );
+
+        // Get assignment metadata
+        const assigningOrgs = assignmentData.assigningOrgs as IOrgsList;
+        const readOrgs = assignmentData.readOrgs as IOrgsList;
+
+        // Snapshot before the assessment write, which mutates the array it reads.
+        const prevAssessments = assignedAssessments.map((assessment) => ({
+          ...assessment,
+        }));
+        const isFirstStart = !prevAssessments.some((assessment) =>
+          Boolean(assessment.startedOn)
+        );
+        const startedOn = new Date();
+
+        // NOW DO ALL WRITES
+        await updateAssignedAssessment(
+          db,
+          uid,
+          administrationId,
+          taskId,
+          { startedOn },
+          transaction
+        );
+
+        // If this is the first assessment to be started in this assignment, mark the assignment as started
+        if (isFirstStart) {
+          await startAssignment(db, administrationId, uid, transaction);
+        }
+
+        await syncAssignmentProgress(
+          db,
+          transaction,
+          uid,
+          administrationId,
+          {
+            assigningOrgs,
+            assessments: prevAssessments,
+            started: assignmentData.started,
+            completed: assignmentData.completed,
+          },
+          {
+            assigningOrgs,
+            assessments: prevAssessments.map((assessment) =>
+              assessment.taskId === taskId
+                ? { ...assessment, startedOn }
+                : assessment
+            ),
+            started: Boolean(assignmentData.started) || isFirstStart,
+            completed: assignmentData.completed,
+          }
+        );
+
+        // Prepare the task information for firekit using the assessment definition from administration
+        const taskInfo = {
+          variantName: assessmentDefinition.variantName,
+          variantParams: assessmentDefinition.params || {},
+          variantId: assessmentDefinition.variantId,
+        };
+
+        return {
+          success: true,
+          taskInfo,
+          assigningOrgs,
+          readOrgs,
+          userData,
+          assessmentPid,
+        };
+      });
+
+      logger.info(uid, "started task", {
         administrationId,
         taskId,
-        { startedOn },
-        transaction
-      );
+      });
 
-      // If this is the first assessment to be started in this assignment, mark the assignment as started
-      if (isFirstStart) {
-        await startAssignment(db, administrationId, uid, transaction);
+      return result;
+    } catch (error) {
+      logger.error(request.auth?.uid, "failed to start task", {
+        error,
+        administrationId: request.data?.administrationId,
+        taskId: request.data?.taskId,
+      });
+
+      if (error instanceof HttpsError) {
+        throw error;
       }
 
-      await syncAssignmentProgress(
-        db,
-        transaction,
-        uid,
-        administrationId,
-        {
-          assigningOrgs,
-          assessments: prevAssessments,
-          started: assignmentData.started,
-          completed: assignmentData.completed,
-        },
-        {
-          assigningOrgs,
-          assessments: prevAssessments.map((assessment) =>
-            assessment.taskId === taskId
-              ? { ...assessment, startedOn }
-              : assessment
-          ),
-          started: Boolean(assignmentData.started) || isFirstStart,
-          completed: assignmentData.completed,
-        }
+      throw new HttpsError(
+        "internal",
+        `Failed to start task: ${
+          error instanceof Error ? error.message : String(error)
+        }`
       );
-
-      // Prepare the task information for firekit using the assessment definition from administration
-      const taskInfo = {
-        variantName: assessmentDefinition.variantName,
-        variantParams: assessmentDefinition.params || {},
-        variantId: assessmentDefinition.variantId,
-      };
-
-      return {
-        success: true,
-        taskInfo,
-        assigningOrgs,
-        readOrgs,
-        userData,
-        assessmentPid,
-      };
-    });
-
-    logger.info(uid, "started task", {
-      administrationId,
-      taskId,
-    });
-
-    return result;
-  } catch (error) {
-    logger.error(request.auth?.uid, "failed to start task", {
-      error,
-      administrationId: request.data?.administrationId,
-      taskId: request.data?.taskId,
-    });
-
-    if (error instanceof HttpsError) {
-      throw error;
     }
-
-    throw new HttpsError(
-      "internal",
-      `Failed to start task: ${
-        error instanceof Error ? error.message : String(error)
-      }`
-    );
   }
-});
+);

@@ -1,4 +1,7 @@
-import type { CoarseLocation } from "@levante-framework/levante-zod";
+import type {
+  CoarseLocation,
+  LanguageSelection,
+} from "@levante-framework/levante-zod";
 import * as admin from "firebase-admin";
 
 // Type alias for Firestore Timestamp
@@ -197,7 +200,7 @@ export interface SiteInformationAnswers {
   siteSES?: string;
   siteLifestyle?: string;
   siteTech?: string;
-  siteLanguages?: string;
+  siteLanguages?: LanguageSelection;
   siteSubsistence?: string[];
   schoolingAgeStart?: number;
   schoolingAgeEnd?: number;
@@ -268,7 +271,8 @@ export type FormFieldKind =
   | "number"
   | "single-select"
   | "multi-select"
-  | "display-only";
+  | "display-only"
+  | "language-selection";
 
 /** Section metadata within a form definition version. */
 export interface FormSectionInfo {
@@ -301,7 +305,7 @@ export interface FullInformationFormField {
    * its own control.
    */
   renderAs?: string;
-  /** Value/label pairs for select fields; omitted for text/number fields. */
+  /** Value/label pairs for select fields; omitted for text, number, and language-selection. */
   options?: { value: string; label: string }[];
   /**
    * Conditional visibility: only render/collect this field when another field's

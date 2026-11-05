@@ -41,7 +41,12 @@ async function seedFormVersion(
   formVersion: string,
   fullFields: {
     variableName: string;
-    kind: "text" | "number" | "single-select" | "multi-select";
+    kind:
+      | "text"
+      | "number"
+      | "single-select"
+      | "multi-select"
+      | "language-selection";
     required?: boolean;
     options?: { value: string; label: string }[];
     displayLogic?: { field: string; includes: string };
@@ -91,6 +96,14 @@ const schoolFields = [
     kind: "single-select" as const,
     required: true,
     options: [{ value: "10_to_24", label: "10-24 teachers" }],
+  },
+];
+
+const languageFields = [
+  {
+    variableName: "siteLanguages",
+    kind: "language-selection" as const,
+    required: true,
   },
 ];
 
@@ -699,6 +712,149 @@ describe("saveOrgInformation (e2e)", () => {
       code: "functions/internal",
       message: "Site has no name",
       details: { code: "org-incomplete", type: "site", id: SITE },
+    });
+  });
+
+  describe("language-selection", () => {
+    it("saves a draft language object to Firestore", async () => {
+      await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
+      await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+      await seedFormVersion("siteInformation", "version-1", languageFields);
+
+      await saveOrgInformation({
+        orgType: "site",
+        orgId: SITE,
+        formVersion: "version-1",
+        responses: {
+          siteLanguages: { codes: ["en", "es"], otherDescription: null },
+        },
+        status: "draft",
+      });
+
+      const snap = await adminDb
+        .doc(`districts/${SITE}/siteInformation/version-1`)
+        .get();
+      expect(dataWithoutTimestamps(snap.data()).rest).toEqual({
+        siteLanguages: { codes: ["en", "es"], otherDescription: null },
+        siteId: SITE,
+        formVersion: "version-1",
+        status: "draft",
+      });
+    });
+
+    it("saves a complete language object to Firestore", async () => {
+      await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
+      await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+      await seedFormVersion("siteInformation", "version-1", languageFields);
+
+      await saveOrgInformation({
+        orgType: "site",
+        orgId: SITE,
+        formVersion: "version-1",
+        responses: {
+          siteLanguages: {
+            codes: ["en", "other"],
+            otherDescription: "Kichwa",
+          },
+        },
+        status: "complete",
+      });
+
+      const snap = await adminDb
+        .doc(`districts/${SITE}/siteInformation/version-1`)
+        .get();
+      expect(dataWithoutTimestamps(snap.data()).rest).toEqual({
+        siteLanguages: {
+          codes: ["en", "other"],
+          otherDescription: "Kichwa",
+        },
+        siteId: SITE,
+        formVersion: "version-1",
+        status: "complete",
+      });
+    });
+
+    it("rejects complete when codes is empty", async () => {
+      await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
+      await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+      await seedFormVersion("siteInformation", "version-1", languageFields);
+
+      await expect(
+        saveOrgInformation({
+          orgType: "site",
+          orgId: SITE,
+          formVersion: "version-1",
+          responses: {
+            siteLanguages: { codes: [], otherDescription: null },
+          },
+          status: "complete",
+        })
+      ).rejects.toMatchObject({
+        code: "functions/failed-precondition",
+        message: "Required fields are missing",
+        details: { code: "missing-fields", fields: ["siteLanguages"] },
+      });
+
+      const snap = await adminDb
+        .doc(`districts/${SITE}/siteInformation/version-1`)
+        .get();
+      expect(snap.exists).toBe(false);
+    });
+
+    it("rejects an alpha-3 alias", async () => {
+      await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
+      await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+      await seedFormVersion("siteInformation", "version-1", languageFields);
+
+      await expect(
+        saveOrgInformation({
+          orgType: "site",
+          orgId: SITE,
+          formVersion: "version-1",
+          responses: {
+            siteLanguages: { codes: ["eng"], otherDescription: null },
+          },
+          status: "draft",
+        })
+      ).rejects.toMatchObject({
+        code: "functions/invalid-argument",
+        details: {
+          code: "responses",
+          issues: [
+            {
+              path: "responses.siteLanguages.codes.0",
+              message: "Invalid ISO 639-1 alpha-2 code",
+            },
+          ],
+        },
+      });
+    });
+
+    it("rejects a string value", async () => {
+      await signInAs(client, SUPER_ADMIN_UID, SUPER_ADMIN_CLAIMS);
+      await adminDb.doc(`districts/${SITE}`).set({ name: "Site 1" });
+      await seedFormVersion("siteInformation", "version-1", languageFields);
+
+      await expect(
+        saveOrgInformation({
+          orgType: "site",
+          orgId: SITE,
+          formVersion: "version-1",
+          responses: { siteLanguages: "English" },
+          status: "draft",
+        })
+      ).rejects.toMatchObject({
+        code: "functions/invalid-argument",
+        details: {
+          code: "responses",
+          issues: [
+            {
+              path: "responses.siteLanguages",
+              message: "Invalid input: expected object, received string",
+            },
+          ],
+        },
+      });
     });
   });
 });
