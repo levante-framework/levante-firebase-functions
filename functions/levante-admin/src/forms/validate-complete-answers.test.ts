@@ -131,6 +131,25 @@ describe("findMissingRequiredFields", () => {
     ).toEqual([]);
   });
 
+  it("does not require a display-only field", () => {
+    expect(
+      findMissingRequiredFields(
+        {
+          sampleApproach: ["convenience"],
+          siteRecruitment: "email",
+        },
+        [
+          ...fields,
+          {
+            variableName: "intro",
+            required: true,
+            kind: "display-only",
+          },
+        ]
+      )
+    ).toEqual([]);
+  });
+
   it("accepts Other text when Other is selected", () => {
     expect(
       findMissingRequiredFields(

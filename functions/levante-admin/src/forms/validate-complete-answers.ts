@@ -1,14 +1,10 @@
 import { LANGUAGE_OTHER } from "@levante-framework/levante-zod";
+import type { FormFieldKind } from "../firestore-schema.js";
 
 export type CompleteFieldShape = {
   variableName: string;
   required: boolean;
-  kind?:
-    | "text"
-    | "number"
-    | "single-select"
-    | "multi-select"
-    | "language-selection";
+  kind?: FormFieldKind;
   displayLogic?: { field: string; includes: string };
 };
 
@@ -51,7 +47,7 @@ export function findMissingRequiredFields(
   const missing: string[] = [];
 
   for (const field of fields) {
-    if (!field.required) continue;
+    if (!field.required || field.kind === "display-only") continue;
     if (field.displayLogic && !isDisplayLogicMet(answers, field.displayLogic)) {
       continue;
     }
