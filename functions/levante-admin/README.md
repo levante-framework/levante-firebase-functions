@@ -20,6 +20,12 @@ Here's a table describing the purpose of each directory:
 | `users`                   | Functions and utilities related to user management, such as creating, updating, and deleting users.       |
 | `utils`                   | Miscellaneous utility functions and helpers used in multiple other folders.                               |
 
+## Firestore user read rules
+
+Admin user documents may leave `districts.current` empty and record their site membership only in `roles[].siteId`.
+The `users/{uid}` read rule therefore checks `districts.current` first and falls back to `roles[].siteId` when needed,
+so site-scoped admins can read admin users in their own site without gaining access to admins from other sites.
+
 ## Database synchronization
 
 Here we describe ROAR's different databases and expound upon the various
