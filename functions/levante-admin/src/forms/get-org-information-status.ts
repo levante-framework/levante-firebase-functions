@@ -8,7 +8,7 @@ import {
   RESOURCES,
 } from "@levante-framework/permissions-core";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
+import { type DocumentSnapshot, getFirestore } from "firebase-admin/firestore";
 import { logger } from "firebase-functions/v2";
 import { HttpsError, onCall } from "firebase-functions/v2/https";
 import { ORG_TYPE_TO_COLLECTION } from "../orgs/constants.js";
@@ -17,61 +17,9 @@ import {
   ensurePermissionsLoaded,
   filterSitesByPermission,
 } from "../utils/permission-helpers.js";
-import { ORG_TYPE_TO_FORM_ID } from "./org-paths.js";
+import { resolveRegisteredFormVersion } from "./registered-form-version.js";
 
 type OrgStatusResult = GetOrgInformationStatusResult["results"][number];
-
-/**
- * Registered version for an org-information form.
- *
- * Same order as `loadFormDefinition`:
- *  1. `currentVersionId`, when that version document exists and is `registered`.
- *  2. otherwise the highest `versionNumber` among `registered` versions.
- *
- * A missing form document is treated as no registered version. This callable's
- * error schema has no `form-definition` code.
- */
-async function resolveRegisteredVersionId(
-  orgType: "site" | "school"
-): Promise<string> {
-  const formId = ORG_TYPE_TO_FORM_ID[orgType];
-  const formRef = getFirestore().collection("formDefinitions").doc(formId);
-  const formSnap = await formRef.get();
-
-  const noCurrentVersion = () =>
-    new HttpsError(
-      "failed-precondition",
-      "Form definition has no registered version",
-      {
-        code: "no-current-version",
-        id: formId,
-      }
-    );
-
-  if (!formSnap.exists) throw noCurrentVersion();
-
-  const currentVersionId = formSnap.get("currentVersionId") as
-    | string
-    | undefined;
-  const versionsRef = formRef.collection("versions");
-  let versionSnap = currentVersionId
-    ? await versionsRef.doc(currentVersionId).get()
-    : null;
-
-  if (!versionSnap?.exists || versionSnap.get("registered") !== true) {
-    const registeredSnap = await versionsRef
-      .where("registered", "==", true)
-      .orderBy("versionNumber", "desc")
-      .limit(1)
-      .get();
-
-    if (registeredSnap.empty) throw noCurrentVersion();
-
-    versionSnap = registeredSnap.docs[0];
-  }
-
-  return versionSnap.id;
-}
 
 function resultFromAnswer(orgId: string, status: unknown): OrgStatusResult {
   if (status === "draft") return { orgId, progress: "incomplete" };
@@ -171,26 +119,27 @@ export const getOrgInformationStatus = onCall(
       }
     }
 
-    const versionId = await resolveRegisteredVersionId(orgType);
-    const formId = ORG_TYPE_TO_FORM_ID[orgType];
     const readableOrgIds = uniqueOrgIds.filter((orgId) =>
       siteIdByOrgId.has(orgId)
     );
-    const answerSnaps =
-      readableOrgIds.length === 0
-        ? []
-        : await db.getAll(
-            ...readableOrgIds.map((orgId) =>
-              db
-                .collection(orgCollection)
-                .doc(orgId)
-                .collection(formId)
-                .doc(versionId)
-            )
-          );
-    const answerSnapByOrgId = new Map(
-      readableOrgIds.map((orgId, index) => [orgId, answerSnaps[index]])
-    );
+    let answerSnapByOrgId = new Map<string, DocumentSnapshot>();
+    if (readableOrgIds.length > 0) {
+      const { formId, versionSnap } = await resolveRegisteredFormVersion(
+        orgType
+      );
+      const answerSnaps = await db.getAll(
+        ...readableOrgIds.map((orgId) =>
+          db
+            .collection(orgCollection)
+            .doc(orgId)
+            .collection(formId)
+            .doc(versionSnap.id)
+        )
+      );
+      answerSnapByOrgId = new Map(
+        readableOrgIds.map((orgId, index) => [orgId, answerSnaps[index]])
+      );
+    }
 
     const results = orgIds.map((orgId): OrgStatusResult => {
       const error = errorByOrgId.get(orgId);

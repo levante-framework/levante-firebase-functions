@@ -23,6 +23,11 @@ const SITE_ADMIN_CLAIMS = {
   siteRoles: { [SITE]: ["site_admin"] },
 };
 
+const SUPER_ADMIN_CLAIMS = {
+  useNewPermissions: true,
+  siteRoles: { any: ["super_admin"] },
+};
+
 const siteVersion = {
   registered: true,
   versionNumber: 1,
@@ -154,6 +159,27 @@ describe("getOrgInformationStatus (e2e)", () => {
     await expect(
       getOrgInformationStatus({ orgType: "school", orgIds: [SCHOOL] })
     ).rejects.toMatchObject({ code: "functions/permission-denied" });
+  });
+
+  it("allows a super admin whose role is siteId any", async () => {
+    await signInAs(client, UID, SUPER_ADMIN_CLAIMS);
+    await seedSite();
+    await seedForm(
+      "siteInformation",
+      { currentVersionId: "v1" },
+      {
+        v1: siteVersion,
+      }
+    );
+
+    const { data } = await getOrgInformationStatus({
+      orgType: "site",
+      orgIds: [SITE],
+    });
+    expect(data).toEqual({
+      orgType: "site",
+      results: [{ orgId: SITE, progress: "not-started" }],
+    });
   });
 
   it("rejects the whole call when any requested site is not allowed", async () => {
@@ -294,19 +320,21 @@ describe("getOrgInformationStatus (e2e)", () => {
     await expect(
       getOrgInformationStatus({ orgType: "site", orgIds: [SITE] })
     ).rejects.toMatchObject({
-      code: "functions/failed-precondition",
-      details: { code: "no-current-version", id: "siteInformation" },
+      code: "functions/not-found",
+      details: { code: "form-definition", id: "siteInformation" },
     });
   });
 
-  it("rejects with no-current-version when every org is missing and the form does not exist", async () => {
+  it("returns an org error when every org is missing and the form does not exist", async () => {
     await signInAs(client, UID, SITE_ADMIN_CLAIMS);
 
-    await expect(
-      getOrgInformationStatus({ orgType: "site", orgIds: [SITE] })
-    ).rejects.toMatchObject({
-      code: "functions/failed-precondition",
-      details: { code: "no-current-version", id: "siteInformation" },
+    const { data } = await getOrgInformationStatus({
+      orgType: "site",
+      orgIds: [SITE],
+    });
+    expect(data).toEqual({
+      orgType: "site",
+      results: [{ orgId: SITE, error: { code: "org" } }],
     });
   });
 
@@ -325,7 +353,7 @@ describe("getOrgInformationStatus (e2e)", () => {
       getOrgInformationStatus({ orgType: "school", orgIds: [SCHOOL] })
     ).rejects.toMatchObject({
       code: "functions/failed-precondition",
-      details: { code: "no-current-version", id: "schoolInformation" },
+      details: { code: "unregistered", id: "schoolInformation" },
     });
   });
 
