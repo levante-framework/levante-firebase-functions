@@ -74,19 +74,16 @@ const evaluateFieldCondition = <T>({
   return false;
 };
 
-const getAge = (birthMonth: number, birthYear: number): number => {
+// Stored birthMonth is 1-based (January = 1). Date.getMonth() is 0-based.
+const birthMonthIndex = (birthMonth: number): number => birthMonth - 1;
+
+// The birth month counts as reached, and the day of the month is ignored.
+const getAgeInMonths = (birthMonth: number, birthYear: number): number => {
   const today = new Date();
-  const todayMonth = today.getMonth();
-  const todayYear = today.getFullYear();
-
-  let age = todayYear - birthYear;
-
-  // If the current month is before the birth month, they haven't had their birthday this year yet.
-  // If it's the same month, we assume they've had their birthday.
-  if (todayMonth < birthMonth) {
-    age--;
-  }
-  return age;
+  return (
+    (today.getFullYear() - birthYear) * 12 +
+    (today.getMonth() - birthMonthIndex(birthMonth))
+  );
 };
 
 /**
@@ -110,12 +107,23 @@ export const evaluateCondition = ({
 
     let referenceValue = (condition as FieldCondition).value;
 
-    if ((condition as FieldCondition).field === "age") {
+    const field = (condition as FieldCondition).field;
+    if (field === "age" || field === "ageMonths") {
       // We never use age conditions for non-student users.
       if (userData.userType !== "student") {
         return false;
       }
-      fieldValue = getAge(userData.birthMonth, userData.birthYear);
+      const months = getAgeInMonths(userData.birthMonth, userData.birthYear);
+      if (!Number.isFinite(months)) return false;
+      if (field === "age") {
+        const year = parseInt(String(referenceValue), 10);
+        if (Number.isNaN(year)) return false;
+        // floor(months / 12) is the whole-year age, so age == 5 covers that year through month 11.
+        fieldValue = Math.floor(months / 12);
+        referenceValue = year;
+      } else {
+        fieldValue = months;
+      }
     }
 
     const evaluationResult = evaluateFieldCondition({
@@ -126,6 +134,11 @@ export const evaluateCondition = ({
 
     return evaluationResult;
   } else if ((condition as CompositeCondition).conditions) {
+    // The dashboard saves assignment conditions as one flat group with one op,
+    // so a task has a single userType today. Several userTypes alone would be an
+    // OR group, which this evaluates correctly. Several userTypes combined with an
+    // age rule, such as (student OR parent) AND ageMonths >= 66, needs nested
+    // groups on the dashboard side. Revisit this when a task can have that.
     if ((condition as CompositeCondition).op === "AND") {
       return (condition as CompositeCondition).conditions.every((_condition) =>
         evaluateCondition({ userData, condition: _condition })
