@@ -19,62 +19,18 @@ import {
   ensurePermissionsLoaded,
   filterSitesByPermission,
 } from "../utils/permission-helpers.js";
-import { ORG_TYPE_TO_FORM_ID } from "./org-paths.js";
+import { resolveRegisteredFormVersion } from "./registered-form-version.js";
 import { savedResponsesFromData } from "./saved-responses.js";
 
-/**
- * Reads a form definition and its registered (live) version from Firestore.
- *
- * Resolves the version in this order:
- *  1. `formDefinitions/{formId}.currentVersionId`, if that version is `registered`.
- *  2. otherwise the highest `versionNumber` among `registered` versions.
- */
 async function loadFormDefinition(orgType: "site" | "school") {
-  const db = getFirestore();
-
-  const formId = ORG_TYPE_TO_FORM_ID[orgType];
-  const formRef = db.collection("formDefinitions").doc(formId);
-  const formSnap = await formRef.get();
-
-  if (!formSnap.exists) {
-    throw new HttpsError("not-found", "Form definition not found", {
-      code: "form-definition",
-      id: formId,
-    });
-  }
+  const { formId, formSnap, versionSnap } = await resolveRegisteredFormVersion(
+    orgType
+  );
 
   const form = formSnap.data() as {
-    currentVersionId?: string;
     formDescription?: string;
     fieldsDescription?: Record<string, string>;
   };
-
-  const versionsRef = formRef.collection("versions");
-  let versionSnap = form.currentVersionId
-    ? await versionsRef.doc(form.currentVersionId).get()
-    : null;
-
-  if (!versionSnap?.exists || versionSnap.get("registered") !== true) {
-    const registeredSnap = await versionsRef
-      .where("registered", "==", true)
-      .orderBy("versionNumber", "desc")
-      .limit(1)
-      .get();
-
-    if (registeredSnap.empty) {
-      throw new HttpsError(
-        "failed-precondition",
-        "Form definition has no registered version",
-        {
-          code: "unregistered",
-          id: formId,
-        }
-      );
-    }
-
-    versionSnap = registeredSnap.docs[0];
-  }
-
   const version = versionSnap.data() as {
     versionNumber?: number;
     generalPrompt?: string;
