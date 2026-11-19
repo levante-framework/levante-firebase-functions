@@ -24,7 +24,7 @@ const cartoRequestOptions: HttpsOptions = {
   cors: true,
   invoker: "public",
   timeoutSeconds: 30,
-  memory: "256MiB",
+  memory: "512MiB",
   secrets: [cartoBasemapApiKey],
   maxInstances: 20,
 };

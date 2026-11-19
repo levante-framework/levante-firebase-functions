@@ -71,7 +71,7 @@ All three co-exist. Disambiguate by Firestore location, not vocabulary.
 
 ## Project-specific rules
 
-- **Don't** use Firebase Functions v1 (`functions.https.onCall`, `functions.config()`). **Do** import from `firebase-functions/v2/https`, `firebase-functions/v2/firestore`, `firebase-functions/v2/tasks`, and configure runtime with `setGlobalOptions({...})` in `index.ts`.
+- **Don't** use Firebase Functions v1 (`functions.https.onCall`, `functions.config()`). **Do** import from `firebase-functions/v2/https`, `firebase-functions/v2/firestore`, `firebase-functions/v2/tasks`, and configure runtime with `setGlobalOptions({...})` in `set-global-options.ts`, imported first from `index.ts`. Individual function options override that default.
 - **Don't** treat admin and assessment as separate Firebase projects. **Do** use a single `getFirestore()` from `firebase-admin/firestore`; ignore old code that references a separate assessment app.
 - **Don't** assume background triggers fire exactly once. **Do** make Firestore/Tasks/Schedule triggers idempotent with a check-then-write or a transaction.
 - **Don't** redeclare `District`, `Administration`, `Claims`, etc. **Do** import from `firestore-schema.ts`.

@@ -15,7 +15,7 @@ const populationRequestOptions: HttpsOptions = {
   cors: true,
   invoker: "public",
   timeoutSeconds: 90,
-  memory: "256MiB",
+  memory: "512MiB",
   maxInstances: 10,
   concurrency: 1,
 };

@@ -1,8 +1,9 @@
 /* eslint-disable @typescript-eslint/no-non-null-assertion */
+import "./set-global-options.js";
 import * as admin from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
-import { logger, setGlobalOptions } from "firebase-functions/v2";
+import { logger } from "firebase-functions/v2";
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import {
   ACTIONS,
@@ -59,10 +60,8 @@ ensurePermissionsLoaded().catch((error) =>
   logger.error("Error initializing permissions at module load", { error })
 );
 
-setGlobalOptions({ timeoutSeconds: 540 });
-
 // TODO: Remove this function and wrapper in firekit
-export const setUidClaims = onCall(async (request) => {
+export const setUidClaims = onCall({ minInstances: 1 }, async (request) => {
   const adminUid = request.auth!.uid;
 
   const roarUid = await getRoarUid({
@@ -335,25 +334,28 @@ export const softDeleteUserAssignment = createSoftDeleteCloudFunction([
   "assignments",
 ]);
 
-export const saveSurveyResponses = onCall(async (request) => {
-  const requestingUid = request.auth!.uid;
+export const saveSurveyResponses = onCall(
+  { minInstances: 1 },
+  async (request) => {
+    const requestingUid = request.auth!.uid;
 
-  try {
-    const result = await writeSurveyResponses(requestingUid, request.data);
-    return result;
-    // eslint-disable @typescript-eslint/no-explicit-any
-  } catch (error: any) {
-    logger.error("Error writing survey responses", {
-      error,
-      requestingUid,
-    });
-    throw new HttpsError(
-      "internal",
-      error.message ||
-        "An unknown error occurred while writing survey responses"
-    );
+    try {
+      const result = await writeSurveyResponses(requestingUid, request.data);
+      return result;
+      // eslint-disable @typescript-eslint/no-explicit-any
+    } catch (error: any) {
+      logger.error("Error writing survey responses", {
+        error,
+        requestingUid,
+      });
+      throw new HttpsError(
+        "internal",
+        error.message ||
+          "An unknown error occurred while writing survey responses"
+      );
+    }
   }
-});
+);
 
 export const getAdministrations = onCall(async (request) => {
   const adminUid = request.auth!.uid;
