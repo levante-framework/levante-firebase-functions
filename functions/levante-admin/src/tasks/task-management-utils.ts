@@ -19,6 +19,11 @@ import {
   extractRolesFromClaims,
   normalizeRoleKey,
 } from "../utils/role-helpers.js";
+import {
+  LEVANTE_TO_ROAR_USERTYPE,
+  ROAR_TO_LEVANTE_USERTYPE,
+  isRoarUserType,
+} from "../users/user-utils.js";
 
 const TASK_READ_ROLES = new Set([
   ROLES.SUPER_ADMIN,
@@ -374,17 +379,20 @@ export async function resolveRegisteredFromLatestRevision(
 }
 
 type ValidUserType = "caregiver" | "child" | "teacher";
-const VALID_USER_TYPES: readonly ValidUserType[] = [
-  "caregiver",
-  "child",
-  "teacher",
-];
 
+// `tasks` docs store user types under legacy ROAR names; translate at the DB
+// boundary so the rest of the system only ever sees LEVANTE names.
 function toValidUserTypes(value: unknown): ValidUserType[] {
   if (!Array.isArray(value)) return [];
-  return value.filter((entry): entry is ValidUserType =>
-    VALID_USER_TYPES.includes(entry as ValidUserType)
-  );
+  return value.flatMap((entry) => {
+    if (!isRoarUserType(entry)) return [];
+    const mapped = ROAR_TO_LEVANTE_USERTYPE[entry];
+    return mapped === "admin" ? [] : [mapped];
+  });
+}
+
+export function toStoredUserTypes(value: readonly ValidUserType[]): string[] {
+  return value.map((entry) => LEVANTE_TO_ROAR_USERTYPE[entry]);
 }
 
 export function serializeTask(snap: DocumentSnapshot): SerializedTask {

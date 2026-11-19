@@ -11,6 +11,7 @@ import {
   semanticIdFromName,
   serializeTask,
   throwSchemaError,
+  toStoredUserTypes,
 } from "./task-management-utils.js";
 
 export const upsertTask = onCall(async (req): Promise<UpsertTaskResult> => {
@@ -46,7 +47,7 @@ export const upsertTask = onCall(async (req): Promise<UpsertTaskResult> => {
       registered,
       updatedAt: now,
       updatedBy: uid,
-      validUserTypes,
+      validUserTypes: toStoredUserTypes(validUserTypes),
     });
 
     const updated = await taskRef.get();
@@ -73,7 +74,7 @@ export const upsertTask = onCall(async (req): Promise<UpsertTaskResult> => {
     registered,
     updatedAt: now,
     updatedBy: uid,
-    validUserTypes,
+    validUserTypes: toStoredUserTypes(validUserTypes),
   });
 
   const created = await taskRef.get();
