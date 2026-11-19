@@ -373,6 +373,20 @@ export async function resolveRegisteredFromLatestRevision(
   return registered;
 }
 
+type ValidUserType = "caregiver" | "child" | "teacher";
+const VALID_USER_TYPES: readonly ValidUserType[] = [
+  "caregiver",
+  "child",
+  "teacher",
+];
+
+function toValidUserTypes(value: unknown): ValidUserType[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is ValidUserType =>
+    VALID_USER_TYPES.includes(entry as ValidUserType)
+  );
+}
+
 export function serializeTask(snap: DocumentSnapshot): SerializedTask {
   const data = snap.data() ?? {};
   return {
@@ -385,10 +399,12 @@ export function serializeTask(snap: DocumentSnapshot): SerializedTask {
     description: typeof data.description === "string" ? data.description : "",
     image: typeof data.image === "string" ? data.image : "",
     name: typeof data.name === "string" ? data.name : "",
+    registered: data.registered === true,
     updatedAt: requireIsoString(data, "updatedAt", "lastUpdated", "createdAt"),
     ...(typeof data.updatedBy === "string"
       ? { updatedBy: data.updatedBy }
       : {}),
+    validUserTypes: toValidUserTypes(data.validUserTypes),
   };
 }
 

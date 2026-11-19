@@ -19,7 +19,8 @@ export const upsertTask = onCall(async (req): Promise<UpsertTaskResult> => {
   const parsed = UpsertTaskParamsSchema.safeParse(req.data ?? {});
   if (!parsed.success) throwSchemaError(parsed.error);
 
-  const { archived, description, image, name, id } = parsed.data;
+  const { archived, description, image, name, registered, validUserTypes, id } =
+    parsed.data;
 
   const userRecord = await getAuth().getUser(uid);
   assertCanWriteTasks(userRecord.customClaims);
@@ -42,8 +43,10 @@ export const upsertTask = onCall(async (req): Promise<UpsertTaskResult> => {
       description,
       image,
       name,
+      registered,
       updatedAt: now,
       updatedBy: uid,
+      validUserTypes,
     });
 
     const updated = await taskRef.get();
@@ -67,8 +70,10 @@ export const upsertTask = onCall(async (req): Promise<UpsertTaskResult> => {
     description,
     image,
     name,
+    registered,
     updatedAt: now,
     updatedBy: uid,
+    validUserTypes,
   });
 
   const created = await taskRef.get();
