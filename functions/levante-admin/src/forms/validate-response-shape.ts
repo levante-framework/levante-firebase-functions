@@ -1,13 +1,9 @@
 import { LanguageSelectionSchema } from "@levante-framework/levante-zod";
+import type { FormFieldKind } from "../firestore-schema.js";
 
 export type ResponseFieldShape = {
   variableName: string;
-  kind:
-    | "text"
-    | "number"
-    | "single-select"
-    | "multi-select"
-    | "language-selection";
+  kind: FormFieldKind;
   options?: { value: string; label: string }[];
 };
 
@@ -37,6 +33,14 @@ export function validateResponseShape(
       issues.push({
         path,
         message: `Unknown field "${key}".`,
+      });
+      continue;
+    }
+
+    if (field.kind === "display-only") {
+      issues.push({
+        path,
+        message: "Display-only fields do not accept a response.",
       });
       continue;
     }

@@ -265,6 +265,15 @@ export type InformationFieldKey =
   | keyof SiteInformation
   | keyof SchoolInformation;
 
+/** How a form definition field is rendered and stored. */
+export type FormFieldKind =
+  | "text"
+  | "number"
+  | "single-select"
+  | "multi-select"
+  | "display-only"
+  | "language-selection";
+
 /** Section metadata within a form definition version. */
 export interface FormSectionInfo {
   sectionId: string;
@@ -273,23 +282,29 @@ export interface FormSectionInfo {
 }
 
 /**
- * Single field within an org-information form version. Describes how to render and
- * validate one question. `variableName` matches a `SiteInformation` or
- * `SchoolInformation` response property for that form.
+ * Single field within a form definition version. Describes how to render and
+ * validate one item. `variableName` is the stored response key: an org-form
+ * property, or a participant-survey response key. `display-only` items are
+ * shown and are not stored as responses.
  */
 export interface FullInformationFormField {
   /** Stable spreadsheet id, e.g. `"site_02"`. */
   itemId: string;
-  variableName: InformationFieldKey;
-  kind:
-    | "text"
-    | "number"
-    | "single-select"
-    | "multi-select"
-    | "language-selection";
+  variableName: string;
+  kind: FormFieldKind;
   required: boolean;
   sectionId: string;
   questionText: string;
+  /**
+   * Groups items that belong to one question. Matrix rows share the matrix
+   * question's id.
+   */
+  questionId?: string;
+  /**
+   * Set when a single-select should render as part of a matrix rather than as
+   * its own control.
+   */
+  renderAs?: string;
   /** Value/label pairs for select fields; omitted for text, number, and language-selection. */
   options?: { value: string; label: string }[];
   /**
@@ -297,25 +312,47 @@ export interface FullInformationFormField {
    * value satisfies the rule (e.g. show `sampleApproachOther` when
    * `sampleApproach` includes `"other"`).
    */
-  displayLogic?: { field: InformationFieldKey; includes: string };
+  displayLogic?: { field: string; includes: string };
   infoExample?: string;
   notes?: string;
+  /**
+   * Determines whether this question appears even if the site has not yet
+   * customised the form.
+   */
+  surveyCore?: boolean;
+}
+
+interface FormDefinitionBase {
+  currentVersionId: string;
+  formDescription: string;
+  /** Absent on documents written before these timestamps were stored. */
+  createdAt?: Timestamp;
+  /** Absent on documents written before these timestamps were stored. */
+  updatedAt?: Timestamp;
+  /**
+   * Per-response-field descriptions. Keys are org-form property names
+   * (`SiteInformation` or `SchoolInformation`) or participant-survey response keys.
+   */
+  fieldsDescription: Record<string, string>;
+}
+
+export interface OrgInformationFormDefinition extends FormDefinitionBase {
+  formType: "orgInformation";
+}
+
+export interface ParticipantSurveyFormDefinition extends FormDefinitionBase {
+  formType: "participantSurvey";
 }
 
 /**
  * Document in the top-level `formDefinitions` collection.
- * Document ID is the form identifier (e.g. `"siteInformation"`, `"schoolInformation"`).
+ * Document ID is the form identifier (e.g. `"siteInformation"`, `"caregiver-general"`).
  * Form-specific field definitions live in the `versions` subcollection.
+ * `fieldsDescription` is required for both org forms and participant surveys.
  */
-export interface FormDefinition {
-  currentVersionId: string;
-  formDescription: string;
-  /**
-   * Per-response-field descriptions; keys are `SiteInformation` or `SchoolInformation`
-   * property names for this form.
-   */
-  fieldsDescription: Record<string, string>;
-}
+export type FormDefinition =
+  | OrgInformationFormDefinition
+  | ParticipantSurveyFormDefinition;
 
 /**
  * Document in the `versions` subcollection of `formDefinitions`.
@@ -334,6 +371,149 @@ export interface FormDefinitionVersion {
   generalPrompt?: string;
   sectionInfo: FormSectionInfo[];
   fullFields: FullInformationFormField[];
+}
+
+/**
+ * Document in `districts/{districtId}/surveyCustomisations/{formId}`.
+ * Document ID is the survey slug. Absent when the district has not customised
+ * that survey. Override lists live in the `versions` subcollection.
+ */
+export interface SurveyCustomisation {
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+}
+
+/**
+ * Document in
+ * `districts/{districtId}/surveyCustomisations/{formId}/versions/{customisationId}`.
+ *
+ * Several documents may target the same form-definition version. Load the one
+ * with `registered: true`. `customFields` replaces fields on
+ * `formDefinitions/{formId}/versions/{formVersionId}` with the same `itemId`.
+ * A base field with no entry here is unchanged.
+ */
+export interface SurveyCustomisationVersion {
+  registered: boolean;
+  /** Form-definition version these overrides apply to. */
+  formVersionId: string;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  customFields: FullInformationFormField[];
+}
+
+// TODO: These types duplicate `SurveyResponseScalar` / `SurveyResponseValue`
+// (and the language selection shape) already exported from levante-zod's
+// `save-survey-responses` schema. Replace them with an import from
+// `@levante-framework/levante-zod` once a version exporting them is published
+// and installed here; kept local for now so this package still typechecks
+// against the currently installed levante-zod.
+
+/**
+ * Stored answer for one survey question.
+ *
+ * The new player stores a scalar, a multi-select list of those scalars, or
+ * `null` for a cleared answer that still has a response time, and gives each
+ * matrix row its own key. SurveyJS still stores a matrix or multi-text
+ * question as one key whose value is an object of scalars. A language
+ * selector stores `{ codes, otherDescription }` (`LanguageSelection` in
+ * levante-zod). Older answers stay a scalar, a list of scalars, or that
+ * matrix object. Unanswered questions are `null` on the responses map.
+ * `null` here is a cleared answer that still has a response time.
+ */
+export type SurveyResponseScalar = string | number | boolean;
+
+/**
+ * Answer stored by the org-information language selector. `codes` are
+ * lowercase ISO 639-1 alpha-2 codes and may include `"other"`.
+ * `otherDescription` is a trimmed non-empty string when `"other"` is
+ * selected, and `null` otherwise.
+ */
+export interface LanguageSelectionValue {
+  codes: string[];
+  otherDescription: string | null;
+}
+
+export type SurveyResponseValue =
+  | SurveyResponseScalar
+  | SurveyResponseScalar[]
+  | Record<string, SurveyResponseScalar>
+  | LanguageSelectionValue
+  | null;
+
+export interface SurveyItemResponse {
+  responseValue: SurveyResponseValue;
+  responseTime: Timestamp;
+  /** Text stored with this answer. Absent on existing documents. */
+  responseText?: string;
+  /** Prompt shown for this question. Absent on existing documents. */
+  questionPrompt?: string;
+}
+
+/**
+ * Answers for one survey part. `versionId` is the form definition version for
+ * this part only (`formDefinitions/{formId}/versions/{versionId}`). Absent on
+ * parts written before versioned survey definitions.
+ */
+export interface SurveyResponsePart {
+  isComplete: boolean;
+  responses: Record<string, SurveyItemResponse | null>;
+  versionId?: string;
+}
+
+/** Caregiver general part (`caregiver-general`). */
+export interface CaregiverGeneralSurveyResponse extends SurveyResponsePart {}
+
+/** Teacher general part (`teacher-general`). */
+export interface TeacherGeneralSurveyResponse extends SurveyResponsePart {}
+
+/** One child-specific caregiver part (`caregiver-specific`). */
+export interface CaregiverSpecificSurveyResponse extends SurveyResponsePart {
+  childId: string;
+}
+
+/** One class-specific teacher part (`teacher-specific`). */
+export interface TeacherSpecificSurveyResponse extends SurveyResponsePart {
+  classId: string;
+}
+
+/**
+ * One caregiver profile on a caregiver survey document. The respondent
+ * answers `demo_08`–`demo_14b` once per caregiver. `childIds` is every child
+ * that caregiver applies to. With one child, that selection is not asked.
+ */
+export interface CaregiverProfileSurveyResponse {
+  isComplete: boolean;
+  childIds: string[];
+  responses: Record<string, SurveyItemResponse | null>;
+}
+
+/**
+ * Caregiver profiles for one adult document. `isComplete` covers the whole
+ * list. Each profile has its own `isComplete`. Teacher documents omit this.
+ */
+export interface CaregiverProfiles {
+  isComplete: boolean;
+  profiles: CaregiverProfileSurveyResponse[];
+}
+
+/**
+ * Adult document in `users/{uid}/surveyResponses/{surveyResponseId}`.
+ * One document per user per administration. `pageNo`, when present, is the
+ * last saved page, not a per-part field. A caregiver document uses the
+ * caregiver parts; a teacher document uses the teacher parts.
+ */
+export interface SurveyResponses {
+  administrationId: string;
+  /** Last saved page. Absent when a save does not send one. */
+  pageNo?: number;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
+  general?: CaregiverGeneralSurveyResponse | TeacherGeneralSurveyResponse;
+  specific?: Array<
+    CaregiverSpecificSurveyResponse | TeacherSpecificSurveyResponse
+  >;
+  /** Absent on teacher documents and on caregiver documents written before profiles. */
+  caregiverProfiles?: CaregiverProfiles;
 }
 
 // Structure for Claims within UserClaims
