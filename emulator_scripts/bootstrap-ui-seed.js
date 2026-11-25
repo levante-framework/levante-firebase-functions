@@ -75,21 +75,6 @@ async function ensureSuperAdmin() {
   };
 
   await auth.setCustomUserClaims(uid, authClaims);
-  await db
-    .collection("userClaims")
-    .doc(uid)
-    .set(
-      {
-        claims: {
-          admin: true,
-          super_admin: true,
-          useNewPermissions: true,
-        },
-        lastUpdated: Date.now(),
-        testData: true,
-      },
-      { merge: true }
-    );
 
   console.log(`  Bootstrapped super admin: ${email}`);
 }

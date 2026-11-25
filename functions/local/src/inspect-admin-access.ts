@@ -73,12 +73,12 @@ const app = admin.initializeApp(
       : admin.applicationDefault(),
     projectId,
   },
-  "admin",
+  "admin"
 );
 
 if (!credentialFile) {
   console.log(
-    "LEVANTE_ADMIN_FIREBASE_CREDENTIALS not set; using application default credentials.",
+    "LEVANTE_ADMIN_FIREBASE_CREDENTIALS not set; using application default credentials."
   );
 }
 
@@ -94,18 +94,18 @@ async function safeGetDoc(path: string) {
   }
 }
 
-const user = argv.uid ? await auth.getUser(argv.uid) : await auth.getUserByEmail(argv.email!);
+const user = argv.uid
+  ? await auth.getUser(argv.uid)
+  : await auth.getUserByEmail(argv.email!);
 const uid = user.uid;
 
-const [userClaimsDoc, usersDoc, systemPermissionsDoc] = await Promise.all([
-  safeGetDoc(`userClaims/${uid}`),
+const [usersDoc, systemPermissionsDoc] = await Promise.all([
   safeGetDoc(`users/${uid}`),
   safeGetDoc(`system/permissions`),
 ]);
 
 if (argv.format === "table") {
   const customClaims = (user.customClaims ?? {}) as Record<string, unknown>;
-  const userClaimsClaims = (userClaimsDoc as any)?.claims ?? {};
   const roles = (usersDoc as any)?.roles as UsersRole[] | undefined;
 
   console.log(`Project: ${projectId}`);
@@ -115,9 +115,9 @@ if (argv.format === "table") {
       email: user.email ?? undefined,
       super_admin_customClaim: Boolean((customClaims as any)?.super_admin),
       admin_customClaim: Boolean((customClaims as any)?.admin),
-      super_admin_userClaimsDoc: Boolean((userClaimsClaims as any)?.super_admin),
-      admin_userClaimsDoc: Boolean((userClaimsClaims as any)?.admin),
-      useNewPermissions_userClaimsDoc: Boolean((userClaimsClaims as any)?.useNewPermissions),
+      useNewPermissions_customClaim: Boolean(
+        (customClaims as any)?.useNewPermissions
+      ),
       rolesCount_usersDoc: Array.isArray(roles) ? roles.length : undefined,
       hasSystemPermissionsDoc: Boolean(systemPermissionsDoc),
     },
@@ -139,15 +139,13 @@ console.log(
         customClaims: user.customClaims ?? {},
       },
       firestore: {
-        userClaims: userClaimsDoc,
         users: usersDoc,
         system_permissions: systemPermissionsDoc,
       },
     },
     null,
-    2,
-  ),
+    2
+  )
 );
 
 await deleteApp(app);
-

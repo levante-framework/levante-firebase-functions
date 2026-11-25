@@ -3,7 +3,18 @@ import {
   Timestamp,
   DocumentReference,
 } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 import { HttpsError } from "firebase-functions/v2/https";
+import {
+  ACTIONS,
+  RESOURCES,
+  type User as PermUser,
+} from "@levante-framework/permissions-core";
+import {
+  buildPermissionsUserFromAuthRecord,
+  ensurePermissionsLoaded,
+  filterSitesByPermission,
+} from "./utils/permission-helpers.js";
 import { syncAssignmentsForUserOrgChange } from "./assignments/sync-assignments.js";
 
 interface UserUpdateData {
@@ -33,6 +44,33 @@ interface UpdateResult {
 // TODO: Update user roles in custom claims if new groups provided
 
 /**
+ * Whether the caller may edit a user belonging to every site in `targetSites`.
+ * Uses the permissions-core matrix when the caller is on the new permission
+ * system, and falls back to requiring a non-participant `siteRoles` role at each
+ * site otherwise. Assumes `targetSites` is non-empty.
+ */
+function canEditUserAtSites(
+  callerClaims: Record<string, unknown>,
+  callerPermissionsUser: PermUser | null,
+  targetSites: string[]
+): boolean {
+  if (callerClaims.useNewPermissions === true && callerPermissionsUser) {
+    return (
+      filterSitesByPermission(callerPermissionsUser, targetSites, {
+        resource: RESOURCES.USERS,
+        action: ACTIONS.UPDATE,
+      }).length === targetSites.length
+    );
+  }
+
+  const siteRoles = (callerClaims.siteRoles ?? {}) as Record<string, unknown>;
+  return targetSites.every((siteId) => {
+    const roles = siteRoles[siteId];
+    return Array.isArray(roles) && roles.some((role) => role !== "participant");
+  });
+}
+
+/**
  * Edits user records with the provided data
  * @param requestingUid - The UID of the user making the request
  * @param usersToUpdate - Array of user objects with fields to update
@@ -46,23 +84,21 @@ export async function _editUsers(
   const errors: UpdateError[] = [];
   let successfulUpdates = 0;
 
-  // Verify the requesting user has admin privileges
+  // Resolve the caller's permissions once. Super admins may edit any user;
+  // other admins are scoped per target user to the sites they can update.
+  let callerClaims: Record<string, unknown>;
+  let isSuperAdmin: boolean;
+  let callerPermissionsUser: PermUser | null = null;
   try {
-    const claimsDocRef = db.collection("userClaims").doc(requestingUid);
-    const claimsDoc = await claimsDocRef.get();
-
-    if (!claimsDoc.exists) {
-      throw new HttpsError("permission-denied", "User claims not found");
-    }
-
-    const claims = claimsDoc.data()?.claims;
-    if (!claims?.admin && !claims?.super_admin) {
-      throw new HttpsError(
-        "permission-denied",
-        "User does not have admin privileges"
-      );
+    const callerRecord = await getAuth().getUser(requestingUid);
+    callerClaims = (callerRecord.customClaims ?? {}) as Record<string, unknown>;
+    isSuperAdmin = callerClaims.super_admin === true;
+    if (!isSuperAdmin) {
+      await ensurePermissionsLoaded();
+      callerPermissionsUser = buildPermissionsUserFromAuthRecord(callerRecord);
     }
   } catch (error: any) {
+    if (error instanceof HttpsError) throw error;
     throw new HttpsError(
       "permission-denied",
       `Authentication error: ${error.message || String(error)}`
@@ -91,6 +127,20 @@ export async function _editUsers(
           reason: "User not found",
         });
         continue;
+      }
+
+      if (!isSuperAdmin) {
+        const targetSites: string[] = userDoc.get("districts")?.current ?? [];
+        const authorized =
+          targetSites.length > 0 &&
+          canEditUserAtSites(callerClaims, callerPermissionsUser, targetSites);
+        if (!authorized) {
+          errors.push({
+            uid,
+            reason: "You do not have permission to edit this user",
+          });
+          continue;
+        }
       }
 
       const updates: Record<string, any> = {};

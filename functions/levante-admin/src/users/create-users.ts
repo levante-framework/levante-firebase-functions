@@ -191,53 +191,6 @@ export async function createAuthUsers(
   }
 }
 
-/**
- * Creates Firestore userClaims docs
- * TODO: remove this after permissions migration is complete
- */
-export async function createUserClaimsDocs(
-  db: Firestore,
-  users: NewUserRecord[],
-  currentRetry = 0
-) {
-  const results = await Promise.allSettled(
-    users.map((user) => {
-      return db
-        .collection("userClaims")
-        .doc(user.uid)
-        .set({
-          claims: {
-            ...user.customClaims,
-          },
-        });
-    })
-  );
-
-  const failedUsers: NewUserRecord[] = results
-    .map((result, i) => (result.status === "rejected" ? users[i] : null))
-    .filter((e) => e !== null);
-  const failedCount = failedUsers.length;
-
-  if (failedCount === 0) return;
-
-  if (currentRetry >= MAX_RETRIES) {
-    logger.error("Maximum retries exceeded creating userClaims docs", {
-      failedCount,
-      maxRetries: MAX_RETRIES,
-    });
-    throw new Error(
-      `Maximum retries (${MAX_RETRIES}) exceeded. Failed to create ${failedCount} userClaims docs.`
-    );
-  }
-
-  logger.warn("Retrying failed userClaims docs creation", {
-    attempt: currentRetry + 1,
-    failedCount,
-    maxRetries: MAX_RETRIES,
-  });
-  await createUserClaimsDocs(db, failedUsers, currentRetry + 1);
-}
-
 /** Creates Firestore users docs */
 export async function createUsersDocs(
   db: Firestore,
@@ -454,11 +407,10 @@ export async function rollbackUsers(auth: Auth, db: Firestore, uids: string[]) {
     });
   }
 
-  // Each user is 2 deletes and a batch caps at 500 ops, so 250 users per batch.
-  for (const chunk of _chunk(uids, 250)) {
+  // Each user is 1 delete and a batch caps at 500 ops, so 500 users per batch.
+  for (const chunk of _chunk(uids, 500)) {
     const batch = db.batch();
     for (const uid of chunk) {
-      batch.delete(db.collection("userClaims").doc(uid));
       batch.delete(db.collection("users").doc(uid));
     }
     await batch.commit().catch((error) => {
@@ -697,10 +649,9 @@ export const createUsers = onCall(async (req): Promise<CreateUsersResult> => {
     });
   }
 
-  // Create Auth, userClaims, and users docs
+  // Create Auth and users docs
   try {
     await createAuthUsers(auth, newUserRecords);
-    await createUserClaimsDocs(db, newUserRecords);
     await createUsersDocs(db, newUserRecords);
   } catch (error) {
     await rollbackUsers(

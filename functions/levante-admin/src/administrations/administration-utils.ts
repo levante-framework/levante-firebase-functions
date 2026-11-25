@@ -1,9 +1,4 @@
-import {
-  getFirestore,
-  FieldValue,
-  FieldPath,
-  Filter,
-} from "firebase-admin/firestore";
+import { getFirestore, FieldValue, Filter } from "firebase-admin/firestore";
 import type {
   CollectionReference,
   DocumentReference,
@@ -598,38 +593,18 @@ export const getAdministrationsForAdministrator = async ({
     }
   }
 
-  return db.runTransaction(async (transaction) => {
-    if (!trimmedSiteId) {
-      const uidFieldPath = new FieldPath("claims", "adminUid");
-      const userClaimsQuery = db
-        .collection("userClaims")
-        .where(uidFieldPath, "==", adminUid);
-
-      const { super_admin } = await transaction
-        .get(userClaimsQuery)
-        .then((snapshot) => {
-          if (snapshot.empty) {
-            throw new Error(`No user claims found for the UID ${adminUid}`);
-          }
-
-          if (snapshot.docs.length > 1) {
-            throw new Error(
-              `Multiple user claims found for the same UID ${adminUid}`
-            );
-          }
-
-          return snapshot.docs[0].data()?.claims;
-        });
-
-      if (!super_admin) {
-        throw new HttpsError("invalid-argument", "siteId is required");
-      }
-
-      logger.debug(
-        `Requesting administrator ${adminUid} is a super admin. Returning all administrations`
-      );
+  if (!trimmedSiteId) {
+    const userRecord = await getAuth().getUser(adminUid);
+    if (userRecord.customClaims?.super_admin !== true) {
+      throw new HttpsError("invalid-argument", "siteId is required");
     }
 
+    logger.debug(
+      `Requesting administrator ${adminUid} is a super admin. Returning all administrations`
+    );
+  }
+
+  return db.runTransaction(async (transaction) => {
     const administrations = await queryAdministrations({
       restrictToOpenAdministrations,
       siteId: trimmedSiteId,

@@ -17,10 +17,7 @@ import {
   getPermissionService,
 } from "./utils/permission-helpers.js";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
-import {
-  setUidClaimsInBothProjects,
-  getRoarUid,
-} from "./users/set-custom-claims.js";
+import { setUidClaimsHandler, getRoarUid } from "./users/set-custom-claims.js";
 import { _createAdministratorWithRoles } from "./users/create-administrator.js";
 import {
   loadAdministratorContext,
@@ -72,7 +69,7 @@ export const setUidClaims = onCall({ minInstances: 1 }, async (request) => {
     throw new HttpsError("unauthenticated", "User must be authenticated");
   }
 
-  return await setUidClaimsInBothProjects({
+  return await setUidClaimsHandler({
     roarUid,
     adminUid,
   });
@@ -665,22 +662,7 @@ export const deleteOrgFunction = onCall(async (request) => {
         );
       }
     } else {
-      const db = getFirestore();
-      const userClaimsRef = db.collection("userClaims").doc(requestingUid);
-      const userClaimsDoc = await userClaimsRef.get();
-
-      if (!userClaimsDoc.exists) {
-        logger.error("User claims not found.", { requestingUid });
-        throw new HttpsError(
-          "permission-denied",
-          "User permissions not found."
-        );
-      }
-
-      const userClaims = userClaimsDoc.data();
-      const isSuperAdmin = userClaims?.claims?.super_admin === true;
-
-      if (!isSuperAdmin) {
+      if (customClaims.super_admin !== true) {
         logger.error("User is not a super admin.", { requestingUid });
         throw new HttpsError(
           "permission-denied",
@@ -766,21 +748,7 @@ export const deleteAdministration = onCall(async (request) => {
         );
       }
     } else {
-      const db = getFirestore();
-      const userClaimsRef = db.collection("userClaims").doc(requestingUid);
-      const userClaimsDoc = await userClaimsRef.get();
-
-      if (!userClaimsDoc.exists) {
-        logger.error("User claims not found.", { requestingUid });
-        throw new HttpsError(
-          "permission-denied",
-          "User permissions not found."
-        );
-      }
-
-      const userClaims = userClaimsDoc.data();
-      const isSuperAdmin = userClaims?.claims?.super_admin === true;
-      if (!isSuperAdmin) {
+      if (customClaims.super_admin !== true) {
         logger.error("User is not a super admin.", { requestingUid });
         throw new HttpsError(
           "permission-denied",

@@ -1,6 +1,5 @@
 import { ACTIONS, RESOURCES } from "@levante-framework/permissions-core";
 import { getAuth } from "firebase-admin/auth";
-import { getFirestore } from "firebase-admin/firestore";
 import { HttpsError } from "firebase-functions/v2/https";
 import {
   buildPermissionsUserFromAuthRecord,
@@ -15,7 +14,7 @@ type Action = (typeof ACTIONS)[keyof typeof ACTIONS];
  * Gate for the offline-launcher callables: the caller must be a super admin, or an
  * administrator allowed to perform `check` on at least one of `siteIds`. Uses the
  * permissions-core matrix when the caller is on the new permission system, and falls
- * back to the legacy `adminOrgs.districts` on the caller's userClaims document otherwise.
+ * back to requiring a non-participant `siteRoles` role at one of the sites otherwise.
  */
 export async function assertSiteAccess(
   callerUid: string,
@@ -39,14 +38,14 @@ export async function assertSiteAccess(
     const user = buildPermissionsUserFromAuthRecord(record);
     if (filterSitesByPermission(user, siteIds, check).length > 0) return;
   } else {
-    const claimsDoc = await getFirestore()
-      .collection("userClaims")
-      .doc(callerUid)
-      .get();
-    const adminOrgs = (claimsDoc.get("claims.adminOrgs") ?? {}) as {
-      districts?: string[];
-    };
-    if ((adminOrgs.districts ?? []).some((d) => siteIds.includes(d))) return;
+    const siteRoles = (claims.siteRoles ?? {}) as Record<string, unknown>;
+    const hasAdminRoleAtSite = siteIds.some((id) => {
+      const roles = siteRoles[id];
+      return (
+        Array.isArray(roles) && roles.some((role) => role !== "participant")
+      );
+    });
+    if (hasAdminRoleAtSite) return;
   }
 
   throw new HttpsError(

@@ -13,7 +13,6 @@ const adminApp = admin.initializeApp({ projectId }, "admin-seeder");
 // Import seeding modules
 const { createGroups } = require("./seeders/groups");
 const { createUsers } = require("./seeders/users");
-const { createUserClaims } = require("./seeders/userClaims");
 const { linkUsersToGroups } = require("./seeders/associations");
 const { updateUserRoles } = require("./seeders/roles");
 const { createTasks } = require("./seeders/tasks");
@@ -45,33 +44,28 @@ async function seedDatabase() {
     const groups = await createGroups(adminApp, adminUser.uid);
     console.log("✅ Groups created successfully\n");
 
-    // Step 4: Create userClaims documents
-    console.log("Step 4: Creating user claims...");
-    await createUserClaims(adminApp, users, groups);
-    console.log("✅ User claims created successfully\n");
-
-    // Step 5: Link users to groups
-    console.log("Step 5: Linking users to groups...");
+    // Step 4: Link users to groups
+    console.log("Step 4: Linking users to groups...");
     await linkUsersToGroups(adminApp, users, groups);
     console.log("✅ User-group associations created successfully\n");
 
-    // Step 6: Update user roles based on associations
-    console.log("Step 6: Updating user roles...");
+    // Step 5: Update user roles based on associations
+    console.log("Step 5: Updating user roles...");
     await updateUserRoles(adminApp, users, groups);
     console.log("✅ User roles updated successfully\n");
 
-    // Step 7: Create tasks and variants
-    console.log("Step 7: Creating tasks and variants...");
+    // Step 6: Create tasks and variants
+    console.log("Step 6: Creating tasks and variants...");
     const tasks = await createTasks(adminApp);
     console.log("✅ Tasks and variants created successfully\n");
 
-    // Step 7b: Derive variantParamSpecs from all variant params
-    console.log("Step 7b: Seeding variantParamSpecs...");
+    // Step 6b: Derive variantParamSpecs from all variant params
+    console.log("Step 6b: Seeding variantParamSpecs...");
     await seedVariantParamSpecs({ targetApp: adminApp, verbose: true });
     console.log("✅ variantParamSpecs created successfully\n");
 
-    // Step 8: Create administrations with subcollections
-    console.log("Step 8: Creating administrations...");
+    // Step 7: Create administrations with subcollections
+    console.log("Step 7: Creating administrations...");
     const administrations = await createAdministrations(
       adminApp,
       tasks,

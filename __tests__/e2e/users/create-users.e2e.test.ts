@@ -224,11 +224,17 @@ describe("createUsers (e2e)", () => {
     expect(userSnap.get("schools").current).toContain("school-a");
     expect(userSnap.get("classes").current).toContain("class-1");
 
-    const claimsSnap = await adminDb.doc(`userClaims/${created.uid}`).get();
-    expect(claimsSnap.exists).toBe(true);
-
     const authUser = await adminAuth.getUser(created.uid);
     expect(authUser.email).toBe(created.email);
+
+    const claims = (authUser.customClaims ?? {}) as {
+      useNewPermissions?: boolean;
+      rolesSet?: string[];
+      siteRoles?: Record<string, string[]>;
+    };
+    expect(claims.useNewPermissions).toBe(true);
+    expect(claims.rolesSet).toEqual(["participant"]);
+    expect(claims.siteRoles).toEqual({ [SITE]: ["participant"] });
   });
 });
 

@@ -30,7 +30,6 @@ async function updateUserRoles(adminApp, users, organizations) {
           console.log(`      - Added super_admin role with siteId: any`);
         } else if (user.userKey === "admin") {
           // Regular admin - has access to all districts in the emulator
-          // This matches what we set in userClaims.js
           for (const districtId of districtIds) {
             roles.push({
               siteId: districtId,
@@ -86,12 +85,37 @@ async function updateUserRoles(adminApp, users, organizations) {
         `      ✅ Updated ${user.email} user doc with ${roles.length} role(s)`
       );
 
-      // 2) Merge roles into Auth custom claims (ensure roles property exists for all users)
+      // 2) Set Auth custom claims (the enforcement source) for every user
       try {
-        const baseAuthClaims = user?.authClaims || {};
-        const newAuthClaims = { ...baseAuthClaims, roles };
-        await auth.setCustomUserClaims(user.uid, newAuthClaims);
-        console.log(`      ✅ Set Auth custom claims roles for ${user.email}`);
+        const rolesSet = Array.from(new Set(roles.map((r) => r.role)));
+        const siteRoles = {};
+        const siteNames = {};
+        // Keep every role entry, including the super_admin "any" sentinel.
+        // permissions-core derives super-admin status from siteRoles, so
+        // dropping "any" would leave seeded super admins with no permissions.
+        for (const { siteId, siteName, role } of roles) {
+          if (!siteRoles[siteId]) {
+            siteRoles[siteId] = [];
+          }
+          if (!siteRoles[siteId].includes(role)) {
+            siteRoles[siteId].push(role);
+          }
+          siteNames[siteId] = siteName;
+        }
+
+        const authClaims = {
+          admin: user.userType === "admin",
+          super_admin: rolesSet.includes("super_admin"),
+          adminUid: user.uid,
+          roarUid: user.uid,
+          useNewPermissions: true,
+          rolesSet,
+          siteRoles,
+          siteNames,
+          roles,
+        };
+        await auth.setCustomUserClaims(user.uid, authClaims);
+        console.log(`      ✅ Set Auth custom claims for ${user.email}`);
       } catch (e) {
         console.warn(
           `      ⚠️  Failed to set Auth claims for ${user.email}:`,

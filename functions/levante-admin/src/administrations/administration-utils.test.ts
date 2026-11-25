@@ -13,12 +13,6 @@ const filterAnd = vi.fn((...filters: unknown[]) => ({
 const getFirestore = vi.fn();
 
 vi.mock("firebase-admin/firestore", () => ({
-  FieldPath: class FieldPath {
-    segments: string[];
-    constructor(...segments: string[]) {
-      this.segments = segments;
-    }
-  },
   FieldValue: {},
   Filter: {
     and: (...filters: unknown[]) => filterAnd(...filters),
@@ -236,41 +230,14 @@ describe("queryAdministrations", () => {
   });
 
   it("does not call where when a super admin requests all administrations", async () => {
-    const userClaimsQuery = { kind: "userClaims" };
-    const administrationsQuery = {
-      where: vi.fn(function where() {
-        return administrationsQuery;
-      }),
-    };
-    const db = {
-      collection: vi.fn((name: string) => {
-        if (name === "administrations") return administrationsQuery;
-        if (name === "userClaims") {
-          return { where: () => userClaimsQuery };
-        }
-        throw new Error(`unexpected collection ${name}`);
-      }),
-      runTransaction: vi.fn(async (cb: (transaction: unknown) => unknown) => {
-        const transaction = {
-          get: vi.fn(async (query: unknown) => {
-            if (query === userClaimsQuery) {
-              return {
-                docs: [{ data: () => ({ claims: { super_admin: true } }) }],
-                empty: false,
-              };
-            }
-            return { docs: [] };
-          }),
-        };
-        return cb(transaction);
-      }),
-    };
-    getFirestore.mockReturnValue(db);
+    getUser.mockResolvedValue({ customClaims: { super_admin: true } });
+    const { administrationsQuery } = mockFirestore();
 
     await getAdministrationsForAdministrator({
       adminUid: "super-admin",
     });
 
+    expect(getUser).toHaveBeenCalledWith("super-admin");
     expect(filterWhere).not.toHaveBeenCalled();
     expect(filterAnd).not.toHaveBeenCalled();
     expect(administrationsQuery.where).not.toHaveBeenCalled();

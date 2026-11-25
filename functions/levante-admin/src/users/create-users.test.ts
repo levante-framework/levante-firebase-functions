@@ -1,7 +1,6 @@
 import { describe, it, vi, expect, beforeEach } from "vitest";
 import {
   createAuthUsers,
-  createUserClaimsDocs,
   createUsersDocs,
   ensureOrgsExistInSite,
   enqueueUserSyncTasks,
@@ -207,42 +206,6 @@ describe("createUsers", () => {
           createAuthUsers(auth, [user1] as never, 3)
         ).rejects.toThrow("Maximum retries");
       });
-    });
-  });
-
-  describe("createUserClaimsDocs", () => {
-    it("writes a userClaims doc holding each user's claims", async () => {
-      const { db, setCalls } = mockWriteDb();
-      const users = [makeNewUserRecord("uid1"), makeNewUserRecord("uid2")];
-
-      await expect(createUserClaimsDocs(db, users)).resolves.toBeUndefined();
-      expect(setCalls).toHaveLength(2);
-      expect(setCalls.every((c) => c.collection === "userClaims")).toBe(true);
-      expect(setCalls[0]).toMatchObject({
-        uid: "uid1",
-        data: { claims: users[0].customClaims },
-      });
-    });
-
-    it("retries only the failed users", async () => {
-      const { db, setCalls } = mockWriteDb(new Set(["uid2"]));
-
-      await expect(
-        createUserClaimsDocs(db, [
-          makeNewUserRecord("uid1"),
-          makeNewUserRecord("uid2"),
-        ])
-      ).resolves.toBeUndefined();
-      // uid1 once; uid2 twice (initial failure, then retry)
-      expect(setCalls.map((c) => c.uid)).toEqual(["uid1", "uid2", "uid2"]);
-    });
-
-    it("throws when MAX_RETRIES is exhausted", async () => {
-      const { db } = mockWriteDb(new Set(["uid1"]), true);
-
-      await expect(
-        createUserClaimsDocs(db, [makeNewUserRecord("uid1")])
-      ).rejects.toThrow("Maximum retries");
     });
   });
 
@@ -585,7 +548,7 @@ describe("createUsers", () => {
       expect(commit).not.toHaveBeenCalled();
     });
 
-    it("deletes Auth users and both Firestore docs per uid", async () => {
+    it("deletes Auth users and the Firestore user doc per uid", async () => {
       const deleteUsers = vi.fn().mockResolvedValue(undefined);
       const auth = { deleteUsers } as unknown as Auth;
       const { db, deletes, commit } = mockRollbackDb();
@@ -594,14 +557,12 @@ describe("createUsers", () => {
       expect(deleteUsers).toHaveBeenCalledWith(["uid1", "uid2"]);
       expect(commit).toHaveBeenCalledTimes(1);
       expect(deletes).toEqual([
-        { collection: "userClaims", uid: "uid1" },
         { collection: "users", uid: "uid1" },
-        { collection: "userClaims", uid: "uid2" },
         { collection: "users", uid: "uid2" },
       ]);
     });
 
-    it("chunks Auth deletes at 1000 and Firestore batches at 250", async () => {
+    it("chunks Auth deletes at 1000 and Firestore batches at 500", async () => {
       const deleteUsers = vi.fn().mockResolvedValue(undefined);
       const auth = { deleteUsers } as unknown as Auth;
       const { db, commit } = mockRollbackDb();
@@ -611,8 +572,8 @@ describe("createUsers", () => {
       expect(deleteUsers).toHaveBeenCalledTimes(2);
       expect(deleteUsers.mock.calls[0][0]).toHaveLength(1000);
       expect(deleteUsers.mock.calls[1][0]).toHaveLength(1);
-      // 1001 users / 250 per batch -> 5 commits
-      expect(commit).toHaveBeenCalledTimes(5);
+      // 1001 users / 500 per batch -> 3 commits
+      expect(commit).toHaveBeenCalledTimes(3);
     });
 
     it("swallows Auth deletion errors and still cleans up Firestore", async () => {

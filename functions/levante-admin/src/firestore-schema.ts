@@ -336,23 +336,6 @@ export interface FormDefinitionVersion {
   fullFields: FullInformationFormField[];
 }
 
-// Structure for Claims within UserClaims
-// Manages custom claims for users, facilitating access control based on administrative roles or organizational (Group) affiliations.
-export interface Claims {
-  adminOrgs: OrgRefMap;
-  adminUid?: string; // Purpose needs clarification
-  minimalAdminOrgs: OrgRefMap;
-  roarUid?: string; // Purpose needs clarification
-  super_admin: boolean;
-}
-
-// Interface for documents in the `userClaims` collection (Document ID is User UID)
-export interface UserClaims {
-  claims: Claims;
-  lastUpdated: number; // Unix milliseconds timestamp?
-  testData?: boolean;
-}
-
 // Structure for Admin-specific data within Users
 export interface AdminData {
   administrationsCreated: string[]; // IDs of administrations

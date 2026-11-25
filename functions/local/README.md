@@ -37,18 +37,11 @@ This section describes each of the npm scripts available to you.
   npm run rebuild-custom-claims -- --environment prod --email someone@stanford.edu --apply
   ```
 
-- `npm run inspect-admin-access` prints a quick view of a user's Auth custom claims vs Firestore `users` / `userClaims` / `system/permissions` docs for debugging. Use `--format json` for full output.
+- `npm run inspect-admin-access` prints a quick view of a user's Auth custom claims vs Firestore `users` / `system/permissions` docs for debugging. Use `--format json` for full output.
 
   ```bash
   npm run inspect-admin-access -- --environment prod --email someone@stanford.edu
   npm run inspect-admin-access -- --environment prod --email someone@stanford.edu --format json
-  ```
-
-- `npm run list-superadmins` lists SuperAdmins (based on Firestore `userClaims.claims.super_admin`) and shows whether Firebase Auth custom claims agree, to help find mismatches.
-
-  ```bash
-  npm run list-superadmins -- --environment prod
-  npm run list-superadmins -- --environment prod --format json
   ```
 
 - `npm run normalize-user-roles` normalizes `users/<uid>.roles` entries (e.g. "site admin" -> "site_admin") for admin users. By default it is a dry-run; add `-- --apply` to write. If you apply this, follow it by rebuilding custom claims so `siteRoles/siteNames` stay in sync.
@@ -70,13 +63,6 @@ This section describes each of the npm scripts available to you.
 
   ```bash
   npm run list-roles-by-email -- --database prod --emails user1@example.com user2@example.com
-  ```
-
-- `npm run toggle-super-admin` will toggle the `super_admin` custom claim for a given ROAR UID. You must pass the ROAR UID as an argument to this script using the following syntax:
-
-  ```bash
-  # Note the space separating the -- from the ROAR_UID argument
-  npm run toggle-super-admin -- ROAR_UID
   ```
 
 - `npm run backfill-userdoc-assignment-progress` fills user-doc `assignmentsStarted` / `assignmentsCompleted` (and the `assignments.started` / `assignments.completed` lists) when the assignment document is already started or completed. That copy stopped updating for `startTask`, `completeTask`, and run completion before the inline sync landed. Existing timestamps are left as they are. Dry-run by default; add `-- --apply` to write.
