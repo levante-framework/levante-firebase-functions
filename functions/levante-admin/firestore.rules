@@ -98,11 +98,6 @@ service cloud.firestore {
     function keysNotUpdated(keys) { return !request.resource.data.diff(resource.data).affectedKeys().hasAny(keys); }
     function onlyTheseKeysUpdated(keys) { return request.resource.data.diff(resource.data).affectedKeys().hasOnly(keys); }
 
-    match /userClaims/{uid} {
-      function myData() { return uid == getUid(); }
-      allow read: if isAuthed() && myData()
-    }
-
     // ============ USERS ============
     match /users/{uid} {
       function myData() { return uid == getUid(); }
