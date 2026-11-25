@@ -297,20 +297,6 @@ export interface IUids {
 }
 
 /**
- * An interface representing the custom claims for a user.
- */
-export interface ICustomClaims extends IUids {
-  /* A boolean indicating whether the user is a super admin. */
-  super_admin?: boolean;
-  /* An interface representing the organizations that the user is an administrator for. */
-  adminOrgs?: IAdminClaims;
-  /* An interface representing only the non-dependent orgs that the user is an administrator for. */
-  minimalAdminOrgs?: IAdminClaims;
-  /* A boolean indicating whether the user is an administrator. */
-  admin?: boolean;
-}
-
-/**
  * An interface representing base organization data.
  */
 interface BaseOrgData {
