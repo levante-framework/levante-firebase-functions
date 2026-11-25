@@ -3,6 +3,7 @@ import {
   Timestamp,
   DocumentReference,
 } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 import { HttpsError } from "firebase-functions/v2/https";
 import { syncAssignmentsForUserOrgChange } from "./assignments/sync-assignments.js";
 
@@ -48,21 +49,22 @@ export async function _editUsers(
 
   // Verify the requesting user has admin privileges
   try {
-    const claimsDocRef = db.collection("userClaims").doc(requestingUid);
-    const claimsDoc = await claimsDocRef.get();
-
-    if (!claimsDoc.exists) {
-      throw new HttpsError("permission-denied", "User claims not found");
-    }
-
-    const claims = claimsDoc.data()?.claims;
-    if (!claims?.admin && !claims?.super_admin) {
+    const userRecord = await getAuth().getUser(requestingUid);
+    const claims = (userRecord.customClaims ?? {}) as {
+      super_admin?: boolean;
+      rolesSet?: string[];
+    };
+    const hasAdminRole = (claims.rolesSet ?? []).some(
+      (role) => role !== "participant"
+    );
+    if (claims.super_admin !== true && !hasAdminRole) {
       throw new HttpsError(
         "permission-denied",
         "User does not have admin privileges"
       );
     }
   } catch (error: any) {
+    if (error instanceof HttpsError) throw error;
     throw new HttpsError(
       "permission-denied",
       `Authentication error: ${error.message || String(error)}`

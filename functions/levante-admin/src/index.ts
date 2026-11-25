@@ -665,22 +665,7 @@ export const deleteOrgFunction = onCall(async (request) => {
         );
       }
     } else {
-      const db = getFirestore();
-      const userClaimsRef = db.collection("userClaims").doc(requestingUid);
-      const userClaimsDoc = await userClaimsRef.get();
-
-      if (!userClaimsDoc.exists) {
-        logger.error("User claims not found.", { requestingUid });
-        throw new HttpsError(
-          "permission-denied",
-          "User permissions not found."
-        );
-      }
-
-      const userClaims = userClaimsDoc.data();
-      const isSuperAdmin = userClaims?.claims?.super_admin === true;
-
-      if (!isSuperAdmin) {
+      if (customClaims.super_admin !== true) {
         logger.error("User is not a super admin.", { requestingUid });
         throw new HttpsError(
           "permission-denied",
@@ -766,21 +751,7 @@ export const deleteAdministration = onCall(async (request) => {
         );
       }
     } else {
-      const db = getFirestore();
-      const userClaimsRef = db.collection("userClaims").doc(requestingUid);
-      const userClaimsDoc = await userClaimsRef.get();
-
-      if (!userClaimsDoc.exists) {
-        logger.error("User claims not found.", { requestingUid });
-        throw new HttpsError(
-          "permission-denied",
-          "User permissions not found."
-        );
-      }
-
-      const userClaims = userClaimsDoc.data();
-      const isSuperAdmin = userClaims?.claims?.super_admin === true;
-      if (!isSuperAdmin) {
+      if (customClaims.super_admin !== true) {
         logger.error("User is not a super admin.", { requestingUid });
         throw new HttpsError(
           "permission-denied",
