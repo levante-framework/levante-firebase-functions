@@ -17,10 +17,7 @@ import {
   getPermissionService,
 } from "./utils/permission-helpers.js";
 import { onDocumentWritten } from "firebase-functions/v2/firestore";
-import {
-  setUidClaimsInBothProjects,
-  getRoarUid,
-} from "./users/set-custom-claims.js";
+import { setUidClaimsHandler, getRoarUid } from "./users/set-custom-claims.js";
 import { _createAdministratorWithRoles } from "./users/create-administrator.js";
 import {
   loadAdministratorContext,
@@ -72,7 +69,7 @@ export const setUidClaims = onCall({ minInstances: 1 }, async (request) => {
     throw new HttpsError("unauthenticated", "User must be authenticated");
   }
 
-  return await setUidClaimsInBothProjects({
+  return await setUidClaimsHandler({
     roarUid,
     adminUid,
   });

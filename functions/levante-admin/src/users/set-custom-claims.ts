@@ -185,31 +185,3 @@ export const setUidClaimsHandler = async ({
     throw new HttpsError("internal", "Error setting custom claims");
   }
 };
-
-export const setUidClaimsInBothProjects = async ({
-  adminUid,
-  roarUid,
-}: {
-  adminUid: string;
-  roarUid: string;
-}) => {
-  const auth = {
-    admin: getAuth(),
-  };
-  const targetAuthUids = {
-    admin: adminUid,
-  };
-
-  const claimsResults = {};
-
-  for (const projectKey of ["admin"]) {
-    claimsResults[projectKey] = await setUidClaimsHandler({
-      roarUid,
-      adminUid,
-      auth: auth[projectKey],
-      targetAuthUid: targetAuthUids[projectKey],
-    });
-  }
-
-  return claimsResults["admin"];
-};
