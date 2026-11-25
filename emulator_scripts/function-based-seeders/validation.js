@@ -64,7 +64,6 @@ async function validateDashboardVisibleData({
 
   const [
     usersCount,
-    userClaimsCount,
     districtsCount,
     schoolsCount,
     classesCount,
@@ -72,7 +71,6 @@ async function validateDashboardVisibleData({
     administrationsCount,
   ] = await Promise.all([
     runtime.countCollection("users"),
-    runtime.countCollection("userClaims"),
     runtime.countCollection("districts"),
     runtime.countCollection("schools"),
     runtime.countCollection("classes"),
@@ -83,7 +81,6 @@ async function validateDashboardVisibleData({
   const expectedUsersCount = participantCount + adminUsers.length + 1;
   const expectedCounts = {
     users: expectedUsersCount,
-    userClaims: expectedUsersCount,
     districts: 1,
     schools: 1,
     classes: 2,
@@ -92,7 +89,6 @@ async function validateDashboardVisibleData({
   };
   const actualCounts = {
     users: usersCount,
-    userClaims: userClaimsCount,
     districts: districtsCount,
     schools: schoolsCount,
     classes: classesCount,

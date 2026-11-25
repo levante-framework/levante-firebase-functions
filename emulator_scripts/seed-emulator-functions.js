@@ -232,7 +232,6 @@ async function main() {
 
   if (validationSummary) {
     console.log(`Firestore users:   ${validationSummary.users}`);
-    console.log(`UserClaims docs:   ${validationSummary.userClaims}`);
     console.log(`Assignment docs:   ${validationSummary.totalAssignments}`);
     validationSummary.assignmentCounts.forEach((assignmentCount) => {
       console.log(`- ${assignmentCount.name}: ${assignmentCount.count}`);

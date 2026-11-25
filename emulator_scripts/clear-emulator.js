@@ -139,7 +139,6 @@ async function clearDatabase() {
     // These collections should not have deep subcollections in the emulator seed data.
     const flatCollections = [
       "system",
-      "userClaims",
       "districts",
       "schools",
       "classes",
