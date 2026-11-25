@@ -90,11 +90,10 @@ async function updateUserRoles(adminApp, users, organizations) {
         const rolesSet = Array.from(new Set(roles.map((r) => r.role)));
         const siteRoles = {};
         const siteNames = {};
+        // Keep every role entry, including the super_admin "any" sentinel.
+        // permissions-core derives super-admin status from siteRoles, so
+        // dropping "any" would leave seeded super admins with no permissions.
         for (const { siteId, siteName, role } of roles) {
-          // "any" is the super_admin sentinel, not a real site
-          if (siteId === "any") {
-            continue;
-          }
           if (!siteRoles[siteId]) {
             siteRoles[siteId] = [];
           }
