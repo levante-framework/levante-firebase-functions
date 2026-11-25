@@ -135,10 +135,12 @@ export const setUidClaimsHandler = async ({
   const currentClaims = (user.customClaims as Record<string, unknown>) || {};
 
   if (roarUid === undefined) {
-    roarUid = await getRoarUid({
-      adminUid,
-      createIfNotFound: true,
-    });
+    roarUid =
+      (currentClaims.roarUid as string | undefined) ??
+      (await getRoarUid({
+        adminUid,
+        createIfNotFound: true,
+      }));
   }
 
   /* eslint-disable @typescript-eslint/no-unused-vars */
