@@ -1,5 +1,6 @@
 import { onCall, HttpsError } from "firebase-functions/v2/https";
 import {
+  Filter,
   getFirestore,
   Transaction,
   DocumentSnapshot,
@@ -13,6 +14,52 @@ import {
   shouldCompleteAssignment,
 } from "../utils/assignment.js";
 import { syncAssignmentProgress } from "../assignments/assignment-sync-in-transaction.js";
+
+type RunStart = { valueOf(): number | string };
+
+/**
+ * Start time of the earliest run for this task and administration.
+ * Throws when completion would otherwise record no start.
+ */
+async function startedOnFromEarliestRun(
+  db: Firestore,
+  transaction: Transaction,
+  userId: string,
+  administrationId: string,
+  taskId: string
+): Promise<RunStart> {
+  const runs = await transaction.get(
+    db
+      .collection("users")
+      .doc(userId)
+      .collection("runs")
+      .where(
+        Filter.and(
+          Filter.where("taskId", "==", taskId),
+          Filter.where("assignmentId", "==", administrationId)
+        )
+      )
+  );
+
+  let earliest: RunStart | undefined;
+
+  for (const run of runs.docs) {
+    const timeStarted = run.data().timeStarted as RunStart | undefined;
+    if (!timeStarted) continue;
+    if (!earliest || timeStarted.valueOf() < earliest.valueOf()) {
+      earliest = timeStarted;
+    }
+  }
+
+  if (!earliest) {
+    throw new HttpsError(
+      "failed-precondition",
+      `Cannot complete task ${taskId} in administration ${administrationId} without a started run`
+    );
+  }
+
+  return earliest;
+}
 
 /**
  * Updates an assigned assessment with the provided updates
@@ -93,18 +140,35 @@ export const completeTask = onCall(async (request) => {
       const prevAssessments = (prevData.assessments ?? []).map(
         (assessment: IExtendedAssignedAssessment) => ({ ...assessment })
       );
+      const targetAssessment = prevAssessments.find(
+        (assessment: IExtendedAssignedAssessment) =>
+          assessment.taskId === taskId
+      );
       const completedOn = new Date();
       const currCompleted = Boolean(prevData.completed) || shouldComplete;
+      const backfilledStartedOn =
+        targetAssessment && !targetAssessment.startedOn
+          ? await startedOnFromEarliestRun(
+              db,
+              transaction,
+              userId,
+              administrationId,
+              taskId
+            )
+          : undefined;
 
       // NOW DO ALL WRITES
       const docRef = getAssignmentDocRef(db, userId, administrationId);
       const progressKey = taskId.replace(/-/g, "_");
+      const assessmentUpdates: { [key: string]: unknown } = { completedOn };
+      if (backfilledStartedOn) {
+        assessmentUpdates.startedOn = backfilledStartedOn;
+      }
 
-      // Update this assessment's `completedOn` timestamp
       updateAssignedTaskInTransaction(
         assignmentDoc,
         taskId,
-        { completedOn },
+        assessmentUpdates,
         docRef,
         transaction
       );
@@ -137,7 +201,7 @@ export const completeTask = onCall(async (request) => {
           assessments: prevAssessments.map(
             (assessment: IExtendedAssignedAssessment) =>
               assessment.taskId === taskId
-                ? { ...assessment, completedOn }
+                ? { ...assessment, ...assessmentUpdates }
                 : assessment
           ),
           started: true,
