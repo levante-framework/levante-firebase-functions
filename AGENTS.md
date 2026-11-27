@@ -5,7 +5,7 @@ Backend for [LEVANTE](https://github.com/levante-framework), a web assessment pl
 ## Layout
 
 - `functions/levante-admin/` — Primary Cloud Functions (TypeScript). **All new work goes here.**
-- `__tests__/e2e/` — End-to-end tests run against emulator. Add or update tests here when working on `levante-admin` functions. Agents must not run them — only humans.
+- `e2e/` — End-to-end tests run against emulator. Add or update tests here when working on `levante-admin` functions. Agents must not run them — only humans.
 - `functions/local/` — One-off scripts for DB admin tasks. Not deployed. **Agents must not execute these scripts** — only humans run them.
 - `emulator_scripts/` — seed scripts for the local Firebase emulator.
 - `functions/levante-assessment/` — **deprecated. Do not edit or reference.**
@@ -28,12 +28,12 @@ This project was forked from ROAR. ROAR's naming convention persists in Firestor
 
 The refactor is ongoing, so ROAR names may appear anywhere in existing code. Treat them as tech debt; use the LEVANTE name in any code you write or touch.
 
-| ROAR name | LEVANTE name |
-|---|---|
-| `districts` | `site` |
-| `students` | `child` |
-| `parents` | `caregiver` |
-| `groups` | `cohort` |
+| ROAR name   | LEVANTE name |
+| ----------- | ------------ |
+| `districts` | `site`       |
+| `students`  | `child`      |
+| `parents`   | `caregiver`  |
+| `groups`    | `cohort`     |
 
 `group` docs use `parentOrgId` / `parentOrgType: "districts"` to reference their site. Map these at the query boundary:
 
@@ -53,11 +53,11 @@ const cohorts = db
 
 All three co-exist. Disambiguate by Firestore location, not vocabulary.
 
-| Term | Lives at | What it is |
-|---|---|---|
-| Administration | `administrations/{id}` | The admin-authored definition: a named set of assessments assigned to orgs over a `dateOpened`–`dateClosed` window. Interface `Administration`. |
-| Assignment | `users/{uid}/assignments/{administrationId}` (doc id == administration id) | The per-user instance of an administration: the subset of assessments that user qualifies for, plus their progress (`startedOn`/`completedOn`, runs). |
-| Assessment | an entry in an `assessments[]` array (e.g. `egma-math`) | A single task with `taskId`, `variantId`, `params`, and `conditions`. Lives in the administration (definition) and, filtered per user, inside each assignment. |
+| Term           | Lives at                                                                   | What it is                                                                                                                                                     |
+| -------------- | -------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Administration | `administrations/{id}`                                                     | The admin-authored definition: a named set of assessments assigned to orgs over a `dateOpened`–`dateClosed` window. Interface `Administration`.                |
+| Assignment     | `users/{uid}/assignments/{administrationId}` (doc id == administration id) | The per-user instance of an administration: the subset of assessments that user qualifies for, plus their progress (`startedOn`/`completedOn`, runs).          |
+| Assessment     | an entry in an `assessments[]` array (e.g. `egma-math`)                    | A single task with `taskId`, `variantId`, `params`, and `conditions`. Lives in the administration (definition) and, filtered per user, inside each assignment. |
 
 **Don't** treat `administration` as the ROAR name for `assignment` — it is not a rename. **Do** read top-level `administrations/*` as the definition and `users/*/assignments/*` as the per-user instance.
 
