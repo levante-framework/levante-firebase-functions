@@ -37,6 +37,12 @@ export function validateResponseShape(
       continue;
     }
 
+    // The dashboard's FormRenderer sends every field, using null for empty
+    // ones, so null must pass here even for display-only fields. The dashboard
+    // should not send display-only fields back at all; once it stops, this
+    // tolerance can go.
+    if (value === null) continue;
+
     if (field.kind === "display-only") {
       issues.push({
         path,
@@ -44,8 +50,6 @@ export function validateResponseShape(
       });
       continue;
     }
-
-    if (value === null) continue;
 
     if (field.kind === "text") {
       if (typeof value !== "string") {
