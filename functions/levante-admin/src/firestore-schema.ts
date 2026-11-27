@@ -333,7 +333,8 @@ interface FormDefinitionBase {
    * Per-response-field descriptions. Keys are org-form property names
    * (`SiteInformation` or `SchoolInformation`) or participant-survey response keys.
    */
-  fieldsDescription: Record<string, string>;
+  // optional for surveys - fields documented in airtable
+  fieldsDescription?: Record<string, string>;
 }
 
 export interface OrgInformationFormDefinition extends FormDefinitionBase {
@@ -348,7 +349,8 @@ export interface ParticipantSurveyFormDefinition extends FormDefinitionBase {
  * Document in the top-level `formDefinitions` collection.
  * Document ID is the form identifier (e.g. `"siteInformation"`, `"caregiver-general"`).
  * Form-specific field definitions live in the `versions` subcollection.
- * `fieldsDescription` is required for both org forms and participant surveys.
+ * `fieldsDescription` is optional: org forms use it, participant surveys may
+ * omit it.
  */
 export type FormDefinition =
   | OrgInformationFormDefinition
