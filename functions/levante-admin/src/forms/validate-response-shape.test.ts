@@ -130,6 +130,29 @@ describe("validateResponseShape", () => {
     ).toEqual([]);
   });
 
+  it("rejects a response for a display-only field", () => {
+    expect(
+      validateResponseShape({ intro: "hello" }, [
+        ...fields,
+        { variableName: "intro", kind: "display-only" },
+      ])
+    ).toEqual([
+      {
+        path: "responses.intro",
+        message: "Display-only fields do not accept a response.",
+      },
+    ]);
+  });
+
+  it("accepts null for a display-only field", () => {
+    expect(
+      validateResponseShape({ intro: null }, [
+        ...fields,
+        { variableName: "intro", kind: "display-only" },
+      ])
+    ).toEqual([]);
+  });
+
   it("collects multiple issues", () => {
     expect(
       validateResponseShape(

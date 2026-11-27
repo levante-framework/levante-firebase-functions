@@ -1,13 +1,9 @@
 import { LanguageSelectionSchema } from "@levante-framework/levante-zod";
+import type { FormFieldKind } from "../firestore-schema.js";
 
 export type ResponseFieldShape = {
   variableName: string;
-  kind:
-    | "text"
-    | "number"
-    | "single-select"
-    | "multi-select"
-    | "language-selection";
+  kind: FormFieldKind;
   options?: { value: string; label: string }[];
 };
 
@@ -41,7 +37,19 @@ export function validateResponseShape(
       continue;
     }
 
+    // The dashboard's FormRenderer sends every field, using null for empty
+    // ones, so null must pass here even for display-only fields. The dashboard
+    // should not send display-only fields back at all; once it stops, this
+    // tolerance can go.
     if (value === null) continue;
+
+    if (field.kind === "display-only") {
+      issues.push({
+        path,
+        message: "Display-only fields do not accept a response.",
+      });
+      continue;
+    }
 
     if (field.kind === "text") {
       if (typeof value !== "string") {
